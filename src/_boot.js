@@ -60,6 +60,7 @@ const kblayoutsDir = path.join(electron.app.getPath("userData"), "keyboards");
 const innerKblayoutsDir = path.join(__dirname, "assets/kb_layouts");
 const fontsDir = path.join(electron.app.getPath("userData"), "fonts");
 const innerFontsDir = path.join(__dirname, "assets/fonts");
+const shellEnvCacheFile = path.join(electron.app.getPath("userData"), "shell_env_cache.json");
 
 // Unset proxy env variables to avoid connection problems on the internal websockets
 // See #222
@@ -133,32 +134,43 @@ if (!fs.existsSync(lastWindowStateFile)) {
     signale.info(`Default last window state written to ${lastWindowStateFile}`);
 }
 
-// Copy default themes & keyboard layouts & fonts
-signale.pending("Mirroring internal assets...");
-try {
-    fs.mkdirSync(themesDir);
-} catch (e) {
-    // Folder already exists
+// Copy default themes & keyboard layouts & fonts (only if missing)
+signale.pending("Checking internal assets...");
+
+// Helper: copy file only if target doesn't exist
+function copyIfMissing(srcDir, destDir, filename, encoding = "utf-8") {
+    const destPath = path.join(destDir, filename);
+    if (!fs.existsSync(destPath)) {
+        const srcPath = path.join(srcDir, filename);
+        const content = encoding ? fs.readFileSync(srcPath, { encoding }) : fs.readFileSync(srcPath);
+        fs.writeFileSync(destPath, content);
+        return true;
+    }
+    return false;
 }
+
+// Ensure directories exist
+[themesDir, kblayoutsDir, fontsDir].forEach(dir => {
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+});
+
+// Copy only missing assets
+let copiedCount = 0;
 fs.readdirSync(innerThemesDir).forEach(e => {
-    fs.writeFileSync(path.join(themesDir, e), fs.readFileSync(path.join(innerThemesDir, e), { encoding: "utf-8" }));
+    if (copyIfMissing(innerThemesDir, themesDir, e)) copiedCount++;
 });
-try {
-    fs.mkdirSync(kblayoutsDir);
-} catch (e) {
-    // Folder already exists
-}
 fs.readdirSync(innerKblayoutsDir).forEach(e => {
-    fs.writeFileSync(path.join(kblayoutsDir, e), fs.readFileSync(path.join(innerKblayoutsDir, e), { encoding: "utf-8" }));
+    if (copyIfMissing(innerKblayoutsDir, kblayoutsDir, e)) copiedCount++;
 });
-try {
-    fs.mkdirSync(fontsDir);
-} catch (e) {
-    // Folder already exists
-}
 fs.readdirSync(innerFontsDir).forEach(e => {
-    fs.writeFileSync(path.join(fontsDir, e), fs.readFileSync(path.join(innerFontsDir, e)));
+    if (copyIfMissing(innerFontsDir, fontsDir, e, null)) copiedCount++;
 });
+
+if (copiedCount > 0) {
+    signale.success(`Copied ${copiedCount} missing asset(s)`);
+} else {
+    signale.success("All assets already present (skipped mirroring)");
+}
 
 // Version history logging
 const versionHistoryPath = path.join(electron.app.getPath("userData"), "versions_log.json");
@@ -173,6 +185,37 @@ if (typeof versionHistory[version] === "undefined") {
     versionHistory[version].lastSeen = Date.now();
 }
 fs.writeFileSync(versionHistoryPath, JSON.stringify(versionHistory, 0, 2), { encoding: "utf-8" });
+
+// Get shell environment with caching (shell-env is slow, ~5-10s on Windows)
+async function getShellEnvCached(shellPath) {
+    // Check if cache exists and is valid for this shell
+    if (fs.existsSync(shellEnvCacheFile)) {
+        try {
+            const cache = JSON.parse(fs.readFileSync(shellEnvCacheFile, { encoding: "utf-8" }));
+            if (cache.shell === shellPath && cache.env && Object.keys(cache.env).length > 0) {
+                signale.success("Using cached shell environment");
+                return cache.env;
+            }
+        } catch (e) {
+            signale.warn("Shell env cache invalid, will regenerate");
+        }
+    }
+
+    // Cache miss or invalid - fetch fresh environment
+    signale.pending("Extracting shell environment (first run or shell changed)...");
+    const shellEnv = require("shell-env");
+    const env = await shellEnv(shellPath);
+
+    // Save to cache
+    fs.writeFileSync(shellEnvCacheFile, JSON.stringify({
+        shell: shellPath,
+        env: env,
+        cachedAt: Date.now()
+    }, null, 2));
+    signale.success("Shell environment cached for future startups");
+
+    return env;
+}
 
 function createWindow(settings) {
     signale.info("Creating window...");
@@ -251,8 +294,8 @@ app.on('ready', async () => {
 
     if (!require("fs").existsSync(settings.cwd)) throw new Error("Configured cwd path does not exist.");
 
-    // See #366
-    let cleanEnv = await require("shell-env")(settings.shell).catch(e => { throw e; });
+    // See #366 - Use cached shell-env to avoid 5-10s delay on every startup
+    let cleanEnv = await getShellEnvCached(settings.shell).catch(e => { throw e; });
 
     Object.assign(cleanEnv, {
         TERM: "xterm-256color",
