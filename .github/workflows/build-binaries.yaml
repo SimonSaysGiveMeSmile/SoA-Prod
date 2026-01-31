@@ -81,8 +81,9 @@ jobs:
     - name: Run prebuild outside of QEMU emulator
       run: npm install && rsync -a --info=progress2 src/ prebuild-src --exclude node_modules && node prebuild-minify.js && rm -rf node_modules
     - name: Build for arm32v7 (aka armv7l)
-      uses: docker://arm32v7/node:20-bookworm
+      uses: docker://node:20-bookworm
       with:
+        options: --platform linux/arm/v7
         args: bash -c "npm install && ./node_modules/.bin/electron-builder build -l --armv7l"
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -120,8 +121,9 @@ jobs:
     - name: Run prebuild outside of QEMU emulator
       run: npm install && rsync -a --info=progress2 src/ prebuild-src --exclude node_modules && node prebuild-minify.js && rm -rf node_modules
     - name: Build for arm64 (aka arm64v8)
-      uses: docker://arm64v8/node:20-bookworm
+      uses: docker://node:20-bookworm
       with:
+        options: --platform linux/arm64
         args: bash -c "npm install && ./node_modules/.bin/electron-builder build -l --arm64"
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
