@@ -34,7 +34,8 @@ if (!gotLock) {
 signale.time("Startup");
 
 const electron = require("electron");
-require('@electron/remote/main').initialize()
+const remoteMain = require('@electron/remote/main');
+remoteMain.initialize();
 const ipc = electron.ipcMain;
 const path = require("path");
 const url = require("url");
@@ -199,7 +200,6 @@ function createWindow(settings) {
         backgroundColor: '#000000',
         webPreferences: {
             devTools: true,
-            enableRemoteModule: true,
             contextIsolation: false,
             backgroundThrottling: false,
             webSecurity: true,
@@ -209,6 +209,9 @@ function createWindow(settings) {
             experimentalFeatures: settings.experimentalFeatures || false
         }
     });
+
+    // Enable @electron/remote for this window
+    remoteMain.enable(win.webContents);
 
     win.loadURL(url.format({
         pathname: path.join(__dirname, 'ui.html'),
