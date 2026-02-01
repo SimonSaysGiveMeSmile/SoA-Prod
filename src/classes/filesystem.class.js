@@ -114,6 +114,11 @@ class FilesystemDisplay {
                         this.readFS(cwd);
                         this.watchFS(cwd);
                     }
+
+                    // Dispatch event for session mapping updates
+                    window.dispatchEvent(new CustomEvent('terminal-cwd-changed', {
+                        detail: { terminal: num, cwd: cwd }
+                    }));
                 }
             };
         };

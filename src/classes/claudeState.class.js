@@ -18,11 +18,13 @@ class ClaudeStateManager {
         this.claudeDir = path.join(os.homedir(), '.claude');
         this.claudeJsonPath = path.join(os.homedir(), '.claude.json');
         this.todosDir = path.join(this.claudeDir, 'todos');
+        this.tasksDir = path.join(this.claudeDir, 'tasks');  // Main session tasks directory
         this.liveContextPath = path.join(this.claudeDir, 'cache', 'context-live.json');
         this.watchers = [];
         this.state = {
             projects: {},
             todos: {},
+            tasks: {},  // Main session tasks from ~/.claude/tasks/
             liveContext: null,  // Real-time context from statusline
             agents: [],  // Subagent data from ~/.claude/projects/*/subagents/
             lastUpdate: null
@@ -31,6 +33,7 @@ class ClaudeStateManager {
         this._updateTimeout = null;
         this._pollInterval = null;
         this._subagentPollInterval = null;
+        this._tasksPollInterval = null;
         this._lastLiveContextMtime = 0;
     }
 
@@ -101,6 +104,21 @@ class ClaudeStateManager {
 
         // Polling fallback for subagents (chokidar glob watching unreliable on Windows/OneDrive)
         this._subagentPollInterval = setInterval(() => this._pollSubagents(), 5000);
+
+        // Watch ~/.claude/tasks/ directory for main session tasks
+        const tasksGlobPattern = path.join(this.tasksDir, '*', '*.json');
+        const tasksWatcher = chokidar.watch(tasksGlobPattern, watcherOptions);
+        tasksWatcher.on('add', (filepath) => this._handleTaskChange(filepath));
+        tasksWatcher.on('change', (filepath) => this._handleTaskChange(filepath));
+        tasksWatcher.on('unlink', (filepath) => this._handleTaskRemove(filepath));
+        tasksWatcher.on('error', (error) => this._handleError('tasks', error));
+        this.watchers.push(tasksWatcher);
+
+        // Initial scan of tasks
+        this._scanAllTasks();
+
+        // Polling fallback for tasks (chokidar glob watching unreliable on Windows/OneDrive)
+        this._tasksPollInterval = setInterval(() => this._pollTasks(), 2000);
     }
 
     /**
@@ -132,6 +150,93 @@ class ClaudeStateManager {
     }
 
     /**
+     * Poll tasks directory for changes (fallback for unreliable chokidar)
+     */
+    _pollTasks() {
+        this._scanAllTasks();
+    }
+
+    /**
+     * Handle changes to task files in ~/.claude/tasks/{sessionId}/*.json
+     * @param {string} filepath - Path to changed file
+     */
+    _handleTaskChange(filepath) {
+        const filename = path.basename(filepath);
+        if (!filename.endsWith('.json') || filename.startsWith('.')) {
+            return;
+        }
+        // Extract sessionId from parent directory name
+        const sessionId = path.basename(path.dirname(filepath));
+        this._scanSessionTasks(sessionId);
+    }
+
+    /**
+     * Handle removal of task files
+     * @param {string} filepath - Path to removed file
+     */
+    _handleTaskRemove(filepath) {
+        const sessionId = path.basename(path.dirname(filepath));
+        this._scanSessionTasks(sessionId);
+    }
+
+    /**
+     * Scan all session task directories and update state
+     */
+    _scanAllTasks() {
+        try {
+            if (!fs.existsSync(this.tasksDir)) {
+                return;
+            }
+            const sessions = fs.readdirSync(this.tasksDir);
+            for (const sessionId of sessions) {
+                const sessionPath = path.join(this.tasksDir, sessionId);
+                try {
+                    const stat = fs.statSync(sessionPath);
+                    if (stat.isDirectory()) {
+                        this._scanSessionTasks(sessionId);
+                    }
+                } catch (e) {
+                    // Skip invalid entries
+                }
+            }
+        } catch (error) {
+            console.warn("[ClaudeState] Tasks scan failed:", error.message);
+        }
+    }
+
+    /**
+     * Scan tasks for a specific session
+     * @param {string} sessionId - Session ID to scan
+     */
+    _scanSessionTasks(sessionId) {
+        const sessionPath = path.join(this.tasksDir, sessionId);
+        try {
+            if (!fs.existsSync(sessionPath)) {
+                delete this.state.tasks[sessionId];
+                this._sendUpdate();
+                return;
+            }
+            const files = fs.readdirSync(sessionPath);
+            const tasks = [];
+            for (const file of files) {
+                if (!file.endsWith('.json') || file.startsWith('.')) continue;
+                const filepath = path.join(sessionPath, file);
+                const task = this._safeParseJson(filepath, null);
+                if (task && task.id) {
+                    tasks.push(task);
+                }
+            }
+            // Sort tasks by ID (numeric order)
+            tasks.sort((a, b) => parseInt(a.id) - parseInt(b.id));
+            this.state.tasks[sessionId] = tasks;
+            this.state.lastUpdate = Date.now();
+            this._sendUpdate();
+        } catch (error) {
+            console.warn("[ClaudeState] Session tasks scan failed:", sessionId, error.message);
+        }
+    }
+
+    /**
      * Stop all file watchers and clean up
      */
     stop() {
@@ -146,6 +251,10 @@ class ClaudeStateManager {
         if (this._subagentPollInterval) {
             clearInterval(this._subagentPollInterval);
             this._subagentPollInterval = null;
+        }
+        if (this._tasksPollInterval) {
+            clearInterval(this._tasksPollInterval);
+            this._tasksPollInterval = null;
         }
         this.watchers.forEach(watcher => watcher.close());
         this.watchers = [];

@@ -39,6 +39,9 @@ const fs = require("fs");
 const electron = require("electron");
 const remote = require("@electron/remote");
 const ipc = electron.ipcRenderer;
+const profiler = require("./performance/startupProfiler");
+const { WidgetLoader } = require("./classes/widgetLoader.class");
+profiler.mark('renderer-start');
 
 const settingsDir = remote.app.getPath("userData");
 const themesDir = path.join(settingsDir, "themes");
@@ -184,6 +187,22 @@ ipc.on('claude-state-update', (event, state) => {
 
     // Emit custom event for widgets to listen to (future phases)
     window.dispatchEvent(new CustomEvent('claude-state-changed', { detail: state }));
+});
+
+// Listen for terminal CWD changes to update session mappings
+window.addEventListener('terminal-cwd-changed', (event) => {
+    const { terminal, cwd } = event.detail;
+    if (!window.claudeState || !cwd) return;
+
+    const sessionId = findSessionForCwd(cwd, window.claudeState.projects, window.claudeState.liveContext);
+    if (sessionId) {
+        window.terminalSessions[terminal] = sessionId;
+    } else {
+        delete window.terminalSessions[terminal];
+    }
+
+    // Re-emit state change so widgets refresh with new session mapping
+    window.dispatchEvent(new CustomEvent('claude-state-changed', { detail: window.claudeState }));
 });
 
 // Helper: Find Claude session ID for a given CWD
@@ -503,6 +522,7 @@ if (window.settings.nointro || window.settings.nointroOverride) {
 
 // Startup boot log
 function displayLine() {
+    profiler.mark('boot-animation-start');
     let bootScreen = document.getElementById("boot_screen");
     let log = fs.readFileSync(path.join(__dirname, "assets", "misc", "boot_log.txt")).toString().split('\n');
 
@@ -599,6 +619,7 @@ async function displayTitleScreen() {
     title.setAttribute("style", `border: 5px solid rgb(${window.theme.r}, ${window.theme.g}, ${window.theme.b});`);
 
     await _delay(1000);
+    profiler.mark('boot-animation-end');
     if (window.term) {
         bootScreen.remove();
         return true;
@@ -640,6 +661,9 @@ async function initUI() {
     <section class="mod_column" id="mod_column_right">
         <h3 class="title"><p>PANEL</p><p>NETWORK</p></h3>
     </section>`;
+
+    profiler.mark('ui-structure-created');
+    profiler.measure('ui-structure', 'renderer-start', 'ui-structure-created');
 
     await _delay(10);
 
@@ -708,50 +732,8 @@ async function initUI() {
 
     greeter.remove();
 
-    // Initialize modules
-    window.mods = {};
-
-    // Left column
-    window.mods.clock = new Clock("mod_column_left");
-    window.mods.sysinfo = new Sysinfo("mod_column_left");
-    window.mods.hardwareInspector = new HardwareInspector("mod_column_left");
-    window.mods.cpuinfo = new Cpuinfo("mod_column_left");
-    window.mods.ramwatcher = new RAMwatcher("mod_column_left");
-    window.mods.toplist = new Toplist("mod_column_left");
-
-    // Right column
-    window.mods.netstat = new Netstat("mod_column_right");
-    window.mods.globe = new LocationGlobe("mod_column_right");
-    window.mods.conninfo = new Conninfo("mod_column_right");
-    window.mods.todoWidget = new TodoWidget("mod_column_right");
-    // window.mods.context = new ContextWidget("mod_column_right");  // Disabled - using Claude HUD instead
-    window.mods.agentList = new AgentList("mod_column_left");
-
-    // Fade-in animations
-    document.querySelectorAll(".mod_column").forEach(e => {
-        e.setAttribute("class", "mod_column activated");
-    });
-    let i = 0;
-    let left = document.querySelectorAll("#mod_column_left > div");
-    let right = document.querySelectorAll("#mod_column_right > div");
-    let x = setInterval(() => {
-        if (!left[i] && !right[i]) {
-            clearInterval(x);
-        } else {
-            window.audioManager.panels.play();
-            if (left[i]) {
-                left[i].setAttribute("style", "animation-play-state: running;");
-            }
-            if (right[i]) {
-                right[i].setAttribute("style", "animation-play-state: running;");
-            }
-            i++;
-        }
-    }, 500);
-
-    await _delay(100);
-
-    // Initialize the terminal
+    // Initialize the terminal FIRST (critical path for interactivity)
+    profiler.mark('terminal-init-start');
     let shellContainer = document.getElementById("main_shell");
     shellContainer.innerHTML += `
         <ul id="main_shell_tabs">
@@ -782,6 +764,8 @@ async function initUI() {
             document.getElementById("shell_tab0").querySelector('p').innerHTML = `MAIN - ${p}`;
         }
     };
+    profiler.mark('terminal-ready');
+    profiler.measure('terminal-creation', 'terminal-init-start', 'terminal-ready');
     // Enable rename on all tabs
     for (let i = 0; i < 5; i++) {
         window.enableTabRename(i);
@@ -791,6 +775,74 @@ async function initUI() {
         // if (window.keyboard.linkedToTerm) window.term[window.currentTerm].term.focus();
     };
     window.term[0].term.writeln("\x1b[1m" + `Welcome to Son of Anton v${remote.app.getVersion()} - Electron v${process.versions.electron}` + "\x1b[0m");
+
+    // Initialize widget loader
+    const widgetLoader = new WidgetLoader({
+        profiler: profiler,
+        staggerDelay: window.settings.widgetStaggerDelay || 100
+    });
+
+    // Register widget classes
+    widgetLoader.registerWidgets({
+        clock: Clock,
+        sysinfo: Sysinfo,
+        hardwareInspector: HardwareInspector,
+        cpuinfo: Cpuinfo,
+        ramwatcher: RAMwatcher,
+        toplist: Toplist,
+        netstat: Netstat,
+        globe: LocationGlobe,
+        conninfo: Conninfo,
+        todoWidget: TodoWidget,
+        agentList: AgentList
+    });
+
+    // Load lightweight widgets immediately (Clock, TodoWidget, AgentList)
+    profiler.mark('widgets-start');
+    const lightweightLoaded = widgetLoader.loadLightweight();
+    console.log('[Startup] Lightweight widgets loaded:', lightweightLoaded.join(', '));
+
+    // Assign mods object (lightweight widgets available now)
+    window.mods = widgetLoader.getMods();
+
+    // Defer heavy widgets until terminal is interactive
+    setTimeout(async () => {
+        const heavyLoaded = await widgetLoader.loadHeavyDeferred();
+        console.log('[Startup] Heavy widgets loaded:', heavyLoaded.join(', '));
+
+        // Load deferred widgets last (for bottom positioning)
+        const deferredLoaded = widgetLoader.loadDeferred();
+        console.log('[Startup] Deferred widgets loaded:', deferredLoaded.join(', '));
+
+        // Update mods reference
+        window.mods = widgetLoader.getMods();
+
+        // Trigger widget fade-in animations
+        document.querySelectorAll(".mod_column").forEach(e => {
+            e.setAttribute("class", "mod_column activated");
+        });
+
+        let i = 0;
+        let left = document.querySelectorAll("#mod_column_left > div");
+        let right = document.querySelectorAll("#mod_column_right > div");
+        let x = setInterval(() => {
+            if (!left[i] && !right[i]) {
+                clearInterval(x);
+            } else {
+                window.audioManager.panels.play();
+                if (left[i]) {
+                    left[i].setAttribute("style", "animation-play-state: running;");
+                }
+                if (right[i]) {
+                    right[i].setAttribute("style", "animation-play-state: running;");
+                }
+                i++;
+            }
+        }, 500);
+
+        profiler.mark('widgets-complete');
+        profiler.measure('widget-loading', 'widgets-start', 'widgets-complete');
+    }, 0);
 
     await _delay(100);
 
@@ -872,15 +924,24 @@ async function initUI() {
         }
     });
 
-    /* Self-Test: Verify UI Integrity */
+    /* Self-Test: Verify UI Integrity (disabled by default, enable in settings.json) */
     setTimeout(() => {
-        if (window.runUITests) window.runUITests();
+        const settings = window.settings || {};
+        if (!settings.disableUITests && window.runUITests) {
+            window.runUITests();
+        }
     }, 2000);
 
     /* Initialize Voice System */
+    profiler.mark('voice-init-start');
     setTimeout(() => {
         initializeVoice();
     }, 2500);
+
+    profiler.mark('renderer-ready');
+    profiler.measure('renderer-total', 'renderer-start', 'renderer-ready');
+    profiler.logSummary();
+    ipc.send('log', 'info', JSON.stringify(profiler.getMetrics()));
 }
 
 window.themeChanger = theme => {
@@ -923,6 +984,18 @@ window.focusShellTab = number => {
         window.term[number].fit();
         window.term[number].term.focus();
         window.term[number].resendCWD();
+
+        // Update session mapping for the new active terminal
+        if (window.claudeState && window.term[number].cwd) {
+            const sessionId = findSessionForCwd(window.term[number].cwd, window.claudeState.projects, window.claudeState.liveContext);
+            if (sessionId) {
+                window.terminalSessions[number] = sessionId;
+            } else {
+                delete window.terminalSessions[number];
+            }
+            // Notify widgets of the change
+            window.dispatchEvent(new CustomEvent('claude-state-changed', { detail: window.claudeState }));
+        }
 
         // window.fsDisp.followTab();
     } else if (number > 0 && number <= 4 && window.term[number] !== null && typeof window.term[number] !== "object") {
@@ -1185,7 +1258,7 @@ window.openSettings = async () => {
             { label: "Open in External Editor", action: `electron.shell.openPath('${settingsFile}');electronWin.minimize();` },
             { label: "Save to Disk", action: "window.writeSettingsFile()" },
             { label: "Reload UI", action: "window.location.reload(true);" },
-            { label: "Restart eDEX", action: "remote.app.relaunch();remote.app.quit();" },
+            { label: "Restart App", action: "remote.app.relaunch();remote.app.quit();" },
             { label: "Quit", action: "remote.app.quit();" }
         ]
     }, () => {

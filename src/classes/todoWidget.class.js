@@ -55,8 +55,12 @@ class TodoWidget {
             return;
         }
 
-        // Get todos for this session from state.todos[sessionId]
-        const todos = state.todos ? state.todos[sessionId] : null;
+        // Get tasks from state.tasks[sessionId] (main session tasks)
+        // or fall back to state.todos[sessionId] (subagent todos)
+        let todos = state.tasks ? state.tasks[sessionId] : null;
+        if (!todos || !Array.isArray(todos) || todos.length === 0) {
+            todos = state.todos ? state.todos[sessionId] : null;
+        }
 
         if (!todos || !Array.isArray(todos) || todos.length === 0) {
             this._renderEmpty();
@@ -87,7 +91,7 @@ class TodoWidget {
             html += '<div class="todo-active-section">';
             activeTodos.forEach((todo, index) => {
                 const statusClass = this._mapStatus(todo.status);
-                const content = this._escapeHtml(todo.content || todo.description || todo.title || 'Task');
+                const content = this._escapeHtml(todo.subject || todo.content || todo.description || todo.title || 'Task');
                 html += `
                     <div class="todo-item">
                         <span class="todo-index">${index + 1}.</span>
@@ -107,7 +111,7 @@ class TodoWidget {
                     <div class="completed-items">
             `;
             completedTodos.forEach((todo, index) => {
-                const content = this._escapeHtml(todo.content || todo.description || todo.title || 'Task');
+                const content = this._escapeHtml(todo.subject || todo.content || todo.description || todo.title || 'Task');
                 html += `
                     <div class="todo-item completed">
                         <span class="todo-index">${activeTodos.length + index + 1}.</span>
