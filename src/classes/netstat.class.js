@@ -177,6 +177,10 @@ class Netstat {
                     const externalIpService = window.settings.externalIpService || { host: "myexternalip.com", port: 443, path: "/json" };
                     this.lastconn = require("https").get({ host: externalIpService.host, port: externalIpService.port, path: externalIpService.path, localAddress: net.ip4, agent: this._httpsAgent }, res => {
                         let rawData = "";
+                        res.on("error", e => {
+                            console.warn("[Netstat] Response stream error:", e.message);
+                            this.lastconn.finished = true;
+                        });
                         res.on("data", chunk => {
                             rawData += chunk;
                         });

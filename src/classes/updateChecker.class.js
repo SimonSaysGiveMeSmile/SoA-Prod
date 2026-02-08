@@ -21,6 +21,10 @@ class UpdateChecker {
                 "User-Agent": "Son of Anton UpdateChecker"
             }
         }, res => {
+            res.on('error', e => {
+                this._fail(e);
+            });
+
             switch (res.statusCode) {
                 case 200:
                     break;

@@ -327,7 +327,34 @@ try {
 
     function initGraphicalErrorHandling() {
         window.edexErrorsModals = [];
+
+        // Network error codes that should not trigger PANIC modals
+        const NETWORK_ERROR_CODES = ['ECONNRESET', 'ECONNREFUSED', 'ENOTFOUND', 'ETIMEDOUT', 'EPIPE', 'EAI_AGAIN'];
+
+        const isNetworkError = (msg, error) => {
+            const str = `${msg} ${error}`;
+            return NETWORK_ERROR_CODES.some(code => str.includes(code));
+        };
+
+        // Catch Node.js EventEmitter errors (e.g. from third-party libs like geolite2-redist)
+        process.on('uncaughtException', (error) => {
+            if (error && isNetworkError(error.message || '', error.code || '')) {
+                console.warn('[Renderer] Network error (suppressed):', error.message);
+                ipc.send("log", "note", `Suppressed network error: ${error.message}`);
+                return;
+            }
+            // Non-network errors: let window.onerror handle via re-throw
+            throw error;
+        });
+
         window.onerror = (msg, path, line, col, error) => {
+            // Suppress PANIC modals for transient network errors
+            if (isNetworkError(msg || '', error || '')) {
+                console.warn('[Renderer] Network error (suppressed):', msg);
+                ipc.send("log", "note", `Suppressed network error: ${msg}`);
+                return true;  // Prevent default error handling
+            }
+
             let errorModal = new Modal({
                 type: "error",
                 title: error,
@@ -826,15 +853,16 @@ try {
         };
         window.term[0].term.writeln("\x1b[1m" + `Welcome to Son of Anton v${remote.app.getVersion()} - Electron v${process.versions.electron}` + "\x1b[0m");
 
-        // Force terminal refit after WebGL canvas initialization settles.
-        // The WebGL addon needs a refit after its canvas is fully initialized;
-        // without this, the terminal area may show the body background through
-        // until a resize event (e.g. DevTools toggle) triggers a refit.
+        // Force terminal refit by toggling DevTools open/close.
+        // This triggers a window resize cycle that forces xterm to recalculate
+        // row count, eliminating the gray body background bleed-through.
         setTimeout(() => {
-            if (window.term && window.term[window.currentTerm]) {
-                window.term[window.currentTerm].fit();
-            }
-        }, 200);
+            let wc = remote.getCurrentWindow().webContents;
+            wc.openDevTools();
+            wc.once('devtools-opened', () => {
+                wc.closeDevTools();
+            });
+        }, 500);
 
         // Initialize widget loader
         const widgetLoader = new WidgetLoader({
