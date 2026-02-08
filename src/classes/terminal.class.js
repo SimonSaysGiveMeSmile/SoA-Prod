@@ -184,7 +184,16 @@ class Terminal {
                 this.term.loadAddon(attachAddon);
                 this.fit();
             };
-            this.socket.onerror = e => { throw JSON.stringify(e) };
+            this.socket.onerror = e => {
+                console.error("[Terminal] WebSocket error on port " + sockPort + ":", e);
+                if (window.edexErrorsModals) {
+                    new Modal({
+                        type: "warning",
+                        title: "Terminal Connection Error",
+                        message: `WebSocket connection to port ${sockPort} failed. The terminal backend may not be ready yet.`
+                    });
+                }
+            };
             this.socket.onclose = e => {
                 if (this.onclose) {
                     this.onclose(e);

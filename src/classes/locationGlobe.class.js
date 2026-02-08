@@ -140,6 +140,7 @@ class LocationGlobe {
         this.globe.addMarker(randomLat - 20, randomLong + 150, '', true);
     }
     addTemporaryConnectedMarker(ip) {
+        if (!window.mods.netstat || !window.mods.netstat.geoLookup) return;
         let data = window.mods.netstat.geoLookup.get(ip);
         let geo = (data !== null ? data.location : {});
         if (geo.latitude && geo.longitude) {
@@ -170,6 +171,12 @@ class LocationGlobe {
         return (Math.random() * (to - from) + from).toFixed(fixed) * 1;
     }
     updateLoc() {
+        if (!window.mods.netstat) {
+            // Netstat not loaded yet, use mock data
+            this.updateWithMockData();
+            return;
+        }
+
         if (window.settings.debug) {
             console.log("[Globe] updateLoc: offline=", window.mods.netstat.offline);
             console.log("[Globe] updateLoc: ipinfo=", window.mods.netstat.ipinfo);
@@ -259,7 +266,7 @@ class LocationGlobe {
         document.querySelector("div#mod_globe").setAttribute("class", "");
     }
     updateConns() {
-        if (!window.mods.globe.globe || window.mods.netstat.offline) return false;
+        if (!window.mods.globe || !window.mods.globe.globe || !window.mods.netstat || window.mods.netstat.offline) return false;
         window.si.networkConnections().then(conns => {
             let newconns = [];
             conns.forEach(conn => {

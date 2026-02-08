@@ -3,12 +3,13 @@ class AgentList {
         if (!parentId) throw "Missing parameters";
 
         this.parent = document.getElementById(parentId);
-        this.parent.innerHTML += `<div id="mod_agentList">
-            <h1>ACTIVE AGENTS</h1>
+        let wrapper = document.createElement("div");
+        wrapper.setAttribute("id", "mod_agentList");
+        wrapper.innerHTML = `<h1>ACTIVE AGENTS</h1>
             <div id="mod_agentList_content">
                 <div class="loading">Waiting for agent data...</div>
-            </div>
-        </div>`;
+            </div>`;
+        this.parent.appendChild(wrapper);
 
         this.contentEl = document.getElementById("mod_agentList_content");
 

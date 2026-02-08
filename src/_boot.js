@@ -219,7 +219,7 @@ function createWindow(settings) {
     });
 
     // Enable @electron/remote for this window
-    // remoteMain.enable(win.webContents); // Disabled: not supported in @electron/remote 1.x
+    remoteMain.enable(win.webContents);
 
     win.loadURL(url.format({
         pathname: path.join(__dirname, 'ui.html'),

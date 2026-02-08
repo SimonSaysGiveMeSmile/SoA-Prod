@@ -94,6 +94,11 @@ class Conninfo {
         let time = new Date().getTime();
         const conninfoEl = document.querySelector("div#mod_conninfo");
 
+        if (!window.mods.netstat) {
+            this.uploadSeries.append(time, 0);
+            this.downloadSeries.append(time, 0);
+            return;
+        }
         if (window.mods.netstat.offline) {
             this.uploadSeries.append(time, 0);
             this.downloadSeries.append(time, 0);

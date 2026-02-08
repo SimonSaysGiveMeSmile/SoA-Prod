@@ -9,14 +9,15 @@ class TodoWidget {
         if (!parentId) throw "Missing parameters";
 
         this.parent = document.getElementById(parentId);
-        this.parent.innerHTML += `<div id="mod_todoWidget">
-            <div id="mod_todoWidget_innercontainer">
+        let wrapper = document.createElement("div");
+        wrapper.setAttribute("id", "mod_todoWidget");
+        wrapper.innerHTML = `<div id="mod_todoWidget_innercontainer">
                 <h1>TASKS<span class="mod_todoWidget_count"></span></h1>
                 <div id="mod_todoWidget_content">
                     <div class="todo-empty">NO SESSION</div>
                 </div>
-            </div>
-        </div>`;
+            </div>`;
+        this.parent.appendChild(wrapper);
 
         // Store DOM references
         this.containerEl = document.getElementById("mod_todoWidget");
