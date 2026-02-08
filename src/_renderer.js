@@ -620,6 +620,7 @@ async function displayTitleScreen() {
 
     await _delay(1000);
     profiler.mark('boot-animation-end');
+    profiler.measure('boot-animation', 'boot-animation-start', 'boot-animation-end');
     if (window.term) {
         bootScreen.remove();
         return true;
@@ -664,6 +665,7 @@ async function initUI() {
 
     profiler.mark('ui-structure-created');
     profiler.measure('ui-structure', 'renderer-start', 'ui-structure-created');
+    profiler.measure('renderer-init', 'renderer-start', 'ui-structure-created');
 
     await _delay(10);
 
@@ -766,6 +768,7 @@ async function initUI() {
     };
     profiler.mark('terminal-ready');
     profiler.measure('terminal-creation', 'terminal-init-start', 'terminal-ready');
+    profiler.measure('terminal-client', 'terminal-init-start', 'terminal-ready');
     // Enable rename on all tabs
     for (let i = 0; i < 5; i++) {
         window.enableTabRename(i);
@@ -779,8 +782,17 @@ async function initUI() {
     // Initialize widget loader
     const widgetLoader = new WidgetLoader({
         profiler: profiler,
-        staggerDelay: window.settings.widgetStaggerDelay || 100
+        staggerDelay: window.settings.widgetStaggerDelay || 100,
+        onStartupComplete: (prof) => {
+            if (process.env.PROFILE_STARTUP === 'deep') {
+                ipc.send('stop-content-tracing');
+            }
+            prof.logSummary();
+        }
     });
+
+    // Expose widgetDataReady globally so widget classes can report first data point
+    window._widgetDataReady = (name) => widgetLoader.widgetDataReady(name);
 
     // Register widget classes
     widgetLoader.registerWidgets({

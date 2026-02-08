@@ -17,7 +17,14 @@ class WidgetLoader {
     constructor(options = {}) {
         this.profiler = options.profiler || null;
         this.staggerDelay = options.staggerDelay || 100;  // ms between heavy widgets
+        this.startupCompleteCallback = options.onStartupComplete || null;
         this.mods = {};
+
+        // Track which monitored widgets have reported their first data point
+        // Monitored = system monitoring widgets with async data:
+        // sysinfo, netstat, globe, conninfo, cpuinfo, ramwatcher, toplist, hardwareInspector
+        this._widgetsWithData = new Set();
+        this.MONITORED_WIDGET_COUNT = 8;
 
         // Widget registry with weight classification
         this.widgetRegistry = {
@@ -186,6 +193,28 @@ class WidgetLoader {
         const heavy = await this.loadHeavyDeferred();
         const deferred = this.loadDeferred();
         return { lightweight, heavy, deferred, mods: this.mods };
+    }
+
+    /**
+     * Report that a widget has received its first data point.
+     * When all monitored widgets have reported, marks startup-complete.
+     * @param {string} widgetName - Name of the widget reporting data ready
+     */
+    widgetDataReady(widgetName) {
+        this._widgetsWithData.add(widgetName);
+        if (this.profiler) {
+            this.profiler.mark('widget-' + widgetName + '-data-ready');
+        }
+        if (this._widgetsWithData.size >= this.MONITORED_WIDGET_COUNT) {
+            if (this.profiler) {
+                this.profiler.mark('startup-complete');
+                this.profiler.measure('total-to-interactive', 'renderer-start', 'startup-complete');
+                this.profiler.measure('widgets-to-interactive', 'widgets-start', 'startup-complete');
+            }
+            if (this.startupCompleteCallback) {
+                this.startupCompleteCallback(this.profiler);
+            }
+        }
     }
 
     /**
