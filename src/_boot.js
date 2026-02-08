@@ -137,6 +137,7 @@ if (!fs.existsSync(lastWindowStateFile)) {
 }
 
 // Copy default themes & keyboard layouts & fonts
+profiler.mark('asset-copy-start');
 signale.pending("Mirroring internal assets...");
 try {
     fs.mkdirSync(themesDir);
@@ -162,6 +163,9 @@ try {
 fs.readdirSync(innerFontsDir).forEach(e => {
     fs.writeFileSync(path.join(fontsDir, e), fs.readFileSync(path.join(innerFontsDir, e)));
 });
+
+profiler.mark('asset-copy-end');
+profiler.measure('asset-copy', 'asset-copy-start', 'asset-copy-end');
 
 // Version history logging
 const versionHistoryPath = path.join(electron.app.getPath("userData"), "versions_log.json");
@@ -251,6 +255,19 @@ function createWindow(settings) {
 }
 
 app.on('ready', async () => {
+    // Auto-start contentTracing for deep profiling mode
+    if (process.env.PROFILE_STARTUP === 'deep') {
+        await profiler.startTracing();
+    }
+
+    // IPC handler: stop contentTracing when renderer signals startup-complete
+    ipc.on('stop-content-tracing', async () => {
+        const tracePath = await profiler.stopTracing();
+        if (tracePath) {
+            signale.info('Trace saved to: ' + tracePath);
+        }
+    });
+
     signale.pending(`Loading settings file...`);
     let settings = require(settingsFile);
     signale.pending(`Resolving shell path...`);
@@ -265,7 +282,10 @@ app.on('ready', async () => {
     if (!require("fs").existsSync(settings.cwd)) throw new Error("Configured cwd path does not exist.");
 
     // See #366
+    profiler.mark('shell-env-start');
     let cleanEnv = await require("shell-env")(settings.shell).catch(e => { throw e; });
+    profiler.mark('shell-env-end');
+    profiler.measure('shell-env', 'shell-env-start', 'shell-env-end');
 
     Object.assign(cleanEnv, {
         TERM: "xterm-256color",
@@ -305,7 +325,10 @@ app.on('ready', async () => {
 
     // Support for multithreaded systeminformation calls
     signale.pending("Starting multithreaded calls controller...");
+    profiler.mark('multithread-start');
     require("./_multithread.js");
+    profiler.mark('multithread-end');
+    profiler.measure('multithread-init', 'multithread-start', 'multithread-end');
 
     createWindow(settings);
     profiler.mark('main-ready');
