@@ -65,37 +65,54 @@ class Conninfo {
         let time = new Date().getTime();
         const conninfoEl = document.querySelector("div#mod_conninfo");
 
-        if (window.mods.netstat.offline || window.mods.netstat.iface === null) {
+        if (window.mods.netstat.offline) {
             this.series[0].append(time, 0);
             this.series[1].append(time, 0);
-            // Hide the entire network traffic module when offline
-            conninfoEl.style.display = "none";
+            conninfoEl.setAttribute("class", "offline");
             return;
-        } else {
-            // Show the module when online
-            conninfoEl.style.display = "";
-            window.si.networkStats(window.mods.netstat.iface).then(data => {
+        }
+        conninfoEl.setAttribute("class", "");
 
-                let max0 = this.series[0].maxValue;
-                let max1 = -this.series[1].minValue;
-                if (max0 > max1) {
-                    this.series[1].minValue = -max0;
-                } else if (max1 > max0) {
-                    this.series[0].maxValue = max1;
-                }
-
-                this.series[0].append(time, data[0].tx_sec/125000);
-                this.series[1].append(time, -data[0].rx_sec/125000);
-
-                this.total.innerText = `${this._pb(data[0].tx_bytes)} OUT, ${this._pb(data[0].rx_bytes)} IN`.toUpperCase();
-                this.current.innerText = "UP " + parseFloat(data[0].tx_sec/125000).toFixed(2) + " DOWN " + parseFloat(data[0].rx_sec/125000).toFixed(2);
-            }).catch(err => {
-                console.error("Conninfo update error:", err);
+        window.si.networkStats().then(data => {
+            if (!data || data.length === 0) {
                 this.series[0].append(time, 0);
                 this.series[1].append(time, 0);
-                document.querySelector("div#mod_conninfo").setAttribute("class", "offline");
+                return;
+            }
+
+            let totalTxSec = 0;
+            let totalRxSec = 0;
+            let totalTxBytes = 0;
+            let totalRxBytes = 0;
+            let hasValidData = false;
+
+            data.forEach(iface => {
+                if (iface.tx_sec !== null && iface.rx_sec !== null) {
+                    totalTxSec += iface.tx_sec;
+                    totalRxSec += iface.rx_sec;
+                    hasValidData = true;
+                }
+                totalTxBytes += iface.tx_bytes;
+                totalRxBytes += iface.rx_bytes;
             });
-        }
+
+            if (!hasValidData) {
+                // First call -- no rate data yet, append 0
+                this.series[0].append(time, 0);
+                this.series[1].append(time, 0);
+            } else {
+                this.series[0].append(time, totalTxSec / 125000);
+                this.series[1].append(time, -totalRxSec / 125000);
+            }
+
+            this.total.innerText = `${this._pb(totalTxBytes)} OUT, ${this._pb(totalRxBytes)} IN`.toUpperCase();
+            this.current.innerText = "UP " + parseFloat(totalTxSec / 125000).toFixed(2) + " DOWN " + parseFloat(totalRxSec / 125000).toFixed(2);
+        }).catch(err => {
+            console.error("Conninfo update error:", err);
+            this.series[0].append(time, 0);
+            this.series[1].append(time, 0);
+            conninfoEl.setAttribute("class", "offline");
+        });
     }
 }
 
