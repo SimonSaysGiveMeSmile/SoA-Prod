@@ -1,4 +1,6 @@
 const signale = require("signale");
+const profiler = require("./performance/startupProfiler");
+profiler.mark('boot-start');
 const { app, BrowserWindow, dialog, shell } = require("electron");
 
 process.on("uncaughtException", e => {
@@ -27,11 +29,9 @@ signale.info(`Renderer is Chrome ${process.versions.chrome}`);
 
 const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) {
-    signale.fatal("Error: Another instance of eDEX is already running. Cannot proceed.");
+    signale.fatal("Error: Another instance of Son of Anton is already running. Cannot proceed.");
     app.exit(1);
 }
-
-signale.time("Startup");
 
 const electron = require("electron");
 const remoteMain = require('@electron/remote/main');
@@ -44,6 +44,8 @@ const which = require("which");
 const Terminal = require("./classes/terminal.class.js").Terminal;
 const ClaudeStateManager = require("./classes/claudeState.class.js");
 const { setupVoiceIPC, cleanupVoiceIPC } = require('./main/ipc/voiceHandlers');
+
+profiler.mark('modules-loaded');
 
 ipc.on("log", (e, type, content) => {
     signale[type](content);
@@ -101,7 +103,8 @@ if (!fs.existsSync(settingsFile)) {
         hideDotfiles: false,
         fsListView: false,
         experimentalGlobeFeatures: false,
-        experimentalFeatures: false
+        experimentalFeatures: false,
+        disableUITests: true
     }, "", 4));
     signale.info(`Default settings written to ${settingsFile}`);
 }
@@ -134,6 +137,7 @@ if (!fs.existsSync(lastWindowStateFile)) {
 }
 
 // Copy default themes & keyboard layouts & fonts
+profiler.mark('asset-copy-start');
 signale.pending("Mirroring internal assets...");
 try {
     fs.mkdirSync(themesDir);
@@ -159,6 +163,9 @@ try {
 fs.readdirSync(innerFontsDir).forEach(e => {
     fs.writeFileSync(path.join(fontsDir, e), fs.readFileSync(path.join(innerFontsDir, e)));
 });
+
+profiler.mark('asset-copy-end');
+profiler.measure('asset-copy', 'asset-copy-start', 'asset-copy-end');
 
 // Version history logging
 const versionHistoryPath = path.join(electron.app.getPath("userData"), "versions_log.json");
@@ -191,7 +198,7 @@ function createWindow(settings) {
         y,
         width,
         height,
-        show: false,
+        show: true,
         resizable: true,
         movable: settings.allowWindowed || false,
         fullscreen: settings.forceFullscreen || false,
@@ -200,6 +207,7 @@ function createWindow(settings) {
         backgroundColor: '#000000',
         webPreferences: {
             devTools: true,
+            enableRemoteModule: true,
             contextIsolation: false,
             backgroundThrottling: false,
             webSecurity: true,
@@ -220,6 +228,8 @@ function createWindow(settings) {
     }));
 
     signale.complete("Frontend window created!");
+    profiler.mark('window-created');
+    profiler.measure('window-init', 'terminal-created', 'window-created');
     win.show();
     if (!settings.allowWindowed) {
         win.setResizable(false);
@@ -236,23 +246,46 @@ function createWindow(settings) {
         // Initialize voice IPC handlers
         setupVoiceIPC(win);
         signale.success("Voice IPC handlers initialized");
+
+        // Notify renderer to track when ready
+        win.webContents.send('main-window-loaded');
     });
 
     signale.watch("Waiting for frontend connection...");
 }
 
 app.on('ready', async () => {
+    // Auto-start contentTracing for deep profiling mode
+    if (process.env.PROFILE_STARTUP === 'deep') {
+        await profiler.startTracing();
+    }
+
+    // IPC handler: stop contentTracing when renderer signals startup-complete
+    ipc.on('stop-content-tracing', async () => {
+        const tracePath = await profiler.stopTracing();
+        if (tracePath) {
+            signale.info('Trace saved to: ' + tracePath);
+        }
+    });
+
     signale.pending(`Loading settings file...`);
     let settings = require(settingsFile);
     signale.pending(`Resolving shell path...`);
     settings.shell = await which(settings.shell).catch(e => { throw (e) });
     signale.info(`Shell found at ${settings.shell}`);
+    profiler.mark('shell-resolved');
     signale.success(`Settings loaded!`);
+    profiler.mark('settings-loaded');
+    profiler.measure('require-time', 'boot-start', 'modules-loaded');
+    profiler.measure('settings-load', 'modules-loaded', 'settings-loaded');
 
     if (!require("fs").existsSync(settings.cwd)) throw new Error("Configured cwd path does not exist.");
 
     // See #366
+    profiler.mark('shell-env-start');
     let cleanEnv = await require("shell-env")(settings.shell).catch(e => { throw e; });
+    profiler.mark('shell-env-end');
+    profiler.measure('shell-env', 'shell-env-start', 'shell-env-end');
 
     Object.assign(cleanEnv, {
         TERM: "xterm-256color",
@@ -271,6 +304,8 @@ app.on('ready', async () => {
         port: settings.port || 3000
     });
     signale.success(`Terminal back-end initialized!`);
+    profiler.mark('terminal-created');
+    profiler.measure('terminal-init', 'settings-loaded', 'terminal-created');
     tty.onclosed = (code, signal) => {
         tty.ondisconnected = () => { };
         signale.complete("Terminal exited", code, signal);
@@ -278,7 +313,7 @@ app.on('ready', async () => {
     };
     tty.onopened = () => {
         signale.success("Connected to frontend!");
-        signale.timeEnd("Startup");
+        profiler.logSummary();
     };
     tty.onresized = (cols, rows) => {
         signale.info("Resized TTY to ", cols, rows);
@@ -290,9 +325,14 @@ app.on('ready', async () => {
 
     // Support for multithreaded systeminformation calls
     signale.pending("Starting multithreaded calls controller...");
+    profiler.mark('multithread-start');
     require("./_multithread.js");
+    profiler.mark('multithread-end');
+    profiler.measure('multithread-init', 'multithread-start', 'multithread-end');
 
     createWindow(settings);
+    profiler.mark('main-ready');
+    profiler.measure('main-total', 'boot-start', 'main-ready');
 
     // Support for more terminals, used for creating tabs (currently limited to 4 extra terms)
     extraTtys = {};

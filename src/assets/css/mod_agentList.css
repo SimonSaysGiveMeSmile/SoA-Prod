@@ -6,7 +6,7 @@
     margin-right: 0;
     transform: translateX(5px);  /* 5px right shift without affecting layout */
     transform-origin: left center;
-    height: 100%;
+    height: auto;  /* Changed from 100% - let content determine height */
     width: 100%;  /* Full width */
 }
 

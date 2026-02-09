@@ -4,8 +4,10 @@ class FuzzyFinder {
             return false;
         }
         
-        window.keyboard.detach();
-        
+        if (window.keyboard && window.keyboard.detach) {
+            window.keyboard.detach();
+        }
+
         this.disp = new Modal({
             type: "custom",
             title: "Fuzzy cwd file search",
@@ -22,8 +24,12 @@ class FuzzyFinder {
             ]
         }, () => {
             delete window.activeFuzzyFinder;
-            window.keyboard.attach();
-            window.term[window.currentTerm].term.focus();
+            if (window.keyboard && window.keyboard.attach) {
+                window.keyboard.attach();
+            }
+            if (window.term && window.term[window.currentTerm]) {
+                window.term[window.currentTerm].term.focus();
+            }
         });
         
         this.input = document.getElementById("fuzzyFinder");

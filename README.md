@@ -60,8 +60,8 @@ Download the latest installer for your platform from [Releases](https://github.c
 
 | Platform | File |
 |----------|------|
-| Windows (64-bit) | [`Son of Anton-Windows-x64.exe`](https://github.com/yifu001/son-of-anton-public/releases/download/v1.0.0/Son.of.Anton-Windows-x64.exe) |
-| Windows (32-bit) | [`Son of Anton-Windows-ia32.exe`](https://github.com/yifu001/son-of-anton-public/releases/download/v1.0.0/Son.of.Anton-Windows-ia32.exe) |
+| Windows (64-bit) | [`Son of Anton-Windows-x64.exe`](https://github.com/yifu001/son-of-anton-public/releases/download/v2.0.0/Son.of.Anton-Windows-x64.exe) |
+| Windows (32-bit) | [`Son of Anton-Windows-ia32.exe`](https://github.com/yifu001/son-of-anton-public/releases/download/v2.0.0/Son.of.Anton-Windows-ia32.exe) |
 
 ### 2. Install & Run
 

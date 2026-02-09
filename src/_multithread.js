@@ -11,6 +11,8 @@ if (cluster.isMaster) {
 
     const si = require("systeminformation");
 
+    const STATEFUL_SI_FUNCTIONS = ['networkStats', 'fsStats', 'disksIO'];
+
     cluster.setupMaster({
         exec: require("path").join(__dirname, "_multithread.js")
     });
@@ -48,7 +50,7 @@ if (cluster.isMaster) {
             return;
         }
 
-        if (args.length > 1 || workers.length <= 0) {
+        if (STATEFUL_SI_FUNCTIONS.includes(type) || args.length > 1 || workers.length <= 0) {
             si[type](...args).then(res => {
                 if (e.sender) {
                     e.sender.send("systeminformation-reply-"+id, res);

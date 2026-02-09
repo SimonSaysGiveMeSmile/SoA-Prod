@@ -1,6 +1,13 @@
 name: Build packaged binaries
 
-on: [push, pull_request, create]
+on:
+  push:
+    branches: [master, main]
+    tags:
+      - 'v*'
+  pull_request:
+    branches: [master, main]
+  workflow_dispatch:
 
 jobs:
   build-linux:
@@ -31,9 +38,7 @@ jobs:
     - name: Setup Node.js
       uses: actions/setup-node@v4
       with:
-        node-version: 14
-    - name: Setup npm
-      run: sudo npm i -g npm@7
+        node-version: 20
     - name: Install build deps
       run: npm install
     - name: Run prebuild script
@@ -74,11 +79,12 @@ jobs:
         path: ~/.cache/electron
         key: ${{ runner.os }}-build-${{ env.cache-name }}-${{ hashFiles('**/package-lock.json') }}
     - name: Run prebuild outside of QEMU emulator
-      run: sudo npm i -g npm@7 && npm install && rsync -a --info=progress2 src/ prebuild-src --exclude node_modules && node prebuild-minify.js && rm -rf node_modules
+      run: npm install && rsync -a --info=progress2 src/ prebuild-src --exclude node_modules && node prebuild-minify.js && rm -rf node_modules
     - name: Build for arm32v7 (aka armv7l)
-      uses: docker://arm32v7/node:14-buster
+      uses: docker://node:20-bookworm
       with:
-        args: bash -c "npm i -g npm@7 && npm install && ./node_modules/.bin/electron-builder build -l --armv7l"
+        options: --platform linux/arm/v7
+        args: bash -c "npm install && ./node_modules/.bin/electron-builder build -l --armv7l"
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     - uses: actions/upload-artifact@v4
@@ -113,11 +119,12 @@ jobs:
         path: ~/.cache/electron
         key: ${{ runner.os }}-build-${{ env.cache-name }}-${{ hashFiles('**/package-lock.json') }}
     - name: Run prebuild outside of QEMU emulator
-      run: sudo npm i -g npm@7 && npm install && rsync -a --info=progress2 src/ prebuild-src --exclude node_modules && node prebuild-minify.js && rm -rf node_modules
+      run: npm install && rsync -a --info=progress2 src/ prebuild-src --exclude node_modules && node prebuild-minify.js && rm -rf node_modules
     - name: Build for arm64 (aka arm64v8)
-      uses: docker://arm64v8/node:14-buster
+      uses: docker://node:20-bookworm
       with:
-        args: bash -c "npm i -g npm@7 && npm install && ./node_modules/.bin/electron-builder build -l --arm64"
+        options: --platform linux/arm64
+        args: bash -c "npm install && ./node_modules/.bin/electron-builder build -l --arm64"
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     - uses: actions/upload-artifact@v4
@@ -151,11 +158,11 @@ jobs:
     - name: Setup Node.js
       uses: actions/setup-node@v4
       with:
-        node-version: 14
-    - name: Setup npm
-      run: npm i -g npm@7
+        node-version: 20
     - name: npm install
-      run: npm install
+      run: npm cache clean --force && npm install
+    - name: Run prebuild script
+      run: npm run prebuild-windows
     - name: npm build
       run: npm run build-windows
       env:
@@ -190,11 +197,11 @@ jobs:
     - name: Setup Node.js
       uses: actions/setup-node@v4
       with:
-        node-version: 14
-    - name: Setup npm
-      run: sudo npm i -g npm@7
+        node-version: 20
     - name: npm install
-      run: npm install
+      run: npm install --legacy-peer-deps
+    - name: Run prebuild script
+      run: npm run prebuild-darwin
     - name: npm build
       run: npm run build-darwin
       env:

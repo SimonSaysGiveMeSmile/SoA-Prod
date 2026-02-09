@@ -50,10 +50,16 @@ class Netstat {
         geolite2.downloadDbs(require("path").join(require("@electron/remote").app.getPath("userData"), "geoIPcache")).then(() => {
             geolite2.open('GeoLite2-City', path => {
                 return maxmind.open(path);
-            }).catch(e => { throw e }).then(lookup => {
+            }).then(lookup => {
                 this.geoLookup = lookup;
                 this.lastconn.finished = true;
+            }).catch(e => {
+                console.error("[Netstat] GeoIP database open failed:", e.message || e);
+                this.lastconn.finished = true;
             });
+        }).catch(e => {
+            console.error("[Netstat] GeoIP database download failed:", e.message || e);
+            this.lastconn.finished = true;
         });
     }
     updateInfo() {
@@ -171,6 +177,10 @@ class Netstat {
                     const externalIpService = window.settings.externalIpService || { host: "myexternalip.com", port: 443, path: "/json" };
                     this.lastconn = require("https").get({ host: externalIpService.host, port: externalIpService.port, path: externalIpService.path, localAddress: net.ip4, agent: this._httpsAgent }, res => {
                         let rawData = "";
+                        res.on("error", e => {
+                            console.warn("[Netstat] Response stream error:", e.message);
+                            this.lastconn.finished = true;
+                        });
                         res.on("data", chunk => {
                             rawData += chunk;
                         });

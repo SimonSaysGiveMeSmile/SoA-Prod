@@ -9,7 +9,9 @@ section.mod_column {
     position: absolute;
     display: flex;
     flex-direction: column;
-    justify-content: space-between;
+    justify-content: flex-start;
+    gap: 1vh;
+    overflow-y: auto;
 
     opacity: 0;
     transition: opacity .5s cubic-bezier(0.4, 0, 1, 1);
@@ -44,6 +46,7 @@ section.mod_column > div {
 section#mod_column_left {
     left: -0.555vh;
     align-items: flex-end;
+    overflow-x: hidden;
 }
 
 section#mod_column_left > h3.title {

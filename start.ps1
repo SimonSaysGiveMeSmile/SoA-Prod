@@ -1,8 +1,32 @@
-# Cleanup previous instances
-Write-Host "Killing stale processes..." -ForegroundColor Yellow
-Get-Process electron -ErrorAction SilentlyContinue | Stop-Process -Force
-Get-NetTCPConnection -LocalPort 3000 -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force }
+# Son of Anton Launcher
+# Usage: .\start.ps1 [-Profile] [-Log]
 
-# Launch
+param(
+    [switch]$Profile,  # Enable startup profiling
+    [switch]$Log       # Enable transcript logging
+)
+
+if ($Log) {
+    Start-Transcript -Path "npm_launch.log" -Append
+}
+
+Write-Host "Killing existing instances..." -ForegroundColor Yellow
+Get-Process electron -ErrorAction SilentlyContinue | Stop-Process -Force
+Start-Sleep -Seconds 1
+
 Write-Host "Launching Son of Anton..." -ForegroundColor Cyan
-.\node_modules\.bin\electron src
+
+if ($Profile) {
+    Write-Host "Profiling enabled - watch for [PERF] output" -ForegroundColor Yellow
+    $env:PROFILE_STARTUP = "true"
+}
+else {
+    $env:PROFILE_STARTUP = $null
+}
+
+# Launch without rebuild (electron src directly)
+.\node_modules\.bin\electron.cmd src 2>&1
+
+if ($Log) {
+    Stop-Transcript
+}
