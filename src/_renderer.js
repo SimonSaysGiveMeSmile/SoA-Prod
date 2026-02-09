@@ -872,15 +872,36 @@ async function initUI() {
         }
     });
 
-    /* Self-Test: Verify UI Integrity */
-    setTimeout(() => {
-        if (window.runUITests) window.runUITests();
-    }, 2000);
+    /* Self-Test: Verify UI Integrity - Disabled to prevent modal popup */
+    // setTimeout(() => {
+    //     if (window.runUITests) window.runUITests();
+    // }, 2000);
 
     /* Initialize Voice System */
     setTimeout(() => {
         initializeVoice();
     }, 2500);
+
+    /* Auto-fix grey zone by toggling DevTools at startup (simulates Option+Cmd+I / Ctrl+Shift+I) */
+    setTimeout(() => {
+        const win = remote.getCurrentWindow();
+
+        // Explicitly open DevTools
+        win.webContents.openDevTools();
+
+        // Wait for DevTools to open, then close them
+        setTimeout(() => {
+            win.webContents.closeDevTools();
+
+            // Force terminal resize after closing to ensure proper layout
+            setTimeout(() => {
+                if (typeof window.currentTerm !== "undefined" && window.term[window.currentTerm]) {
+                    window.term[window.currentTerm].fit();
+                    window.dispatchEvent(new Event('resize'));
+                }
+            }, 150);
+        }, 300);
+    }, 1000);
 }
 
 window.themeChanger = theme => {
@@ -1574,4 +1595,24 @@ electronWin.on("resize", () => {
 
 electronWin.on("leave-full-screen", () => {
     remote.getCurrentWindow().setSize(960, 540);
+});
+
+// Handle DevTools state changes to prevent grey zone
+ipc.on('devtools-state-changed', (event, isOpen) => {
+    // Force multiple resize attempts to ensure proper layout
+    const forceResize = () => {
+        if (typeof window.currentTerm !== "undefined") {
+            if (typeof window.term[window.currentTerm] !== "undefined") {
+                // Force terminal to recalculate dimensions
+                window.term[window.currentTerm].fit();
+            }
+        }
+        // Trigger window resize event
+        window.dispatchEvent(new Event('resize'));
+    };
+
+    // Multiple resize attempts with delays to handle race conditions
+    setTimeout(forceResize, 50);
+    setTimeout(forceResize, 150);
+    setTimeout(forceResize, 300);
 });

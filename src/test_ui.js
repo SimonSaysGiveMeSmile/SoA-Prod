@@ -45,17 +45,5 @@ window.runUITests = () => {
         }
     });
 
-    if (passed === tests.length) {
-        new Modal({
-            type: "info",
-            title: "System Check",
-            message: `All ${passed} UI integrity tests passed.<br>Status: OPERATIONAL`
-        });
-    } else {
-        new Modal({
-            type: "error",
-            title: "System Check Failed",
-            message: `${tests.length - passed} tests failed. Check console for details.`
-        });
-    }
+    
 };

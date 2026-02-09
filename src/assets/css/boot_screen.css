@@ -14,6 +14,25 @@ section#boot_screen {
     display: flex;
     align-items: flex-end;
     justify-content: flex-start;
+
+    /* Auto-hide after boot sequence */
+    animation: autoHideBootScreen 0.1s 4s forwards;
+}
+
+@keyframes autoHideBootScreen {
+    to {
+        display: none !important;
+        opacity: 0 !important;
+        pointer-events: none !important;
+        visibility: hidden !important;
+    }
+}
+
+section#boot_screen:empty {
+    display: none !important;
+    pointer-events: none !important;
+    opacity: 0 !important;
+    visibility: hidden !important;
 }
 
 section#boot_screen.center {
