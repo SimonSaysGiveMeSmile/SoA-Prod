@@ -62,7 +62,8 @@ Download the latest installer for your platform from [Releases](https://github.c
 |----------|------|
 | Windows (64-bit) | [`Son of Anton-Windows-x64.exe`](https://github.com/yifu001/son-of-anton-public/releases/download/v2.0.0/Son.of.Anton-Windows-x64.exe) |
 | Windows (32-bit) | [`Son of Anton-Windows-ia32.exe`](https://github.com/yifu001/son-of-anton-public/releases/download/v2.0.0/Son.of.Anton-Windows-ia32.exe) |
-| macOS (Intel/Apple Silicon) | [`Son of Anton-mac.dmg`](https://github.com/yifu001/son-of-anton-public/releases/download/v2.0.0-mac/Son.of.Anton-mac.dmg) |
+| macOS (Intel) | [`Son of Anton-macOS-x64.dmg`](https://github.com/yifu001/son-of-anton-public/releases/download/v2.0.1-mac/Son%20of%20Anton-macOS-x64.dmg) |
+| macOS (Apple Silicon) | [`Son of Anton-macOS-arm64.dmg`](https://github.com/yifu001/son-of-anton-public/releases/download/v2.0.1-mac/Son%20of%20Anton-macOS-arm64.dmg) |
 
 ### 2. Install & Run
 
