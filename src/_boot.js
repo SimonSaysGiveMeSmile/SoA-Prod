@@ -251,6 +251,21 @@ function createWindow(settings) {
         win.webContents.send('main-window-loaded');
     });
 
+    // Handle DevTools toggle to prevent grey zone issue
+    win.webContents.on('devtools-opened', () => {
+        // Force window to recalculate layout immediately
+        if (win && !win.isDestroyed()) {
+            win.webContents.send('devtools-state-changed', true);
+        }
+    });
+
+    win.webContents.on('devtools-closed', () => {
+        // Force window to recalculate layout and resize terminal immediately
+        if (win && !win.isDestroyed()) {
+            win.webContents.send('devtools-state-changed', false);
+        }
+    });
+
     signale.watch("Waiting for frontend connection...");
 }
 

@@ -45,9 +45,5 @@ window.runUITests = () => {
         }
     });
 
-    if (passed === tests.length) {
-        console.log(`%c[UI Tests] All ${passed} tests passed`, "color: lime; font-weight: bold;");
-    } else {
-        console.warn(`%c[UI Tests] ${tests.length - passed}/${tests.length} tests failed`, "color: red; font-weight: bold;");
-    }
+    
 };

@@ -1,0 +1,103 @@
+/* Credit Display - Game-currency style credit counter */
+
+div#mod_creditDisplay {
+    font-family: var(--font_main), sans-serif;
+    color: rgb(var(--color_r), var(--color_g), var(--color_b));
+}
+
+div#mod_creditDisplay_innercontainer {
+    padding: 0.5vh 0;
+}
+
+div#mod_creditDisplay h1 {
+    font-size: 1.2vh;
+    letter-spacing: 0.2vh;
+    margin: 0;
+    padding: 0;
+    color: rgba(var(--color_r), var(--color_g), var(--color_b), 0.5);
+    font-weight: normal;
+}
+
+div#mod_creditDisplay_content {
+    padding: 0.5vh 0;
+}
+
+/* Main credit counter */
+.credit-counter {
+    display: flex;
+    align-items: center;
+    gap: 0.5vh;
+}
+
+.credit-icon {
+    font-size: 1.8vh;
+    color: rgb(var(--color_r), var(--color_g), var(--color_b));
+    text-shadow: 0 0 4px rgba(var(--color_r), var(--color_g), var(--color_b), 0.5);
+}
+
+.credit-amount {
+    font-size: 2.2vh;
+    font-family: var(--font_mono), monospace;
+    font-weight: bold;
+    color: rgb(var(--color_r), var(--color_g), var(--color_b));
+    transition: text-shadow 0.3s ease;
+}
+
+.credit-amount--earning {
+    text-shadow: 0 0 8px rgba(var(--color_r), var(--color_g), var(--color_b), 0.8);
+}
+
+/* Earning rate indicator */
+.credit-rate {
+    font-size: 1vh;
+    margin-top: 0.3vh;
+    color: rgba(var(--color_r), var(--color_g), var(--color_b), 0.4);
+    min-height: 1.2vh;
+    transition: color 0.3s ease;
+}
+
+.credit-rate--active {
+    color: rgb(var(--color_r), var(--color_g), var(--color_b));
+    animation: creditPulse 1s ease-in-out infinite;
+}
+
+@keyframes creditPulse {
+    0%, 100% { opacity: 0.6; }
+    50% { opacity: 1; }
+}
+
+/* Session history */
+.credit-history {
+    font-size: 0.9vh;
+    margin-top: 0.3vh;
+    color: rgba(var(--color_r), var(--color_g), var(--color_b), 0.3);
+    min-height: 1vh;
+}
+
+/* Watch Ad toggle button */
+.credit-watch-btn {
+    margin-top: 0.6vh;
+    padding: 0.5vh 0;
+    font-size: 1vh;
+    font-family: var(--font_main), sans-serif;
+    letter-spacing: 0.15vh;
+    text-align: center;
+    cursor: pointer;
+    color: rgba(var(--color_r), var(--color_g), var(--color_b), 0.6);
+    border: 0.08vh solid rgba(var(--color_r), var(--color_g), var(--color_b), 0.3);
+    background: transparent;
+    transition: color 0.2s, border-color 0.2s, background 0.2s;
+}
+
+.credit-watch-btn:hover {
+    color: rgb(var(--color_r), var(--color_g), var(--color_b));
+    border-color: rgba(var(--color_r), var(--color_g), var(--color_b), 0.6);
+    background: rgba(var(--color_r), var(--color_g), var(--color_b), 0.08);
+}
+
+.credit-watch-btn--active {
+    color: rgb(var(--color_r), var(--color_g), var(--color_b));
+    border-color: rgba(var(--color_r), var(--color_g), var(--color_b), 0.5);
+    background: rgba(var(--color_r), var(--color_g), var(--color_b), 0.12);
+    animation: creditPulse 1.5s ease-in-out infinite;
+}
