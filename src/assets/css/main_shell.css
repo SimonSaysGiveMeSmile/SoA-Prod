@@ -108,6 +108,29 @@ ul#main_shell_tabs>li p[contenteditable="true"] {
     min-width: 50px;
 }
 
+/* Dev reload/restart buttons in tab bar */
+ul#main_shell_tabs>li.shell-dev-btn {
+    max-width: 3.5vh;
+    min-width: 3.5vh;
+    flex-shrink: 0;
+    flex-grow: 0;
+    background: transparent;
+    border-left: 0.18vh solid rgba(var(--color_r), var(--color_g), var(--color_b), 0.3);
+    transform: none;
+    opacity: 0.4;
+    transition: opacity 0.2s, background 0.2s;
+}
+
+ul#main_shell_tabs>li.shell-dev-btn:hover {
+    opacity: 1;
+    background: rgba(var(--color_r), var(--color_g), var(--color_b), 0.15);
+}
+
+ul#main_shell_tabs>li.shell-dev-btn>p {
+    transform: none;
+    font-size: 1.4vh;
+}
+
 div#main_shell_innercontainer,
 div#main_shell_innercontainer pre {
     height: 100%;

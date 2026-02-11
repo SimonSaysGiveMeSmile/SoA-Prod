@@ -1,0 +1,267 @@
+/* Ad Overlay - Displays during AI thinking time */
+
+/* Base overlay - absolute positioned over terminal */
+.ad-overlay {
+    position: absolute;
+    z-index: 50;
+    pointer-events: none;
+    transition: opacity 0.3s ease, transform 0.3s ease;
+    opacity: 1;
+}
+
+/* Hidden state */
+.ad-overlay--hidden {
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(10px);
+}
+
+/* ── Fullscreen mode ──
+   Covers upper portion of terminal, leaves bottom lines visible */
+.ad-overlay--fullscreen {
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 20%;  /* Leave bottom 20% visible so user sees current output */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.75);
+}
+
+.ad-overlay--fullscreen .ad-overlay__content {
+    width: 70%;
+    max-width: 55vh;
+    text-align: center;
+}
+
+.ad-overlay--fullscreen .ad-overlay__image-container {
+    width: 100%;
+    height: 22vh;
+    margin: 1vh 0;
+}
+
+/* ── Corner mode ──
+   Small overlay in bottom-right, above the last line */
+.ad-overlay--corner {
+    bottom: 4vh;
+    right: 1vh;
+    width: 22vh;
+}
+
+.ad-overlay--corner .ad-overlay__content {
+    width: 100%;
+}
+
+.ad-overlay--corner .ad-overlay__image-container {
+    width: 100%;
+    height: 14vh;
+    margin: 0.5vh 0;
+}
+
+/* ── Panel mode ──
+   Lives in a side column, only visible on hover */
+.ad-panel {
+    position: relative;
+    width: 100%;
+    max-height: 0;
+    overflow: hidden;
+    opacity: 0;
+    transition: max-height 0.3s ease, opacity 0.3s ease;
+    font-family: var(--font_main), sans-serif;
+    color: rgb(var(--color_r), var(--color_g), var(--color_b));
+}
+
+/* Show panel on hover over the parent column */
+.mod_column:hover .ad-panel--active {
+    max-height: 30vh;
+    opacity: 1;
+}
+
+/* Also show briefly when first activated (pulse) */
+.ad-panel--active {
+    max-height: 0;
+    opacity: 0;
+}
+
+.ad-panel__inner {
+    padding: 0.5vh 0;
+}
+
+.ad-panel__badge {
+    font-size: 0.9vh;
+    letter-spacing: 0.2vh;
+    color: rgba(var(--color_r), var(--color_g), var(--color_b), 0.4);
+    text-transform: uppercase;
+    margin-bottom: 0.3vh;
+}
+
+.ad-panel__image-container {
+    width: 100%;
+    height: 12vh;
+    background: rgba(var(--color_r), var(--color_g), var(--color_b), 0.05);
+    border: 0.05vh solid rgba(var(--color_r), var(--color_g), var(--color_b), 0.2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    margin: 0.3vh 0;
+}
+
+.ad-panel__image {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+    transition: opacity 0.3s ease;
+}
+
+.ad-panel__placeholder {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5vh;
+    color: rgba(var(--color_r), var(--color_g), var(--color_b), 0.3);
+}
+
+.ad-panel__placeholder-icon {
+    font-size: 3vh;
+}
+
+.ad-panel__placeholder-text {
+    font-size: 1vh;
+    letter-spacing: 0.2vh;
+}
+
+.ad-panel__info {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.9vh;
+    margin-top: 0.3vh;
+}
+
+.ad-panel__earning {
+    color: rgb(var(--color_r), var(--color_g), var(--color_b));
+}
+
+.ad-panel__status {
+    color: rgba(var(--color_r), var(--color_g), var(--color_b), 0.5);
+    animation: adPulse 1.5s ease-in-out infinite;
+}
+
+.ad-panel__hover-hint {
+    font-size: 0.8vh;
+    text-align: center;
+    color: rgba(var(--color_r), var(--color_g), var(--color_b), 0.25);
+    margin-top: 0.2vh;
+}
+
+/* ── Shared styles ── */
+
+/* Content wrapper (overlay modes) */
+.ad-overlay__content {
+    background: rgba(0, 0, 0, 0.85);
+    border: 0.1vh solid rgba(var(--color_r), var(--color_g), var(--color_b), 0.4);
+    padding: 1vh;
+    font-family: var(--font_main), sans-serif;
+    position: relative;
+}
+
+/* Close button */
+.ad-overlay__close {
+    position: absolute;
+    top: 0.5vh;
+    right: 0.5vh;
+    width: 2.2vh;
+    height: 2.2vh;
+    border: 0.08vh solid rgba(var(--color_r), var(--color_g), var(--color_b), 0.4);
+    background: rgba(0, 0, 0, 0.6);
+    color: rgba(var(--color_r), var(--color_g), var(--color_b), 0.7);
+    font-size: 1.2vh;
+    line-height: 2.2vh;
+    text-align: center;
+    cursor: pointer;
+    pointer-events: auto;  /* Clickable even though parent is pointer-events: none */
+    transition: background 0.2s, color 0.2s;
+    font-family: var(--font_main), sans-serif;
+    z-index: 51;
+}
+
+.ad-overlay__close:hover {
+    background: rgba(var(--color_r), var(--color_g), var(--color_b), 0.2);
+    color: rgb(var(--color_r), var(--color_g), var(--color_b));
+}
+
+/* Badge label */
+.ad-overlay__badge {
+    font-size: 1vh;
+    letter-spacing: 0.2vh;
+    color: rgba(var(--color_r), var(--color_g), var(--color_b), 0.6);
+    text-transform: uppercase;
+    margin-bottom: 0.5vh;
+}
+
+/* Image container */
+.ad-overlay__image-container {
+    background: rgba(var(--color_r), var(--color_g), var(--color_b), 0.05);
+    border: 0.05vh solid rgba(var(--color_r), var(--color_g), var(--color_b), 0.2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+}
+
+.ad-overlay__image {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+    transition: opacity 0.3s ease;
+}
+
+/* Placeholder when no image */
+.ad-overlay__placeholder {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1vh;
+    color: rgba(var(--color_r), var(--color_g), var(--color_b), 0.3);
+}
+
+.ad-overlay__placeholder-icon {
+    font-size: 5vh;
+}
+
+.ad-overlay--corner .ad-overlay__placeholder-icon {
+    font-size: 3vh;
+}
+
+.ad-overlay__placeholder-text {
+    font-size: 1.2vh;
+    letter-spacing: 0.3vh;
+    font-family: var(--font_main), sans-serif;
+}
+
+/* Info bar */
+.ad-overlay__info {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 0.5vh;
+    font-size: 1vh;
+}
+
+.ad-overlay__earning {
+    color: rgb(var(--color_r), var(--color_g), var(--color_b));
+    font-family: var(--font_main), sans-serif;
+}
+
+.ad-overlay__status {
+    color: rgba(var(--color_r), var(--color_g), var(--color_b), 0.5);
+    animation: adPulse 1.5s ease-in-out infinite;
+    font-family: var(--font_main), sans-serif;
+}
+
+@keyframes adPulse {
+    0%, 100% { opacity: 0.5; }
+    50% { opacity: 1; }
+}

@@ -86,6 +86,10 @@ window.voiceToggleWidget = null;
 window.interimTranscription = null;
 window.activeTerminal = 0; // Track current terminal for voice integration
 
+// Ad overlay / thinking detection instances
+window.thinkingDetector = null;
+window.adOverlay = null;
+
 // Voice module imports (lazy loaded during initializeVoice)
 let VoiceController, VoiceState, AudioFeedback, WaveformVisualizer, VoiceToggleWidget, InterimTranscription;
 
@@ -760,6 +764,8 @@ async function initUI() {
             <li id="shell_tab2" onclick="window.focusShellTab(2);"><p>${window._escapeHtml(window.terminalNames[2])}</p></li>
             <li id="shell_tab3" onclick="window.focusShellTab(3);"><p>${window._escapeHtml(window.terminalNames[3])}</p></li>
             <li id="shell_tab4" onclick="window.focusShellTab(4);"><p>${window._escapeHtml(window.terminalNames[4])}</p></li>
+            <li id="shell_reload_btn" class="shell-dev-btn" onclick="window.location.reload(true);" title="Reload UI (Ctrl+Shift+F5)"><p>⟳</p></li>
+            <li id="shell_restart_btn" class="shell-dev-btn" onclick="remote.app.relaunch();remote.app.quit();" title="Full Restart"><p>⏻</p></li>
         </ul>
         <div id="main_shell_innercontainer">
             <pre id="terminal0" class="active"></pre>
@@ -791,6 +797,128 @@ async function initUI() {
         // if (window.keyboard.linkedToTerm) window.term[window.currentTerm].term.focus();
     };
     window.term[0].term.writeln("\x1b[1m" + `Welcome to Son of Anton v${remote.app.getVersion()} - Electron v${process.versions.electron}` + "\x1b[0m");
+
+    // Initialize thinking detector and ad overlay system (INT-01, INT-02)
+    const adOverlayEnabled = window.settings.adOverlayEnabled !== false;
+    const adOverlayMode = window.settings.adOverlayMode || 'corner';
+    const adDebounceMs = window.settings.adDebounceMs || 300;
+    const adTimeoutMs = window.settings.adTimeoutMs || 30000;
+
+    // Credit display widget in right column
+    window.mods.creditDisplay = new CreditDisplay("mod_column_right");
+
+    // Thinking detector (DET-01 through DET-06)
+    window.thinkingDetector = new ThinkingDetector({
+        enabled: adOverlayEnabled,
+        debounceMs: adDebounceMs,
+        timeoutMs: adTimeoutMs
+    });
+
+    // Ad overlay (UI-01 through UI-05)
+    // Load ad images from assets/ads/ folder if any exist
+    const adsDir = require("path").join(__dirname, "assets", "ads");
+    let adImageUrls = [];
+    try {
+        const fs = require("fs");
+        if (fs.existsSync(adsDir)) {
+            adImageUrls = fs.readdirSync(adsDir)
+                .filter(f => /\.(png|jpg|jpeg|gif|svg|webp)$/i.test(f))
+                .map(f => require("path").join(adsDir, f));
+        }
+    } catch (e) { /* no ads folder or read error — use placeholder */ }
+
+    window.adOverlay = new AdOverlay({
+        enabled: adOverlayEnabled,
+        mode: adOverlayMode,
+        creditSystem: window.mods.creditDisplay,
+        imageUrls: adImageUrls
+    });
+    window.adOverlay.init();
+
+    // Attach detector to main terminal's WebSocket
+    if (window.term[0].socket) {
+        const attachWhenReady = () => {
+            if (window.term[0].socket.readyState === WebSocket.OPEN) {
+                window.thinkingDetector.attach(0, window.term[0].socket);
+            } else {
+                window.term[0].socket.addEventListener('open', () => {
+                    window.thinkingDetector.attach(0, window.term[0].socket);
+                }, { once: true });
+            }
+        };
+        attachWhenReady();
+    }
+
+    // Test/demo functions — call from DevTools console (no app restart needed)
+    // Usage:
+    //   window.testAdOverlay()          — simulate 10s thinking on current terminal
+    //   window.testAdOverlay(5000)      — simulate 5s thinking
+    //   window.testAdMode('fullscreen') — switch mode and test
+    //   window.testAdMode('corner')
+    //   window.testAdMode('panel')
+    //   window.testAdReload()           — reload images from assets/ads/ folder
+    window.testAdOverlay = (durationMs = 10000) => {
+        if (!window.thinkingDetector || !window.adOverlay) {
+            console.warn('[AdOverlay] System not initialized');
+            return;
+        }
+        // Ensure enabled for testing
+        window.adOverlay.setEnabled(true);
+        window.thinkingDetector.configure({ enabled: true });
+
+        const termIdx = window.currentTerm || 0;
+        console.log(`[AdOverlay] Simulating ${durationMs}ms thinking on terminal ${termIdx} (mode: ${window.adOverlay.mode})...`);
+
+        // Manually fire thinking-start event
+        window.dispatchEvent(new CustomEvent('thinking-state-changed', {
+            detail: { terminalIndex: termIdx, isThinking: true, method: 'test' }
+        }));
+
+        // Auto-hide after duration
+        setTimeout(() => {
+            window.dispatchEvent(new CustomEvent('thinking-state-changed', {
+                detail: { terminalIndex: termIdx, isThinking: false, method: null }
+            }));
+            console.log('[AdOverlay] Test complete');
+        }, durationMs);
+    };
+
+    window.testAdMode = (mode) => {
+        if (!window.adOverlay) return;
+        window.adOverlay.setMode(mode);
+        console.log(`[AdOverlay] Switched to ${mode} mode`);
+        window.testAdOverlay();
+    };
+
+    window.testAdReload = () => {
+        try {
+            const fs = require("fs");
+            const p = require("path");
+            const dir = p.join(__dirname, "assets", "ads");
+            if (!fs.existsSync(dir)) {
+                console.warn(`[AdOverlay] No ads folder at ${dir} — create it and add images`);
+                return;
+            }
+            const urls = fs.readdirSync(dir)
+                .filter(f => /\.(png|jpg|jpeg|gif|svg|webp)$/i.test(f))
+                .map(f => p.join(dir, f));
+            window.adOverlay.setImageUrls(urls);
+            console.log(`[AdOverlay] Loaded ${urls.length} images from ${dir}`);
+            if (urls.length > 0) console.log('[AdOverlay] Files:', urls.map(u => p.basename(u)));
+        } catch (e) {
+            console.error('[AdOverlay] Reload failed:', e);
+        }
+    };
+
+    // Cycle ad mode — call window.toggleAdMode() from DevTools console
+    window.toggleAdMode = () => {
+        if (!window.adOverlay) return;
+        const modes = ['corner', 'fullscreen', 'panel'];
+        const idx = modes.indexOf(window.adOverlay.mode);
+        const newMode = modes[(idx + 1) % modes.length];
+        window.adOverlay.setMode(newMode);
+        console.log(`[AdOverlay] Switched to ${newMode} mode`);
+    };
 
     await _delay(100);
 
@@ -931,7 +1059,7 @@ window.focusShellTab = number => {
     if (number !== window.currentTerm && window.term[number]) {
         window.currentTerm = number;
 
-        document.querySelectorAll(`ul#main_shell_tabs > li:not(:nth-child(${number + 1}))`).forEach(e => {
+        document.querySelectorAll(`ul#main_shell_tabs > li:not(:nth-child(${number + 1})):not(.shell-dev-btn)`).forEach(e => {
             e.setAttribute("class", "");
         });
         document.getElementById("shell_tab" + number).setAttribute("class", "active");
@@ -944,6 +1072,16 @@ window.focusShellTab = number => {
         window.term[number].fit();
         window.term[number].term.focus();
         window.term[number].resendCWD();
+
+        // Update ad overlay for active terminal (DET-06)
+        if (window.thinkingDetector) {
+            const isThinking = window.thinkingDetector.isThinking(number);
+            if (isThinking && window.adOverlay) {
+                window.adOverlay.show(number);
+            } else if (window.adOverlay) {
+                window.adOverlay.hide();
+            }
+        }
 
         // window.fsDisp.followTab();
     } else if (number > 0 && number <= 4 && window.term[number] !== null && typeof window.term[number] !== "object") {
@@ -965,6 +1103,10 @@ window.focusShellTab = number => {
 
                 window.term[number].onclose = e => {
                     delete window.term[number].onprocesschange;
+                    // Detach thinking detector from closing terminal
+                    if (window.thinkingDetector) {
+                        window.thinkingDetector.detach(number);
+                    }
                     // Reset to default name on close
                     window.terminalNames[number] = "EMPTY";
                     window.saveTerminalNames();
@@ -985,6 +1127,21 @@ window.focusShellTab = number => {
 
                 document.getElementById("shell_tab" + number).innerHTML = `<p>::${port}</p>`;
                 window.enableTabRename(number);
+
+                // Attach thinking detector to new terminal (DET-06)
+                if (window.thinkingDetector && window.term[number].socket) {
+                    const attachNewTerm = () => {
+                        if (window.term[number].socket.readyState === WebSocket.OPEN) {
+                            window.thinkingDetector.attach(number, window.term[number].socket);
+                        } else {
+                            window.term[number].socket.addEventListener('open', () => {
+                                window.thinkingDetector.attach(number, window.term[number].socket);
+                            }, { once: true });
+                        }
+                    };
+                    attachNewTerm();
+                }
+
                 setTimeout(() => {
                     window.focusShellTab(number);
                 }, 500);
@@ -1199,6 +1356,33 @@ window.openSettings = async () => {
                         <td>Context usage percentage to trigger warning (0-100)</td>
                         <td><input type="number" id="settingsEditor-contextWarningThreshold" value="${window.settings.contextWarningThreshold || 80}" min="0" max="100"></td>
                     </tr>
+                    <tr>
+                        <td>adOverlayEnabled</td>
+                        <td>Show ad overlay during AI thinking time to earn credits</td>
+                        <td><select id="settingsEditor-adOverlayEnabled">
+                            <option>${window.settings.adOverlayEnabled !== false}</option>
+                            <option>${window.settings.adOverlayEnabled === false}</option>
+                        </select></td>
+                    </tr>
+                    <tr>
+                        <td>adOverlayMode</td>
+                        <td>Ad display: corner, fullscreen (more credits), or panel (hover to view)</td>
+                        <td><select id="settingsEditor-adOverlayMode">
+                            <option value="corner" ${(window.settings.adOverlayMode || 'corner') === 'corner' ? 'selected' : ''}>corner</option>
+                            <option value="fullscreen" ${window.settings.adOverlayMode === 'fullscreen' ? 'selected' : ''}>fullscreen</option>
+                            <option value="panel" ${window.settings.adOverlayMode === 'panel' ? 'selected' : ''}>panel</option>
+                        </select></td>
+                    </tr>
+                    <tr>
+                        <td>adDebounceMs</td>
+                        <td>Debounce delay (ms) before showing/hiding overlay</td>
+                        <td><input type="number" id="settingsEditor-adDebounceMs" value="${window.settings.adDebounceMs || 300}" min="0" max="2000"></td>
+                    </tr>
+                    <tr>
+                        <td>adTimeoutMs</td>
+                        <td>Max overlay display time (ms) before auto-hide</td>
+                        <td><input type="number" id="settingsEditor-adTimeoutMs" value="${window.settings.adTimeoutMs || 30000}" min="5000" max="120000"></td>
+                    </tr>
                 </table>
                 <h6 id="settingsEditorStatus">Loaded values from memory</h6>
                 <br>`,
@@ -1261,7 +1445,11 @@ window.writeSettingsFile = () => {
         fsListView: (document.getElementById("settingsEditor-fsListView").value === "true"),
         experimentalGlobeFeatures: (document.getElementById("settingsEditor-experimentalGlobeFeatures").value === "true"),
         experimentalFeatures: (document.getElementById("settingsEditor-experimentalFeatures").value === "true"),
-        contextWarningThreshold: Number(document.getElementById("settingsEditor-contextWarningThreshold")?.value) || 80
+        contextWarningThreshold: Number(document.getElementById("settingsEditor-contextWarningThreshold")?.value) || 80,
+        adOverlayEnabled: (document.getElementById("settingsEditor-adOverlayEnabled")?.value === "true"),
+        adOverlayMode: document.getElementById("settingsEditor-adOverlayMode")?.value || 'corner',
+        adDebounceMs: Number(document.getElementById("settingsEditor-adDebounceMs")?.value) || 300,
+        adTimeoutMs: Number(document.getElementById("settingsEditor-adTimeoutMs")?.value) || 30000
     };
 
     Object.keys(window.settings).forEach(key => {
