@@ -484,6 +484,19 @@ try {
                 onStateChange: (state, oldState) => {
                     console.log('[Voice] State changed:', oldState, '->', state);
 
+                    // Update tab bar mic button
+                    const micBtn = document.getElementById('shell_mic_btn');
+                    if (micBtn) {
+                        micBtn.classList.remove('shell-mic-active', 'shell-mic-recording', 'shell-mic-processing');
+                        if (state === VoiceState.RECORDING) {
+                            micBtn.classList.add('shell-mic-active', 'shell-mic-recording');
+                        } else if (state === VoiceState.PROCESSING) {
+                            micBtn.classList.add('shell-mic-active', 'shell-mic-processing');
+                        } else if (state === VoiceState.LISTENING) {
+                            micBtn.classList.add('shell-mic-active');
+                        }
+                    }
+
                     // Update toggle widget
                     if (window.voiceToggleWidget) {
                         if (state === VoiceState.RECORDING) {
@@ -813,6 +826,7 @@ try {
             <li id="shell_tab2" onclick="window.focusShellTab(2);"><p>${window._escapeHtml(window.terminalNames[2])}</p></li>
             <li id="shell_tab3" onclick="window.focusShellTab(3);"><p>${window._escapeHtml(window.terminalNames[3])}</p></li>
             <li id="shell_tab4" onclick="window.focusShellTab(4);"><p>${window._escapeHtml(window.terminalNames[4])}</p></li>
+            <li id="shell_mic_btn" class="shell-dev-btn shell-mic-btn" onclick="window.toggleMic();" title="Toggle Microphone"><p>🎙</p></li>
             <li id="shell_settings_btn" class="shell-dev-btn" onclick="window.openSettings();" title="Settings"><p>⚙</p></li>
             <li id="shell_reload_btn" class="shell-dev-btn" onclick="window.location.reload(true);" title="Reload UI (Ctrl+Shift+F5)"><p>⟳</p></li>
             <li id="shell_restart_btn" class="shell-dev-btn" onclick="remote.app.relaunch();remote.app.quit();" title="Full Restart"><p>⏻</p></li>
@@ -947,6 +961,141 @@ try {
                     }, 500);
                 }
             });
+        })();
+
+        // Terminal image preview — drag-and-drop & clipboard paste
+        (function initTerminalImagePreview() {
+            const container = document.getElementById("main_shell_innercontainer");
+            if (!container) return;
+
+            const imageExts = /\.(png|jpe?g|gif|bmp|webp|svg|ico|tiff?)$/i;
+
+            function showImagePreview(src, label) {
+                // Remove any existing preview
+                dismissPreview();
+
+                const overlay = document.createElement("div");
+                overlay.className = "terminal-image-preview";
+                overlay.innerHTML = `
+                    <div class="img-preview-inner">
+                        <span class="img-preview-close">✕</span>
+                        <img src="${src}" ondragstart="return false;">
+                        <div class="img-preview-label">${window._escapeHtml(label)}</div>
+                    </div>`;
+
+                overlay.addEventListener("click", e => {
+                    if (e.target === overlay || e.target.classList.contains("img-preview-close")) {
+                        dismissPreview();
+                    }
+                });
+
+                container.appendChild(overlay);
+            }
+
+            function dismissPreview() {
+                const existing = container.querySelector(".terminal-image-preview");
+                if (existing) existing.remove();
+            }
+
+            // Expose globally so other parts can trigger previews
+            window.showTerminalImagePreview = showImagePreview;
+            window.dismissTerminalImagePreview = dismissPreview;
+
+            // Dismiss on Escape key
+            document.addEventListener("keydown", e => {
+                if (e.key === "Escape") dismissPreview();
+            });
+
+            // --- Drag and drop ---
+            let dragCounter = 0;
+
+            container.addEventListener("dragenter", e => {
+                e.preventDefault();
+                dragCounter++;
+                container.classList.add("drag-over");
+            });
+
+            container.addEventListener("dragover", e => {
+                e.preventDefault();
+            });
+
+            container.addEventListener("dragleave", e => {
+                dragCounter--;
+                if (dragCounter <= 0) {
+                    dragCounter = 0;
+                    container.classList.remove("drag-over");
+                }
+            });
+
+            container.addEventListener("drop", e => {
+                e.preventDefault();
+                dragCounter = 0;
+                container.classList.remove("drag-over");
+
+                const files = e.dataTransfer.files;
+                if (!files || files.length === 0) return;
+
+                for (let i = 0; i < files.length; i++) {
+                    const file = files[i];
+                    if (file.type.startsWith("image/") || imageExts.test(file.name)) {
+                        showImagePreview(
+                            "file://" + file.path.replace(/#/g, "%23"),
+                            file.name + " — " + formatBytes(file.size)
+                        );
+                        // Insert the file path into the active terminal
+                        if (window.term && window.term[window.currentTerm]) {
+                            window.term[window.currentTerm].write(file.path.includes(" ") ? `"${file.path}"` : file.path);
+                        }
+                        break; // Preview first image only
+                    }
+                }
+            });
+
+            // --- Clipboard paste for images ---
+            container.addEventListener("paste", e => {
+                const items = (e.clipboardData || {}).items;
+                if (!items) return;
+
+                for (let i = 0; i < items.length; i++) {
+                    if (items[i].type.startsWith("image/")) {
+                        e.preventDefault();
+                        const blob = items[i].getAsFile();
+                        if (!blob) return;
+
+                        // Save to temp file and show preview
+                        const reader = new FileReader();
+                        reader.onload = () => {
+                            const dataUrl = reader.result;
+                            const ext = blob.type.split("/")[1] || "png";
+                            const tmpDir = require("os").tmpdir();
+                            const tmpPath = require("path").join(tmpDir, `clipboard_${Date.now()}.${ext}`);
+
+                            // Write the buffer to a temp file
+                            const buf = Buffer.from(dataUrl.split(",")[1], "base64");
+                            require("fs").writeFile(tmpPath, buf, err => {
+                                if (err) {
+                                    console.error("[ImagePreview] Failed to save clipboard image:", err);
+                                    return;
+                                }
+                                showImagePreview(dataUrl, "Clipboard image → " + tmpPath);
+                                if (window.term && window.term[window.currentTerm]) {
+                                    window.term[window.currentTerm].write(tmpPath.includes(" ") ? `"${tmpPath}"` : tmpPath);
+                                }
+                            });
+                        };
+                        reader.readAsDataURL(blob);
+                        break;
+                    }
+                }
+            });
+
+            function formatBytes(bytes) {
+                if (bytes < 1024) return bytes + " B";
+                if (bytes < 1048576) return (bytes / 1024).toFixed(1) + " KB";
+                return (bytes / 1048576).toFixed(1) + " MB";
+            }
+
+            console.log("[Startup] Terminal image preview initialized (drag-drop + clipboard)");
         })();
 
         // Initialize thinking detector and ad overlay system (INT-01, INT-02)
@@ -1476,6 +1625,25 @@ try {
         }
     };
 
+    // Mic toggle in tab bar
+    window.toggleMic = () => {
+        const btn = document.getElementById('shell_mic_btn');
+        if (!window.voiceController) {
+            console.warn('[Mic] Voice controller not initialized');
+            return;
+        }
+        const newState = window.voiceController.toggle();
+        if (btn) {
+            btn.classList.toggle('shell-mic-active', newState);
+            btn.title = newState ? 'Microphone ON (click to disable)' : 'Toggle Microphone';
+        }
+        // Keep the sidebar widget in sync if it exists
+        if (window.voiceToggleWidget) {
+            window.voiceToggleWidget.setEnabled(newState);
+        }
+        console.log('[Mic] Toggled to:', newState ? 'ON' : 'OFF');
+    };
+
     // Settings editor
     window.openSettings = async () => {
         if (document.getElementById("settingsEditor")) return;
@@ -1824,6 +1992,7 @@ try {
             "SETTINGS": "Open the settings editor.",
             "SHORTCUTS": "List and edit available keyboard shortcuts.",
             "FUZZY_SEARCH": "Search for entries in the current working directory.",
+            "TEXT_EDITOR": "Open a text editor overlay for composing and editing text before sending to the terminal.",
             "FS_LIST_VIEW": "Toggle between list and grid view in the file browser.",
             "FS_DOTFILES": "Toggle hidden files and directories in the file browser.",
             "KB_PASSMODE": "Toggle the on-screen keyboard's \"Password Mode\", which allows you to safely<br>type sensitive information even if your screen might be recorded (disable visual input feedback).",
@@ -1915,6 +2084,30 @@ try {
                 window.term[window.currentTerm].clipboard.copy();
                 return true;
             case "PASTE":
+                // Check for image in clipboard first
+                {
+                    const clipImg = remote.clipboard.readImage();
+                    if (clipImg && !clipImg.isEmpty()) {
+                        const ext = "png";
+                        const tmpDir = require("os").tmpdir();
+                        const tmpPath = require("path").join(tmpDir, `clipboard_${Date.now()}.${ext}`);
+                        const buf = clipImg.toPNG();
+                        require("fs").writeFile(tmpPath, buf, err => {
+                            if (err) {
+                                console.error("[ImagePreview] Failed to save clipboard image:", err);
+                                return;
+                            }
+                            const dataUrl = "data:image/png;base64," + buf.toString("base64");
+                            if (window.showTerminalImagePreview) {
+                                window.showTerminalImagePreview(dataUrl, "Clipboard image → " + tmpPath);
+                            }
+                            if (window.term && window.term[window.currentTerm]) {
+                                window.term[window.currentTerm].write(tmpPath.includes(" ") ? `"${tmpPath}"` : tmpPath);
+                            }
+                        });
+                        return true;
+                    }
+                }
                 window.term[window.currentTerm].clipboard.paste();
                 return true;
             case "NEXT_TAB":
@@ -1967,6 +2160,9 @@ try {
                 return true;
             case "FUZZY_SEARCH":
                 window.activeFuzzyFinder = new FuzzyFinder();
+                return true;
+            case "TEXT_EDITOR":
+                new TextEditor();
                 return true;
             case "FS_LIST_VIEW":
                 if (window.fsDisp && window.fsDisp.toggleListview) {
@@ -2030,6 +2226,14 @@ try {
         });
     };
     window.registerKeyboardShortcuts();
+
+    // Fallback: ensure Text Editor shortcut works even if not in user's shortcuts.json
+    document.addEventListener("keydown", (e) => {
+        if (e.ctrlKey && e.shiftKey && e.key === "E") {
+            e.preventDefault();
+            window.useAppShortcut("TEXT_EDITOR");
+        }
+    });
 
     // See #361
     window.addEventListener("focus", () => {

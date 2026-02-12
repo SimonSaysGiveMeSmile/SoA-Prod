@@ -204,12 +204,43 @@ ul#main_shell_tabs>li.shell-dev-btn>p {
     font-size: 1.4vh;
 }
 
+/* Mic toggle button in tab bar */
+ul#main_shell_tabs>li.shell-mic-btn {
+    transition: opacity 0.2s, background 0.2s, box-shadow 0.2s;
+}
+
+ul#main_shell_tabs>li.shell-mic-active {
+    opacity: 1;
+    background: rgba(var(--color_r), var(--color_g), var(--color_b), 0.15);
+    box-shadow: inset 0 -2px 0 rgb(var(--color_r), var(--color_g), var(--color_b));
+}
+
+ul#main_shell_tabs>li.shell-mic-recording {
+    background: rgba(239, 68, 68, 0.2);
+    box-shadow: inset 0 -2px 0 #ef4444;
+    animation: micPulse 1s ease-in-out infinite;
+}
+
+ul#main_shell_tabs>li.shell-mic-processing {
+    background: rgba(234, 179, 8, 0.15);
+    box-shadow: inset 0 -2px 0 #eab308;
+}
+
+@keyframes micPulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
 div#main_shell_innercontainer,
 div#main_shell_innercontainer pre {
     height: 100%;
     width: 100%;
     margin: 0vh;
     overflow: hidden;
+}
+
+div#main_shell_innercontainer {
+    position: relative;
 }
 
 div#main_shell_innercontainer pre {
@@ -329,4 +360,95 @@ div#main_shell_innercontainer pre#terminal4 {
 
 .xterm:not(.enable-mouse-events) {
     cursor: text;
+}
+
+/* Image preview overlay */
+.terminal-image-preview {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.85);
+    backdrop-filter: blur(4px);
+    opacity: 0;
+    animation: imgPreviewFadeIn 0.25s ease-out forwards;
+    cursor: pointer;
+}
+
+@keyframes imgPreviewFadeIn {
+    to { opacity: 1; }
+}
+
+.terminal-image-preview .img-preview-inner {
+    position: relative;
+    max-width: 80%;
+    max-height: 80%;
+    border: 1px solid rgba(var(--color_r), var(--color_g), var(--color_b), 0.6);
+    box-shadow:
+        0 0 12px rgba(var(--color_r), var(--color_g), var(--color_b), 0.3),
+        0 0 40px rgba(var(--color_r), var(--color_g), var(--color_b), 0.1);
+}
+
+.terminal-image-preview .img-preview-inner img {
+    display: block;
+    max-width: 100%;
+    max-height: 60vh;
+    object-fit: contain;
+}
+
+.terminal-image-preview .img-preview-label {
+    position: absolute;
+    bottom: -3vh;
+    left: 0;
+    right: 0;
+    text-align: center;
+    font-family: var(--font_main);
+    font-size: 1.2vh;
+    color: rgb(var(--color_r), var(--color_g), var(--color_b));
+    opacity: 0.7;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.terminal-image-preview .img-preview-close {
+    position: absolute;
+    top: -2.5vh;
+    right: -1vh;
+    font-family: var(--font_main);
+    font-size: 1.6vh;
+    color: rgb(var(--color_r), var(--color_g), var(--color_b));
+    cursor: pointer;
+    opacity: 0.6;
+    transition: opacity 0.15s;
+}
+
+.terminal-image-preview .img-preview-close:hover {
+    opacity: 1;
+}
+
+/* Drag-over highlight on terminal */
+div#main_shell_innercontainer.drag-over {
+    outline: 2px dashed rgba(var(--color_r), var(--color_g), var(--color_b), 0.6);
+    outline-offset: -4px;
+}
+
+div#main_shell_innercontainer.drag-over::after {
+    content: 'DROP IMAGE';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-family: var(--font_main);
+    font-size: 2vh;
+    color: rgb(var(--color_r), var(--color_g), var(--color_b));
+    opacity: 0.5;
+    z-index: 999;
+    pointer-events: none;
+    letter-spacing: 0.5vh;
 }
