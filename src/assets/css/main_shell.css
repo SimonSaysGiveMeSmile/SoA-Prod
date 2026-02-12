@@ -108,6 +108,66 @@ ul#main_shell_tabs>li p[contenteditable="true"] {
     min-width: 50px;
 }
 
+/* Claude Code tab status indicator — single dot, four states */
+ul#main_shell_tabs>li[data-claude-status]>p::before {
+    content: '';
+    display: inline-block;
+    width: 0.5vh;
+    height: 0.5vh;
+    border-radius: 50%;
+    margin-right: 0.35vh;
+    vertical-align: middle;
+    position: relative;
+    top: -0.05vh;
+    transition: background 0.3s, box-shadow 0.3s, opacity 0.3s;
+}
+
+/* Running — pulsing green glow */
+ul#main_shell_tabs>li[data-claude-status="running"]>p::before {
+    background: #00ff88;
+    box-shadow: 0 0 3px #00ff88, 0 0 6px rgba(0, 255, 136, 0.4);
+    animation: tabStatusPulse 1.2s ease-in-out infinite;
+}
+
+/* Needs input — steady amber */
+ul#main_shell_tabs>li[data-claude-status="input"]>p::before {
+    background: #ffaa00;
+    box-shadow: 0 0 3px rgba(255, 170, 0, 0.5);
+    animation: tabStatusBlink 2s ease-in-out infinite;
+}
+
+/* Completed — dim theme color */
+ul#main_shell_tabs>li[data-claude-status="completed"]>p::before {
+    background: rgb(var(--color_r), var(--color_g), var(--color_b));
+    opacity: 0.45;
+}
+
+/* Active tab overrides — darker tones for contrast on bright background */
+ul#main_shell_tabs>li.active[data-claude-status="running"]>p::before {
+    background: #00994d;
+    box-shadow: 0 0 3px rgba(0, 153, 77, 0.6);
+}
+
+ul#main_shell_tabs>li.active[data-claude-status="input"]>p::before {
+    background: #b37700;
+    box-shadow: 0 0 3px rgba(179, 119, 0, 0.5);
+}
+
+ul#main_shell_tabs>li.active[data-claude-status="completed"]>p::before {
+    background: var(--color_light_black);
+    opacity: 0.4;
+}
+
+@keyframes tabStatusPulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+}
+
+@keyframes tabStatusBlink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+}
+
 /* Dev reload/restart buttons in tab bar */
 ul#main_shell_tabs>li.shell-dev-btn {
     max-width: 3.5vh;

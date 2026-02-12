@@ -11,8 +11,10 @@
  */
 class ThinkingDetector {
     constructor(opts = {}) {
-        this.debounceMs = opts.debounceMs || 300;       // DET-03
-        this.timeoutMs = opts.timeoutMs || 30000;       // DET-04
+        this.debounceStartMs = opts.debounceStartMs || opts.debounceMs || 300;  // DET-03
+        this.debounceEndMs = opts.debounceEndMs || 500;   // Longer end debounce to avoid premature end
+        this.timeoutMs = opts.timeoutMs || 30000;         // DET-04
+        this._cooldownMs = opts.cooldownMs || 2000;       // Cooldown after thinking ends
         this.enabled = opts.enabled !== false;
 
         // Per-terminal thinking state (DET-06)
@@ -61,6 +63,7 @@ class ThinkingDetector {
             debounceTimer: null,
             timeoutTimer: null,
             lastOutputTime: 0,
+            lastThinkingEndTime: 0,
             silenceTimer: null,
             method: null
         };
@@ -104,66 +107,74 @@ class ThinkingDetector {
         const state = this._terminals[terminalIndex];
         if (!state) return;
 
-        // Update buffer (rolling window)
+        // Update buffer (rolling window) — used for end-of-thinking prompt detection
         state.buffer = (state.buffer + data).slice(-this._bufferSize);
         state.lastOutputTime = Date.now();
 
-        // Check for thinking indicators
-        const thinkingDetected = this._detectThinking(state.buffer);
+        // Use raw data chunk for start detection (avoids stale buffer false positives)
+        // Use buffer tail for end detection (prompt patterns may span chunks)
+        const startDetected = this._detectThinkingStart(data);
+        const endDetected = this._detectThinkingEnd(state.buffer);
 
-        if (thinkingDetected.detected && !state.isThinking) {
+        if (startDetected.detected && !state.isThinking) {
+            // Skip if within cooldown window after last thinking ended
+            const elapsed = Date.now() - state.lastThinkingEndTime;
+            if (elapsed < this._cooldownMs) return;
+
             // Start thinking with debounce (DET-03)
             clearTimeout(state.debounceTimer);
             state.debounceTimer = setTimeout(() => {
-                this._setThinking(terminalIndex, true, thinkingDetected.method);
-            }, this.debounceMs);
-        } else if (!thinkingDetected.detected && state.isThinking) {
-            // End thinking with debounce (DET-03)
+                this._setThinking(terminalIndex, true, startDetected.method);
+            }, this.debounceStartMs);
+        } else if (state.isThinking && endDetected) {
+            // End thinking with longer debounce to avoid premature end
             clearTimeout(state.debounceTimer);
             state.debounceTimer = setTimeout(() => {
                 this._setThinking(terminalIndex, false, null);
-            }, this.debounceMs);
+            }, this.debounceEndMs);
         }
 
         // Reset silence detection - if output is flowing, check for prompt return
         if (state.isThinking) {
             clearTimeout(state.silenceTimer);
-            // If we see a prompt pattern, end thinking
             const promptDetected = this._patterns.toolUseEnd.some(p => p.test(data));
             if (promptDetected) {
                 clearTimeout(state.debounceTimer);
                 state.debounceTimer = setTimeout(() => {
                     this._setThinking(terminalIndex, false, null);
-                }, this.debounceMs);
+                }, this.debounceEndMs);
             }
         }
     }
 
     /**
-     * Detect thinking patterns in buffered output (DET-01, DET-05)
-     * Only checks recent output (last chunk + small window) to avoid stale matches
-     * @param {string} buffer
+     * Detect thinking START patterns in raw data chunk (not buffer)
+     * Using raw data avoids stale ⏺ indicators in the rolling buffer
+     * @param {string} data - Raw incoming terminal output chunk
      * @returns {{ detected: boolean, method: string|null }}
      */
-    _detectThinking(buffer) {
-        // Only check the most recent output to avoid stale pattern matches
-        const recent = buffer.slice(-512);
-
-        // Check tool use patterns (DET-01) — Claude-specific indicators
+    _detectThinkingStart(data) {
         for (const pattern of this._patterns.toolUseStart) {
-            if (pattern.test(recent)) {
+            if (pattern.test(data)) {
                 return { detected: true, method: 'tool_use' };
             }
         }
-
-        // Check status messages (DET-05)
         for (const pattern of this._patterns.statusMessages) {
-            if (pattern.test(recent)) {
+            if (pattern.test(data)) {
                 return { detected: true, method: 'status_message' };
             }
         }
-
         return { detected: false, method: null };
+    }
+
+    /**
+     * Detect thinking END patterns in buffer tail (prompts may span chunks)
+     * @param {string} buffer
+     * @returns {boolean}
+     */
+    _detectThinkingEnd(buffer) {
+        const recent = buffer.slice(-512);
+        return this._patterns.toolUseEnd.some(p => p.test(recent));
     }
 
     /**
@@ -189,7 +200,9 @@ class ThinkingDetector {
             this._onThinkingStart(terminalIndex, method);
         } else {
             clearTimeout(state.timeoutTimer);
+            // Aggressively clear buffer and record end time for cooldown
             state.buffer = '';
+            state.lastThinkingEndTime = Date.now();
             this._onThinkingEnd(terminalIndex);
         }
 
@@ -214,7 +227,12 @@ class ThinkingDetector {
      * @param {object} opts
      */
     configure(opts) {
-        if (typeof opts.debounceMs === 'number') this.debounceMs = opts.debounceMs;
+        if (typeof opts.debounceMs === 'number') {
+            this.debounceStartMs = opts.debounceMs;
+        }
+        if (typeof opts.debounceStartMs === 'number') this.debounceStartMs = opts.debounceStartMs;
+        if (typeof opts.debounceEndMs === 'number') this.debounceEndMs = opts.debounceEndMs;
+        if (typeof opts.cooldownMs === 'number') this._cooldownMs = opts.cooldownMs;
         if (typeof opts.timeoutMs === 'number') this.timeoutMs = opts.timeoutMs;
         if (typeof opts.enabled === 'boolean') this.enabled = opts.enabled;
     }

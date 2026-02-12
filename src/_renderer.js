@@ -41,6 +41,7 @@ const remote = require("@electron/remote");
 const ipc = electron.ipcRenderer;
 const profiler = require("./performance/startupProfiler");
 const { WidgetLoader } = require("./classes/widgetLoader.class");
+const { DragManager } = require("./classes/dragManager.class");
 const logFile = path.join(__dirname, '..', 'renderer_debug.log');
 const log = (msg) => {
     try {
@@ -963,6 +964,74 @@ try {
             console.log(`[AdOverlay] Switched to ${newMode} mode`);
         };
 
+        // Test tab status indicator — call window.testTabStatus(0, 'running') from DevTools
+        window.testTabStatus = (tabIndex = 0, status = 'running') => {
+            const valid = ['running', 'input', 'completed', 'hidden'];
+            if (!valid.includes(status)) {
+                console.warn(`[TabStatus] Invalid status. Use: ${valid.join(', ')}`);
+                return;
+            }
+            const tabEl = document.getElementById('shell_tab' + tabIndex);
+            if (!tabEl) { console.warn('[TabStatus] Tab not found'); return; }
+            if (status === 'hidden') {
+                tabEl.removeAttribute('data-claude-status');
+            } else {
+                tabEl.setAttribute('data-claude-status', status);
+            }
+            console.log(`[TabStatus] Tab ${tabIndex} → ${status}`);
+        };
+
+        // Tab status indicator — tracks Claude Code state per terminal tab
+        // States: running | input | completed | (no attribute = idle/hidden)
+        window.updateTabStatuses = () => {
+            for (let i = 0; i < 5; i++) {
+                const tabEl = document.getElementById('shell_tab' + i);
+                if (!tabEl || tabEl.classList.contains('shell-dev-btn')) continue;
+
+                const term = window.term && window.term[i];
+                const sessionId = window.terminalSessions && window.terminalSessions[i];
+
+                // No terminal instance or no Claude session → hide indicator
+                if (!term || typeof term !== 'object' || !sessionId) {
+                    tabEl.removeAttribute('data-claude-status');
+                    continue;
+                }
+
+                // Check thinking state from detector
+                const isThinking = window.thinkingDetector && window.thinkingDetector.isThinking(i);
+
+                if (isThinking) {
+                    tabEl.setAttribute('data-claude-status', 'running');
+                    continue;
+                }
+
+                // Not thinking — determine if waiting for input or completed
+                const liveCtx = window.claudeState && window.claudeState.liveContext;
+                const isLiveSession = liveCtx && String(liveCtx.session_id) === String(sessionId);
+                const liveAge = isLiveSession ? (Date.now() - (liveCtx.timestamp || 0)) : Infinity;
+
+                // Also check detector's last activity for this terminal
+                const detState = window.thinkingDetector && window.thinkingDetector._terminals[i];
+                const lastEnd = detState ? detState.lastThinkingEndTime : 0;
+                const lastOutput = detState ? detState.lastOutputTime : 0;
+                const recentActivity = Math.max(lastEnd, lastOutput);
+                const timeSinceActivity = recentActivity ? (Date.now() - recentActivity) : Infinity;
+
+                if (liveAge < 120000 || timeSinceActivity < 120000) {
+                    tabEl.setAttribute('data-claude-status', 'input');
+                } else {
+                    tabEl.setAttribute('data-claude-status', 'completed');
+                }
+            }
+        };
+
+        // Update on thinking state changes
+        window.addEventListener('thinking-state-changed', () => window.updateTabStatuses());
+        // Update on Claude state changes (session mapping, live context)
+        window.addEventListener('claude-state-changed', () => window.updateTabStatuses());
+        // Periodic refresh for time-based transitions (input → completed)
+        setInterval(() => window.updateTabStatuses(), 5000);
+
         // Initialize widget loader
         const widgetLoader = new WidgetLoader({
             profiler: profiler,
@@ -1042,6 +1111,10 @@ try {
 
             profiler.mark('widgets-complete');
             profiler.measure('widget-loading', 'widgets-start', 'widgets-complete');
+
+            // Enable drag-and-drop reordering on all panel widgets
+            window.dragManager = new DragManager();
+            console.log('[Startup] DragManager initialized — widgets are now draggable');
         }, 0);
 
         await _delay(100);

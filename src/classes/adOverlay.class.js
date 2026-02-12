@@ -12,7 +12,7 @@
 class AdOverlay {
     constructor(opts = {}) {
         this.enabled = opts.enabled !== false;
-        this.mode = opts.mode || 'corner';
+        this.mode = opts.mode || localStorage.getItem('soa_ad_mode') || null; // null = needs picker
         this.placeholderUrl = opts.placeholderUrl || null;
         this.creditSystem = opts.creditSystem || null;
         this.panelParentId = opts.panelParentId || 'mod_column_right';
@@ -26,6 +26,7 @@ class AdOverlay {
         this._overlayEl = null;
         this._panelEl = null;
         this._containerEl = null;
+        this._modePickerEl = null;
         this._visible = false;
         this._dismissed = false;
         this._activeTerminal = null;
@@ -34,6 +35,14 @@ class AdOverlay {
         this._creditInterval = null;
         this._manualMode = false;  // True when user manually triggered the ad
         this._userDismissed = false;  // True when user explicitly dismissed via button/close
+
+        // Drag state for corner mode
+        this._isDragging = false;
+        this._dragOffsetX = 0;
+        this._dragOffsetY = 0;
+        this._onDragStart = this._onDragStart.bind(this);
+        this._onDragMove = this._onDragMove.bind(this);
+        this._onDragEnd = this._onDragEnd.bind(this);
 
         this._onThinkingChanged = this._onThinkingChanged.bind(this);
         this._onCloseClick = this._onCloseClick.bind(this);
@@ -50,6 +59,13 @@ class AdOverlay {
             this._overlayEl.className = 'ad-overlay ad-overlay--hidden';
             this._overlayEl.innerHTML = this._buildOverlayHTML();
             this._containerEl.appendChild(this._overlayEl);
+
+            // Mode picker overlay
+            this._modePickerEl = document.createElement('div');
+            this._modePickerEl.id = 'ad_mode_picker';
+            this._modePickerEl.className = 'ad-mode-picker ad-mode-picker--hidden';
+            this._modePickerEl.innerHTML = this._buildModePickerHTML();
+            this._containerEl.appendChild(this._modePickerEl);
         }
 
         // Panel element (panel mode — lives in side column)
@@ -75,6 +91,7 @@ class AdOverlay {
         return `
             <div class="ad-overlay__content">
                 <div class="ad-overlay__close" title="Close ad">✕</div>
+                <div class="ad-overlay__change-mode" title="Change ad mode">⚙</div>
                 <div class="ad-overlay__badge">${label}</div>
                 <div class="ad-overlay__image-container">
                     ${this._imgHTML('ad-overlay')}
@@ -111,6 +128,158 @@ class AdOverlay {
                     <span class="${prefix}__placeholder-icon">🐱</span>
                     <span class="${prefix}__placeholder-text">AD SPACE</span>
                 </div>`;
+    }
+
+    // ── Mode Picker ──
+
+    _buildModePickerHTML() {
+        return `
+            <div class="ad-mode-picker__backdrop">
+                <div class="ad-mode-picker__container">
+                    <div class="ad-mode-picker__title">CHOOSE AD DISPLAY MODE</div>
+                    <div class="ad-mode-picker__subtitle">Earn credits while AI thinks</div>
+                    <div class="ad-mode-picker__cards">
+                        <div class="ad-mode-picker__card" data-mode="fullscreen">
+                            <div class="ad-mode-picker__card-icon">⬜</div>
+                            <div class="ad-mode-picker__card-name">FULLSCREEN</div>
+                            <div class="ad-mode-picker__card-desc">Covers the terminal for maximum earnings</div>
+                            <div class="ad-mode-picker__card-rate">+5 credits/sec</div>
+                        </div>
+                        <div class="ad-mode-picker__card" data-mode="corner">
+                            <div class="ad-mode-picker__card-icon">◳</div>
+                            <div class="ad-mode-picker__card-name">CORNER</div>
+                            <div class="ad-mode-picker__card-desc">Small draggable overlay in the corner</div>
+                            <div class="ad-mode-picker__card-rate">+2 credits/sec</div>
+                        </div>
+                        <div class="ad-mode-picker__card" data-mode="panel">
+                            <div class="ad-mode-picker__card-icon">▐</div>
+                            <div class="ad-mode-picker__card-name">PANEL</div>
+                            <div class="ad-mode-picker__card-desc">Side panel, visible on hover</div>
+                            <div class="ad-mode-picker__card-rate">+3 credits/sec</div>
+                        </div>
+                    </div>
+                </div>
+            </div>`;
+    }
+
+    _showModePicker(terminalIndex) {
+        if (!this._modePickerEl) return;
+        this._modePickerEl.className = 'ad-mode-picker ad-mode-picker--visible';
+        // Bind card clicks
+        const cards = this._modePickerEl.querySelectorAll('.ad-mode-picker__card');
+        cards.forEach(card => {
+            card.onclick = () => {
+                const mode = card.dataset.mode;
+                this._selectMode(mode, terminalIndex);
+            };
+        });
+    }
+
+    _hideModePicker() {
+        if (!this._modePickerEl) return;
+        this._modePickerEl.className = 'ad-mode-picker ad-mode-picker--hidden';
+    }
+
+    _selectMode(mode, terminalIndex) {
+        this.mode = mode;
+        localStorage.setItem('soa_ad_mode', mode);
+        this._hideModePicker();
+        // Now show the actual ad
+        this._dismissed = false;
+        this._userDismissed = false;
+        this.show(terminalIndex);
+    }
+
+    _onChangeModeClick(e) {
+        e.stopPropagation();
+        const savedTerminal = this._activeTerminal;
+        this.hide();
+        this._dismissed = false;
+        this._userDismissed = false;
+        this.mode = null;
+        localStorage.removeItem('soa_ad_mode');
+        this._showModePicker(savedTerminal);
+    }
+
+    // ── Drag support (corner mode) ──
+
+    _initDrag() {
+        if (!this._overlayEl) return;
+        const content = this._overlayEl.querySelector('.ad-overlay__content');
+        if (content) {
+            content.addEventListener('mousedown', this._onDragStart);
+            this._overlayEl.classList.add('ad-overlay--draggable');
+        }
+        // Restore saved position
+        const saved = localStorage.getItem('soa_ad_position');
+        if (saved) {
+            try {
+                const pos = JSON.parse(saved);
+                this._overlayEl.style.position = 'fixed';
+                this._overlayEl.style.top = pos.top + 'px';
+                this._overlayEl.style.left = pos.left + 'px';
+                this._overlayEl.style.bottom = 'auto';
+                this._overlayEl.style.right = 'auto';
+            } catch (_) { /* ignore bad data */ }
+        }
+    }
+
+    _onDragStart(e) {
+        // Don't drag when clicking close or change-mode buttons
+        if (e.target.closest('.ad-overlay__close') || e.target.closest('.ad-overlay__change-mode')) return;
+        this._isDragging = true;
+        const rect = this._overlayEl.getBoundingClientRect();
+        this._dragOffsetX = e.clientX - rect.left;
+        this._dragOffsetY = e.clientY - rect.top;
+        // Switch to fixed positioning for free movement
+        this._overlayEl.style.position = 'fixed';
+        this._overlayEl.style.top = rect.top + 'px';
+        this._overlayEl.style.left = rect.left + 'px';
+        this._overlayEl.style.bottom = 'auto';
+        this._overlayEl.style.right = 'auto';
+        this._overlayEl.classList.add('ad-overlay--dragging');
+        document.addEventListener('mousemove', this._onDragMove);
+        document.addEventListener('mouseup', this._onDragEnd);
+        e.preventDefault();
+    }
+
+    _onDragMove(e) {
+        if (!this._isDragging) return;
+        const x = e.clientX - this._dragOffsetX;
+        const y = e.clientY - this._dragOffsetY;
+        this._overlayEl.style.left = x + 'px';
+        this._overlayEl.style.top = y + 'px';
+    }
+
+    _onDragEnd() {
+        if (!this._isDragging) return;
+        this._isDragging = false;
+        this._overlayEl.classList.remove('ad-overlay--dragging');
+        document.removeEventListener('mousemove', this._onDragMove);
+        document.removeEventListener('mouseup', this._onDragEnd);
+        // Save position
+        const rect = this._overlayEl.getBoundingClientRect();
+        localStorage.setItem('soa_ad_position', JSON.stringify({
+            top: rect.top, left: rect.left
+        }));
+    }
+
+    _cleanupDrag() {
+        if (!this._overlayEl) return;
+        const content = this._overlayEl.querySelector('.ad-overlay__content');
+        if (content) {
+            content.removeEventListener('mousedown', this._onDragStart);
+        }
+        document.removeEventListener('mousemove', this._onDragMove);
+        document.removeEventListener('mouseup', this._onDragEnd);
+        this._isDragging = false;
+        this._overlayEl.classList.remove('ad-overlay--draggable', 'ad-overlay--dragging');
+        // Reset inline position styles
+        this._overlayEl.style.position = '';
+        this._overlayEl.style.top = '';
+        this._overlayEl.style.left = '';
+        this._overlayEl.style.bottom = '';
+        this._overlayEl.style.right = '';
     }
 
     /**
@@ -181,16 +350,19 @@ class AdOverlay {
         if (terminalIndex !== active) return;
 
         if (isThinking) {
-            // Don't show if user explicitly dismissed via button/close
             if (!this._dismissed && !this._userDismissed) {
-                this.show(terminalIndex);
+                if (!this.mode) {
+                    // No mode chosen yet — show picker instead of ad
+                    this._showModePicker(terminalIndex);
+                } else {
+                    this.show(terminalIndex);
+                }
             }
         } else {
-            // Thinking ended completely — reset dismissed flags for the next thinking session
             this._dismissed = false;
             this._userDismissed = false;
+            this._hideModePicker();
             if (!this._manualMode) {
-                // Only auto-hide if user didn't manually trigger the ad
                 this.hide();
             }
         }
@@ -237,6 +409,10 @@ class AdOverlay {
 
     show(terminalIndex) {
         if (this._visible || this._dismissed || this._userDismissed) return;
+        if (!this.mode) {
+            this._showModePicker(terminalIndex);
+            return;
+        }
         this._visible = true;
         this._activeTerminal = terminalIndex;
 
@@ -289,10 +465,15 @@ class AdOverlay {
         this._overlayEl.className = `ad-overlay ad-overlay--${this.mode}`;
         const btn = this._overlayEl.querySelector('.ad-overlay__close');
         if (btn) btn.addEventListener('click', this._onCloseClick);
+        const changeBtn = this._overlayEl.querySelector('.ad-overlay__change-mode');
+        if (changeBtn) changeBtn.addEventListener('click', (e) => this._onChangeModeClick(e));
+        // Init drag for corner mode
+        if (this.mode === 'corner') this._initDrag();
     }
 
     _hideOverlay() {
         if (!this._overlayEl) return;
+        this._cleanupDrag();
         this._overlayEl.className = 'ad-overlay ad-overlay--hidden';
         const btn = this._overlayEl.querySelector('.ad-overlay__close');
         if (btn) btn.removeEventListener('click', this._onCloseClick);
@@ -342,6 +523,7 @@ class AdOverlay {
         const savedTerminal = this._activeTerminal;
         if (wasVisible) this.hide();
         this.mode = mode;
+        localStorage.setItem('soa_ad_mode', mode);
         if (wasVisible) {
             this._dismissed = false;
             this.show(savedTerminal);
@@ -362,12 +544,16 @@ class AdOverlay {
     destroy() {
         this.hide();
         this._stopImageRotation();
+        this._cleanupDrag();
         window.removeEventListener('thinking-state-changed', this._onThinkingChanged);
         if (this._overlayEl && this._overlayEl.parentNode) {
             this._overlayEl.parentNode.removeChild(this._overlayEl);
         }
         if (this._panelEl && this._panelEl.parentNode) {
             this._panelEl.parentNode.removeChild(this._panelEl);
+        }
+        if (this._modePickerEl && this._modePickerEl.parentNode) {
+            this._modePickerEl.parentNode.removeChild(this._modePickerEl);
         }
     }
 }
