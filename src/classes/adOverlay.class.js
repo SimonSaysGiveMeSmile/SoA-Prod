@@ -33,6 +33,7 @@ class AdOverlay {
         this._creditRates = { fullscreen: 5, corner: 2, panel: 3 };
         this._creditInterval = null;
         this._manualMode = false;  // True when user manually triggered the ad
+        this._userDismissed = false;  // True when user explicitly dismissed via button/close
 
         this._onThinkingChanged = this._onThinkingChanged.bind(this);
         this._onCloseClick = this._onCloseClick.bind(this);
@@ -180,14 +181,14 @@ class AdOverlay {
         if (terminalIndex !== active) return;
 
         if (isThinking) {
-            // Don't reset _dismissed here — respect user's dismiss for this thinking session.
-            // _dismissed is only reset when thinking fully ENDS, so the next fresh session can show.
-            if (!this._dismissed) {
+            // Don't show if user explicitly dismissed via button/close
+            if (!this._dismissed && !this._userDismissed) {
                 this.show(terminalIndex);
             }
         } else {
-            // Thinking ended completely — reset dismissed for the next thinking session
+            // Thinking ended completely — reset dismissed flags for the next thinking session
             this._dismissed = false;
+            this._userDismissed = false;
             if (!this._manualMode) {
                 // Only auto-hide if user didn't manually trigger the ad
                 this.hide();
@@ -198,6 +199,7 @@ class AdOverlay {
     _onCloseClick(e) {
         e.stopPropagation();
         this._dismissed = true;
+        this._userDismissed = true;
         this._manualMode = false;
         this.hide();
     }
@@ -211,14 +213,18 @@ class AdOverlay {
      */
     manualToggle() {
         if (this._visible) {
+            // User wants to stop the ad — dismiss it so thinking detector won't re-show
             this._manualMode = false;
-            this._dismissed = false;
+            this._dismissed = true;
+            this._userDismissed = true;
             this.hide();
             window.dispatchEvent(new CustomEvent('ad-manual-toggled', { detail: { active: false } }));
             return false;
         } else {
+            // User wants to watch an ad
             this._manualMode = true;
             this._dismissed = false;
+            this._userDismissed = false;
             this.enabled = true;
             const termIdx = typeof window.currentTerm !== 'undefined' ? window.currentTerm : 0;
             this.show(termIdx);
@@ -230,7 +236,7 @@ class AdOverlay {
     // ── Show / Hide ──
 
     show(terminalIndex) {
-        if (this._visible || this._dismissed) return;
+        if (this._visible || this._dismissed || this._userDismissed) return;
         this._visible = true;
         this._activeTerminal = terminalIndex;
 
@@ -254,6 +260,17 @@ class AdOverlay {
         this._stopCredits();
         this._stopImageRotation();
         this._dispatchVisibilityEvent(false);
+    }
+
+    /**
+     * Force-hide the ad and reset all state flags.
+     * Used when the ad needs to be completely reset (e.g., terminal switch).
+     */
+    forceHide() {
+        this._dismissed = false;
+        this._userDismissed = false;
+        this._manualMode = false;
+        this.hide();
     }
 
     /**

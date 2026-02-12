@@ -116,7 +116,7 @@ try {
 
     // Voice control instances
     window.voiceController = null;
-    window.audioFeedback = null;
+    window.audioFeedback = null; // Audio feedback disabled - sounds removed
     window.waveformVisualizer = null;
     window.voiceToggleWidget = null;
     window.interimTranscription = null;
@@ -127,7 +127,7 @@ try {
     window.adOverlay = null;
 
     // Voice module imports (lazy loaded during initializeVoice)
-    let VoiceController, VoiceState, AudioFeedback, WaveformVisualizer, VoiceToggleWidget, InterimTranscription;
+    let VoiceController, VoiceState, WaveformVisualizer, VoiceToggleWidget, InterimTranscription;
 
     // IPC wrapper for voice (maps to electron.ipcRenderer)
     window.ipc = {
@@ -450,9 +450,6 @@ try {
             VoiceController = voiceControllerModule.VoiceController;
             VoiceState = voiceControllerModule.VoiceState;
 
-            const audioFeedbackModule = require('./classes/audioFeedback.class');
-            AudioFeedback = audioFeedbackModule.AudioFeedback;
-
             const waveformVisualizerModule = require('./classes/waveformVisualizer.class');
             WaveformVisualizer = waveformVisualizerModule.WaveformVisualizer;
 
@@ -461,10 +458,6 @@ try {
 
             const interimTranscriptionModule = require('./classes/interimTranscription.class');
             InterimTranscription = interimTranscriptionModule.InterimTranscription;
-
-            // Create audio feedback handler
-            window.audioFeedback = new AudioFeedback();
-            window.audioFeedback.initialize();
 
             // Create waveform visualizer
             window.waveformVisualizer = new WaveformVisualizer({ barCount: 32 });
@@ -519,15 +512,12 @@ try {
                 },
 
                 onWakeDetected: () => {
-                    window.audioFeedback.playYesSir();
+                    console.log('[Voice] Wake word detected');
                 },
 
                 onTranscription: (text, success) => {
                     if (success && text) {
-                        window.audioFeedback.playSuccess();
                         insertTranscriptionIntoTerminal(text);
-                    } else {
-                        window.audioFeedback.playFailure();
                     }
                 },
 
@@ -822,6 +812,7 @@ try {
             <li id="shell_tab2" onclick="window.focusShellTab(2);"><p>${window._escapeHtml(window.terminalNames[2])}</p></li>
             <li id="shell_tab3" onclick="window.focusShellTab(3);"><p>${window._escapeHtml(window.terminalNames[3])}</p></li>
             <li id="shell_tab4" onclick="window.focusShellTab(4);"><p>${window._escapeHtml(window.terminalNames[4])}</p></li>
+            <li id="shell_settings_btn" class="shell-dev-btn" onclick="window.openSettings();" title="Settings"><p>⚙</p></li>
             <li id="shell_reload_btn" class="shell-dev-btn" onclick="window.location.reload(true);" title="Reload UI (Ctrl+Shift+F5)"><p>⟳</p></li>
             <li id="shell_restart_btn" class="shell-dev-btn" onclick="remote.app.relaunch();remote.app.quit();" title="Full Restart"><p>⏻</p></li>
         </ul>
@@ -1216,9 +1207,10 @@ try {
             if (window.thinkingDetector) {
                 const isThinking = window.thinkingDetector.isThinking(number);
                 if (isThinking && window.adOverlay) {
+                    window.adOverlay.forceHide();
                     window.adOverlay.show(number);
                 } else if (window.adOverlay) {
-                    window.adOverlay.hide();
+                    window.adOverlay.forceHide();
                 }
             }
 

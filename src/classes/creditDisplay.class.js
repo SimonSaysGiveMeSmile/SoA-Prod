@@ -51,8 +51,15 @@ class CreditDisplay {
         // Update button label when ad visibility changes (covers both manual and thinking-driven)
         this._onAdVisibilityChanged = (e) => {
             const { visible } = e.detail;
-            this.watchBtn.textContent = visible ? '■ STOP AD' : '▶ WATCH AD';
-            this.watchBtn.classList.toggle('credit-watch-btn--active', visible);
+            // Re-query button in case DOM was rebuilt
+            const btn = this.watchBtn && document.contains(this.watchBtn)
+                ? this.watchBtn
+                : document.getElementById('credit_watchAdBtn');
+            if (btn) {
+                btn.textContent = visible ? '■ STOP AD' : '▶ WATCH AD';
+                btn.classList.toggle('credit-watch-btn--active', visible);
+                this.watchBtn = btn;
+            }
         };
         window.addEventListener('ad-visibility-changed', this._onAdVisibilityChanged);
 
@@ -68,6 +75,11 @@ class CreditDisplay {
      * @param {string} source - Source type ('fullscreen', 'corner', or 'panel')
      */
     addCredits(amount, source) {
+        // Reconnect DOM if elements were detached (e.g., by widget loader rebuild)
+        if (!this.amountEl || !document.contains(this.amountEl)) {
+            this._reconnectDOM();
+        }
+
         this.credits += amount;
         this._saveCredits();
 
@@ -94,6 +106,10 @@ class CreditDisplay {
      * @param {string} source - Ad mode ('fullscreen', 'corner', 'panel')
      */
     startEarning(rate, source) {
+        // Reconnect DOM if elements were detached
+        if (!this.rateEl || !document.contains(this.rateEl)) {
+            this._reconnectDOM();
+        }
         this._isEarning = true;
         this._currentRate = rate;
         this._updateRate(rate, source);
@@ -105,8 +121,55 @@ class CreditDisplay {
     stopEarning() {
         this._isEarning = false;
         this._currentRate = 0;
-        this.rateEl.textContent = '';
-        this.rateEl.classList.remove('credit-rate--active');
+        if (this.rateEl && document.contains(this.rateEl)) {
+            this.rateEl.textContent = '';
+            this.rateEl.classList.remove('credit-rate--active');
+        }
+    }
+
+    /**
+     * Re-create DOM elements if they were detached (e.g., by widget loader rebuild)
+     */
+    _reconnectDOM() {
+        // Check if our wrapper is still in the document
+        let wrapper = document.getElementById('mod_creditDisplay');
+        if (!wrapper || !document.contains(wrapper)) {
+            // Re-create the wrapper
+            wrapper = document.createElement('div');
+            wrapper.id = 'mod_creditDisplay';
+            wrapper.style.animationPlayState = 'running';
+            wrapper.innerHTML = `
+                <div id="mod_creditDisplay_innercontainer">
+                    <h1>CREDITS</h1>
+                    <div id="mod_creditDisplay_content">
+                        <div class="credit-counter">
+                            <span class="credit-icon">◆</span>
+                            <span class="credit-amount">${this._formatCredits(this.credits)}</span>
+                        </div>
+                        <div class="credit-rate"></div>
+                        <div class="credit-history"></div>
+                        <div class="credit-watch-btn" id="credit_watchAdBtn">▶ WATCH AD</div>
+                    </div>
+                </div>`;
+            if (this.parent && document.contains(this.parent)) {
+                this.parent.appendChild(wrapper);
+            }
+        }
+
+        this.containerEl = wrapper;
+        this.amountEl = wrapper.querySelector('.credit-amount');
+        this.rateEl = wrapper.querySelector('.credit-rate');
+        this.historyEl = wrapper.querySelector('.credit-history');
+        this.watchBtn = document.getElementById('credit_watchAdBtn');
+
+        // Re-attach button handler
+        if (this.watchBtn) {
+            this.watchBtn.addEventListener('click', () => {
+                if (window.adOverlay) {
+                    window.adOverlay.manualToggle();
+                }
+            });
+        }
     }
 
     /**
@@ -114,6 +177,7 @@ class CreditDisplay {
      */
     _animateCounter() {
         if (this._animationFrame) cancelAnimationFrame(this._animationFrame);
+        if (!this.amountEl || !document.contains(this.amountEl)) return;
 
         const target = this.credits;
         const start = this._displayedCredits;
@@ -150,6 +214,7 @@ class CreditDisplay {
     _updateRate(rate, source) {
         this._currentRate = rate;
         this._isEarning = true;
+        if (!this.rateEl || !document.contains(this.rateEl)) return;
         const labels = { fullscreen: 'FULL AD', corner: 'CORNER AD', panel: 'PANEL AD' };
         const label = labels[source] || 'AD';
         this.rateEl.textContent = `+${rate}/sec · ${label}`;
