@@ -122,24 +122,31 @@ ul#main_shell_tabs>li[data-claude-status]>p::before {
     transition: background 0.3s, box-shadow 0.3s, opacity 0.3s;
 }
 
-/* Running — pulsing green glow */
+/* Running / generating — pulsing green */
 ul#main_shell_tabs>li[data-claude-status="running"]>p::before {
-    background: #00ff88;
-    box-shadow: 0 0 3px #00ff88, 0 0 6px rgba(0, 255, 136, 0.4);
+    background: #00e676;
+    box-shadow: 0 0 3px #00e676, 0 0 6px rgba(0, 230, 118, 0.4);
     animation: tabStatusPulse 1.2s ease-in-out infinite;
 }
 
-/* Needs input — steady amber */
+/* Attention / input required — red */
 ul#main_shell_tabs>li[data-claude-status="input"]>p::before {
-    background: #ffaa00;
-    box-shadow: 0 0 3px rgba(255, 170, 0, 0.5);
+    background: #ff4444;
+    box-shadow: 0 0 3px rgba(255, 68, 68, 0.5);
     animation: tabStatusBlink 2s ease-in-out infinite;
 }
 
-/* Completed — dim theme color */
+/* Execution completed — orange */
 ul#main_shell_tabs>li[data-claude-status="completed"]>p::before {
-    background: rgb(var(--color_r), var(--color_g), var(--color_b));
-    opacity: 0.45;
+    background: #ff9800;
+    box-shadow: 0 0 3px rgba(255, 152, 0, 0.4);
+}
+
+/* Idle — blue */
+ul#main_shell_tabs>li[data-claude-status="idle"]>p::before {
+    background: #42a5f5;
+    box-shadow: 0 0 3px rgba(66, 165, 245, 0.3);
+    opacity: 0.6;
 }
 
 /* Active tab overrides — darker tones for contrast on bright background */
@@ -149,13 +156,19 @@ ul#main_shell_tabs>li.active[data-claude-status="running"]>p::before {
 }
 
 ul#main_shell_tabs>li.active[data-claude-status="input"]>p::before {
-    background: #b37700;
-    box-shadow: 0 0 3px rgba(179, 119, 0, 0.5);
+    background: #cc0000;
+    box-shadow: 0 0 3px rgba(204, 0, 0, 0.5);
 }
 
 ul#main_shell_tabs>li.active[data-claude-status="completed"]>p::before {
-    background: var(--color_light_black);
-    opacity: 0.4;
+    background: #e68a00;
+    box-shadow: 0 0 3px rgba(230, 138, 0, 0.4);
+}
+
+ul#main_shell_tabs>li.active[data-claude-status="idle"]>p::before {
+    background: #1976d2;
+    box-shadow: 0 0 3px rgba(25, 118, 210, 0.4);
+    opacity: 0.5;
 }
 
 @keyframes tabStatusPulse {

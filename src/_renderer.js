@@ -851,6 +851,104 @@ try {
         };
         window.term[0].term.writeln("\x1b[1m" + `Welcome to Son of Anton v${remote.app.getVersion()} - Electron v${process.versions.electron}` + "\x1b[0m");
 
+        // Save terminal state before unload for hot-reload preservation
+        window.addEventListener("beforeunload", () => {
+            let ports = {};
+            let buffers = {};
+            Object.keys(window.term).forEach(idx => {
+                if (window.term[idx] && window.term[idx].port) {
+                    ports[idx] = window.term[idx].port;
+                }
+                if (window.term[idx] && window.term[idx].term) {
+                    let buf = window.term[idx].term.buffer.active;
+                    let lines = [];
+                    for (let i = 0; i < buf.length; i++) {
+                        let line = buf.getLine(i);
+                        if (line) lines.push(line.translateToString(true));
+                    }
+                    buffers[idx] = lines.join("\r\n");
+                }
+            });
+            sessionStorage.setItem("terminalPorts", JSON.stringify(ports));
+            sessionStorage.setItem("terminalBuffers", JSON.stringify(buffers));
+            sessionStorage.setItem("currentTerm", String(window.currentTerm));
+        });
+
+        // Restore extra terminals on hot-reload
+        (function restoreTerminals() {
+            let savedPorts = sessionStorage.getItem("terminalPorts");
+            if (!savedPorts) return;
+
+            let ports = JSON.parse(savedPorts);
+            let buffers = JSON.parse(sessionStorage.getItem("terminalBuffers") || "{}");
+            let savedCurrentTerm = parseInt(sessionStorage.getItem("currentTerm") || "0", 10);
+            sessionStorage.removeItem("terminalPorts");
+            sessionStorage.removeItem("terminalBuffers");
+            sessionStorage.removeItem("currentTerm");
+
+            ipc.send("ttylist");
+            ipc.once("ttylist-reply", (e, alivePorts) => {
+                Object.keys(ports).forEach(key => {
+                    let idx = Number(key);
+                    if (idx === 0) return;
+                    let port = Number(ports[key]);
+                    if (!alivePorts[port]) return;
+
+                    window.term[idx] = new Terminal({
+                        role: "client",
+                        parentId: "terminal" + idx,
+                        port: port
+                    });
+
+                    if (buffers[key]) {
+                        window.term[idx].term.write(buffers[key]);
+                    }
+
+                    window.term[idx].onclose = () => {
+                        delete window.term[idx].onprocesschange;
+                        if (window.thinkingDetector) {
+                            window.thinkingDetector.detach(idx);
+                        }
+                        window.terminalNames[idx] = "EMPTY";
+                        window.saveTerminalNames();
+                        document.getElementById("shell_tab" + idx).innerHTML = "<p>EMPTY</p>";
+                        document.getElementById("terminal" + idx).innerHTML = "";
+                        window.term[idx].term.dispose();
+                        delete window.term[idx];
+                        window.useAppShortcut("PREVIOUS_TAB");
+                    };
+
+                    window.term[idx].onprocesschange = p => {
+                        if (window.terminalNames[idx] === "EMPTY" || window.terminalNames[idx].startsWith('#')) {
+                            document.getElementById("shell_tab" + idx).querySelector('p').innerHTML = `#${idx + 1} - ${p}`;
+                        }
+                    };
+
+                    document.getElementById("shell_tab" + idx).innerHTML = `<p>::${port}</p>`;
+                    window.enableTabRename(idx);
+
+                    if (window.thinkingDetector && window.term[idx].socket) {
+                        const doAttach = () => {
+                            if (window.term[idx].socket.readyState === WebSocket.OPEN) {
+                                window.thinkingDetector.attach(idx, window.term[idx].socket);
+                            } else {
+                                window.term[idx].socket.addEventListener('open', () => {
+                                    window.thinkingDetector.attach(idx, window.term[idx].socket);
+                                }, { once: true });
+                            }
+                        };
+                        doAttach();
+                    }
+                });
+
+                if (savedCurrentTerm > 0 && window.term[savedCurrentTerm]) {
+                    setTimeout(() => {
+                        window.focusShellTab(savedCurrentTerm);
+                    }, 500);
+                }
+            });
+        })();
+
         // Initialize thinking detector and ad overlay system (INT-01, INT-02)
         const adOverlayEnabled = window.settings.adOverlayEnabled !== false;
         const adOverlayMode = window.settings.adOverlayMode || 'corner';
@@ -966,7 +1064,7 @@ try {
 
         // Test tab status indicator — call window.testTabStatus(0, 'running') from DevTools
         window.testTabStatus = (tabIndex = 0, status = 'running') => {
-            const valid = ['running', 'input', 'completed', 'hidden'];
+            const valid = ['running', 'input', 'completed', 'idle', 'hidden'];
             if (!valid.includes(status)) {
                 console.warn(`[TabStatus] Invalid status. Use: ${valid.join(', ')}`);
                 return;
@@ -982,7 +1080,7 @@ try {
         };
 
         // Tab status indicator — tracks Claude Code state per terminal tab
-        // States: running | input | completed | (no attribute = idle/hidden)
+        // States: running (green) | input (red) | completed (orange) | idle (blue)
         window.updateTabStatuses = () => {
             for (let i = 0; i < 5; i++) {
                 const tabEl = document.getElementById('shell_tab' + i);
@@ -991,9 +1089,15 @@ try {
                 const term = window.term && window.term[i];
                 const sessionId = window.terminalSessions && window.terminalSessions[i];
 
-                // No terminal instance or no Claude session → hide indicator
-                if (!term || typeof term !== 'object' || !sessionId) {
+                // No terminal instance → no indicator
+                if (!term || typeof term !== 'object') {
                     tabEl.removeAttribute('data-claude-status');
+                    continue;
+                }
+
+                // Terminal exists but no Claude session → idle (blue)
+                if (!sessionId) {
+                    tabEl.setAttribute('data-claude-status', 'idle');
                     continue;
                 }
 
@@ -1019,8 +1123,10 @@ try {
 
                 if (liveAge < 120000 || timeSinceActivity < 120000) {
                     tabEl.setAttribute('data-claude-status', 'input');
-                } else {
+                } else if (recentActivity > 0) {
                     tabEl.setAttribute('data-claude-status', 'completed');
+                } else {
+                    tabEl.setAttribute('data-claude-status', 'idle');
                 }
             }
         };
@@ -1134,7 +1240,11 @@ try {
 
         // Resend terminal CWD to fsDisp if we're hot reloading
         if (window.performance.navigation.type === 1) {
-            window.term[window.currentTerm].resendCWD();
+            Object.keys(window.term).forEach(idx => {
+                if (window.term[idx] && window.term[idx].resendCWD) {
+                    window.term[idx].resendCWD();
+                }
+            });
         }
 
         await _delay(200);

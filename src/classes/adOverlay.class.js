@@ -50,23 +50,22 @@ class AdOverlay {
 
     init() {
         // Always create DOM elements so manualToggle can enable and show later
-        // Overlay element (fullscreen + corner modes)
+        // Reference the terminal container for positioning context
         this._containerEl = document.getElementById('main_shell_innercontainer');
-        if (this._containerEl) {
-            this._containerEl.style.position = 'relative';
-            this._overlayEl = document.createElement('div');
-            this._overlayEl.id = 'ad_overlay';
-            this._overlayEl.className = 'ad-overlay ad-overlay--hidden';
-            this._overlayEl.innerHTML = this._buildOverlayHTML();
-            this._containerEl.appendChild(this._overlayEl);
 
-            // Mode picker overlay
-            this._modePickerEl = document.createElement('div');
-            this._modePickerEl.id = 'ad_mode_picker';
-            this._modePickerEl.className = 'ad-mode-picker ad-mode-picker--hidden';
-            this._modePickerEl.innerHTML = this._buildModePickerHTML();
-            this._containerEl.appendChild(this._modePickerEl);
-        }
+        // Overlay element — appended to body so it's never clipped by overflow:hidden
+        this._overlayEl = document.createElement('div');
+        this._overlayEl.id = 'ad_overlay';
+        this._overlayEl.className = 'ad-overlay ad-overlay--hidden';
+        this._overlayEl.innerHTML = this._buildOverlayHTML();
+        document.body.appendChild(this._overlayEl);
+
+        // Mode picker overlay — also on body for top-level stacking
+        this._modePickerEl = document.createElement('div');
+        this._modePickerEl.id = 'ad_mode_picker';
+        this._modePickerEl.className = 'ad-mode-picker ad-mode-picker--hidden';
+        this._modePickerEl.innerHTML = this._buildModePickerHTML();
+        document.body.appendChild(this._modePickerEl);
 
         // Panel element (panel mode — lives in side column)
         const panelParent = document.getElementById(this.panelParentId);

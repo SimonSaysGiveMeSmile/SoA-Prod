@@ -516,13 +516,24 @@ class Terminal {
             });
             this.wss.on("connection", ws => {
                 this.onopened(this.tty._pid);
+
+                // Dispose previous onData listener if reconnecting
+                if (this._dataDisposable) {
+                    this._dataDisposable.dispose();
+                    this._dataDisposable = null;
+                }
+
                 ws.on("close", (code, reason) => {
+                    if (this._dataDisposable) {
+                        this._dataDisposable.dispose();
+                        this._dataDisposable = null;
+                    }
                     this.ondisconnected(code, reason);
                 });
                 ws.on("message", msg => {
                     this.tty.write(msg);
                 });
-                this.tty.onData(data => {
+                this._dataDisposable = this.tty.onData(data => {
                     this._nextTickUpdateTtyCWD = true;
                     this._nextTickUpdateProcess = true;
 

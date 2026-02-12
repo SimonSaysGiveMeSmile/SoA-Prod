@@ -7,6 +7,7 @@ section.mod_column {
     padding-bottom: 0vh;
     box-sizing: border-box;
     position: absolute;
+    z-index: 40;
     display: flex;
     flex-direction: column;
     justify-content: flex-start;

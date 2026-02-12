@@ -70,10 +70,20 @@ class ThinkingDetector {
 
         const state = this._terminals[terminalIndex];
 
+        // Shared TextDecoder for binary WebSocket frames (AttachAddon sets binaryType='arraybuffer')
+        const decoder = new TextDecoder();
+
         // Listen to WebSocket messages (DET-02 - using message events)
         const handler = (event) => {
-            const data = typeof event.data === 'string' ? event.data : '';
-            this._processOutput(terminalIndex, data);
+            let data;
+            if (typeof event.data === 'string') {
+                data = event.data;
+            } else if (event.data instanceof ArrayBuffer) {
+                data = decoder.decode(event.data);
+            } else {
+                return; // Blob or unknown — skip
+            }
+            if (data) this._processOutput(terminalIndex, data);
         };
 
         socket.addEventListener('message', handler);

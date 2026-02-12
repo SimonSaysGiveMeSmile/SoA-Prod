@@ -393,16 +393,22 @@ app.on('ready', async () => {
             };
             term.onresized = () => { };
             term.ondisconnected = () => {
-                term.onclosed = () => { };
-                term.close();
-                term.wss.close();
-                extraTtys[term.port] = null;
-                term = null;
+                signale.warn(`TTY ${port} disconnected from frontend, waiting for reconnection...`);
             };
 
             extraTtys[port] = term;
             e.sender.send("ttyspawn-reply", "SUCCESS: " + port);
         }
+    });
+
+    ipc.on("ttylist", (e) => {
+        let alive = {};
+        Object.keys(extraTtys).forEach(port => {
+            if (extraTtys[port] !== null) {
+                alive[port] = true;
+            }
+        });
+        e.sender.send("ttylist-reply", alive);
     });
 
     // Backend support for theme and keyboard hotswitch

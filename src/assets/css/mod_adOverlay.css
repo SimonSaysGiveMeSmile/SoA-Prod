@@ -1,9 +1,9 @@
 /* Ad Overlay - Displays during AI thinking time */
 
-/* Base overlay - absolute positioned over terminal */
+/* Base overlay — lives on document.body, always position:fixed for top-level stacking */
 .ad-overlay {
-    position: absolute;
-    z-index: 50;
+    position: fixed;
+    z-index: 900;
     pointer-events: none;
     transition: opacity 0.3s ease, transform 0.3s ease;
     opacity: 1;
@@ -71,13 +71,15 @@
 }
 
 /* ── Corner mode ──
-   Small overlay in bottom-right, above the last line */
+   Small overlay in bottom-right, fixed to viewport */
 .ad-overlay--corner {
+    position: fixed;
     bottom: 4vh;
-    right: 1vh;
+    right: 18vw;
     width: 22vh;
     visibility: visible;
     pointer-events: auto;
+    z-index: 900;
 }
 
 .ad-overlay--corner .ad-overlay__content {
@@ -91,7 +93,7 @@
 }
 
 /* ── Panel mode ──
-   Lives in a side column, only visible on hover */
+   Lives in a side column, visible when active, expands on hover */
 .ad-panel {
     position: relative;
     width: 100%;
@@ -101,18 +103,18 @@
     transition: max-height 0.3s ease, opacity 0.3s ease;
     font-family: var(--font_main), sans-serif;
     color: rgb(var(--color_r), var(--color_g), var(--color_b));
+    z-index: 45;
 }
 
-/* Show panel on hover over the parent column */
-.mod_column:hover .ad-panel--active {
+/* Show panel when active — always visible, not just on hover */
+.ad-panel--active {
     max-height: 30vh;
     opacity: 1;
 }
 
-/* Also show briefly when first activated (pulse) */
-.ad-panel--active {
-    max-height: 0;
-    opacity: 0;
+/* Expand further on hover for better viewing */
+.mod_column:hover .ad-panel--active {
+    max-height: 40vh;
 }
 
 .ad-panel__inner {
@@ -352,7 +354,7 @@
     left: 0;
     right: 0;
     bottom: 0;
-    z-index: 1000;
+    z-index: 1100;
     pointer-events: auto;
     transition: opacity 0.3s ease;
 }
