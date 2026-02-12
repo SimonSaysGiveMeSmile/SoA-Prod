@@ -180,11 +180,18 @@ class AdOverlay {
         if (terminalIndex !== active) return;
 
         if (isThinking) {
+            // Don't reset _dismissed here — respect user's dismiss for this thinking session.
+            // _dismissed is only reset when thinking fully ENDS, so the next fresh session can show.
+            if (!this._dismissed) {
+                this.show(terminalIndex);
+            }
+        } else {
+            // Thinking ended completely — reset dismissed for the next thinking session
             this._dismissed = false;
-            this.show(terminalIndex);
-        } else if (!this._manualMode) {
-            // Only auto-hide if user didn't manually trigger the ad
-            this.hide();
+            if (!this._manualMode) {
+                // Only auto-hide if user didn't manually trigger the ad
+                this.hide();
+            }
         }
     }
 
@@ -234,6 +241,7 @@ class AdOverlay {
         }
         this._startCredits();
         this._startImageRotation();
+        this._dispatchVisibilityEvent(true);
     }
 
     hide() {
@@ -245,6 +253,17 @@ class AdOverlay {
         this._hidePanel();
         this._stopCredits();
         this._stopImageRotation();
+        this._dispatchVisibilityEvent(false);
+    }
+
+    /**
+     * Notify other components (CreditDisplay) when ad visibility changes
+     * @param {boolean} visible
+     */
+    _dispatchVisibilityEvent(visible) {
+        window.dispatchEvent(new CustomEvent('ad-visibility-changed', {
+            detail: { visible, mode: this.mode }
+        }));
     }
 
     _showOverlay() {
@@ -278,6 +297,10 @@ class AdOverlay {
     _startCredits() {
         this._stopCredits();
         const rate = this._creditRates[this.mode] || 2;
+        // Notify credit display that earning has started
+        if (this.creditSystem && this.creditSystem.startEarning) {
+            this.creditSystem.startEarning(rate, this.mode);
+        }
         this._creditInterval = setInterval(() => {
             if (this.creditSystem) this.creditSystem.addCredits(rate, this.mode);
         }, 1000);
@@ -287,6 +310,10 @@ class AdOverlay {
         if (this._creditInterval) {
             clearInterval(this._creditInterval);
             this._creditInterval = null;
+        }
+        // Notify credit display that earning has stopped
+        if (this.creditSystem && this.creditSystem.stopEarning) {
+            this.creditSystem.stopEarning();
         }
     }
 

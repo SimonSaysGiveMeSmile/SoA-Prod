@@ -122,6 +122,10 @@ try {
     window.interimTranscription = null;
     window.activeTerminal = 0; // Track current terminal for voice integration
 
+    // Ad overlay / thinking detection instances
+    window.thinkingDetector = null;
+    window.adOverlay = null;
+
     // Voice module imports (lazy loaded during initializeVoice)
     let VoiceController, VoiceState, AudioFeedback, WaveformVisualizer, VoiceToggleWidget, InterimTranscription;
 
@@ -182,66 +186,14 @@ try {
         window.settings.nocursorOverride = false;
     }
 
-// Claude state tracking - maps terminal index to Claude session ID
-window.terminalSessions = {};  // { terminalIndex: sessionId }
-window.claudeState = null;     // Latest state from main process
-
-// Voice control instances
-window.voiceController = null;
-window.audioFeedback = null;
-window.waveformVisualizer = null;
-window.voiceToggleWidget = null;
-window.interimTranscription = null;
-window.activeTerminal = 0; // Track current terminal for voice integration
-
-// Ad overlay / thinking detection instances
-window.thinkingDetector = null;
-window.adOverlay = null;
-
-// Voice module imports (lazy loaded during initializeVoice)
-let VoiceController, VoiceState, AudioFeedback, WaveformVisualizer, VoiceToggleWidget, InterimTranscription;
-
-// IPC wrapper for voice (maps to electron.ipcRenderer)
-window.ipc = {
-    invoke: (channel, ...args) => ipc.invoke(channel, ...args),
-    send: (channel, ...args) => ipc.send(channel, ...args),
-    on: (channel, callback) => {
-        ipc.on(channel, (event, ...args) => callback(...args));
-    },
-};
-
-window.enableTabRename = (tabIndex) => {
-    const tabElement = document.getElementById(`shell_tab${tabIndex}`);
-    const textElement = tabElement.querySelector('p');
-
-    textElement.addEventListener('dblclick', (e) => {
-        e.stopPropagation(); // Prevent tab switch
-        textElement.setAttribute('contenteditable', 'true');
-        textElement.focus();
-        // Select all text for easy replacement
-        const range = document.createRange();
-        range.selectNodeContents(textElement);
-        window.getSelection().removeAllRanges();
-        window.getSelection().addRange(range);
-    });
-
-    textElement.addEventListener('blur', () => {
-        textElement.removeAttribute('contenteditable');
-        let newName = textElement.innerText.trim().substring(0, 20); // Max 20 chars
-        if (!newName) newName = tabIndex === 0 ? "MAIN SHELL" : "EMPTY";
-        window.terminalNames[tabIndex] = newName;
-        textElement.innerHTML = window._escapeHtml(newName);
-        window.saveTerminalNames();
-    });
-
-    textElement.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') {
-            e.preventDefault();
-            textElement.blur(); // Triggers save via blur handler
-        } else if (e.key === 'Escape') {
-            // Revert to saved name
-            textElement.innerText = window.terminalNames[tabIndex];
-            textElement.blur();
+    // Retrieve theme override (hotswitch)
+    ipc.once("getThemeOverride", (e, theme) => {
+        if (theme !== null) {
+            window.settings.theme = theme;
+            window.settings.nointroOverride = true;
+            _loadTheme(require(path.join(themesDir, window.settings.theme + ".json")));
+        } else {
+            _loadTheme(require(path.join(themesDir, window.settings.theme + ".json")));
         }
     });
     ipc.send("getThemeOverride");
@@ -907,353 +859,128 @@ window.enableTabRename = (tabIndex) => {
         };
         window.term[0].term.writeln("\x1b[1m" + `Welcome to Son of Anton v${remote.app.getVersion()} - Electron v${process.versions.electron}` + "\x1b[0m");
 
-    // Initialize thinking detector and ad overlay system (INT-01, INT-02)
-    const adOverlayEnabled = window.settings.adOverlayEnabled !== false;
-    const adOverlayMode = window.settings.adOverlayMode || 'corner';
-    const adDebounceMs = window.settings.adDebounceMs || 300;
-    const adTimeoutMs = window.settings.adTimeoutMs || 30000;
+        // Initialize thinking detector and ad overlay system (INT-01, INT-02)
+        const adOverlayEnabled = window.settings.adOverlayEnabled !== false;
+        const adOverlayMode = window.settings.adOverlayMode || 'corner';
+        const adDebounceMs = window.settings.adDebounceMs || 300;
+        const adTimeoutMs = window.settings.adTimeoutMs || 30000;
 
-    // Credit display widget in right column
-    window.mods.creditDisplay = new CreditDisplay("mod_column_right");
+        // Credit display widget in right column
+        if (!window.mods) window.mods = {};
+        window.mods.creditDisplay = new CreditDisplay("mod_column_right");
 
-    // Thinking detector (DET-01 through DET-06)
-    window.thinkingDetector = new ThinkingDetector({
-        enabled: adOverlayEnabled,
-        debounceMs: adDebounceMs,
-        timeoutMs: adTimeoutMs
-    });
+        // Thinking detector (DET-01 through DET-06)
+        window.thinkingDetector = new ThinkingDetector({
+            enabled: adOverlayEnabled,
+            debounceMs: adDebounceMs,
+            timeoutMs: adTimeoutMs
+        });
 
-    // Ad overlay (UI-01 through UI-05)
-    // Load ad images from assets/ads/ folder if any exist
-    const adsDir = require("path").join(__dirname, "assets", "ads");
-    let adImageUrls = [];
-    try {
-        const fs = require("fs");
-        if (fs.existsSync(adsDir)) {
-            adImageUrls = fs.readdirSync(adsDir)
-                .filter(f => /\.(png|jpg|jpeg|gif|svg|webp)$/i.test(f))
-                .map(f => require("path").join(adsDir, f));
-        }
-    } catch (e) { /* no ads folder or read error — use placeholder */ }
-
-    window.adOverlay = new AdOverlay({
-        enabled: adOverlayEnabled,
-        mode: adOverlayMode,
-        creditSystem: window.mods.creditDisplay,
-        imageUrls: adImageUrls
-    });
-    window.adOverlay.init();
-
-    // Attach detector to main terminal's WebSocket
-    if (window.term[0].socket) {
-        const attachWhenReady = () => {
-            if (window.term[0].socket.readyState === WebSocket.OPEN) {
-                window.thinkingDetector.attach(0, window.term[0].socket);
-            } else {
-                window.term[0].socket.addEventListener('open', () => {
-                    window.thinkingDetector.attach(0, window.term[0].socket);
-                }, { once: true });
-            }
-        };
-        attachWhenReady();
-    }
-
-    // Test/demo functions — call from DevTools console (no app restart needed)
-    // Usage:
-    //   window.testAdOverlay()          — simulate 10s thinking on current terminal
-    //   window.testAdOverlay(5000)      — simulate 5s thinking
-    //   window.testAdMode('fullscreen') — switch mode and test
-    //   window.testAdMode('corner')
-    //   window.testAdMode('panel')
-    //   window.testAdReload()           — reload images from assets/ads/ folder
-    window.testAdOverlay = (durationMs = 10000) => {
-        if (!window.thinkingDetector || !window.adOverlay) {
-            console.warn('[AdOverlay] System not initialized');
-            return;
-        }
-        // Ensure enabled for testing
-        window.adOverlay.setEnabled(true);
-        window.thinkingDetector.configure({ enabled: true });
-
-        const termIdx = window.currentTerm || 0;
-        console.log(`[AdOverlay] Simulating ${durationMs}ms thinking on terminal ${termIdx} (mode: ${window.adOverlay.mode})...`);
-
-        // Manually fire thinking-start event
-        window.dispatchEvent(new CustomEvent('thinking-state-changed', {
-            detail: { terminalIndex: termIdx, isThinking: true, method: 'test' }
-        }));
-
-        // Auto-hide after duration
-        setTimeout(() => {
-            window.dispatchEvent(new CustomEvent('thinking-state-changed', {
-                detail: { terminalIndex: termIdx, isThinking: false, method: null }
-            }));
-            console.log('[AdOverlay] Test complete');
-        }, durationMs);
-    };
-
-    window.testAdMode = (mode) => {
-        if (!window.adOverlay) return;
-        window.adOverlay.setMode(mode);
-        console.log(`[AdOverlay] Switched to ${mode} mode`);
-        window.testAdOverlay();
-    };
-
-    window.testAdReload = () => {
+        // Ad overlay (UI-01 through UI-05)
+        // Load ad images from assets/ads/ folder if any exist
+        const adsDir = require("path").join(__dirname, "assets", "ads");
+        let adImageUrls = [];
         try {
             const fs = require("fs");
-            const p = require("path");
-            const dir = p.join(__dirname, "assets", "ads");
-            if (!fs.existsSync(dir)) {
-                console.warn(`[AdOverlay] No ads folder at ${dir} — create it and add images`);
+            if (fs.existsSync(adsDir)) {
+                adImageUrls = fs.readdirSync(adsDir)
+                    .filter(f => /\.(png|jpg|jpeg|gif|svg|webp)$/i.test(f))
+                    .map(f => require("path").join(adsDir, f));
+            }
+        } catch (e) { /* no ads folder or read error — use placeholder */ }
+
+        window.adOverlay = new AdOverlay({
+            enabled: adOverlayEnabled,
+            mode: adOverlayMode,
+            creditSystem: window.mods.creditDisplay,
+            imageUrls: adImageUrls
+        });
+        window.adOverlay.init();
+
+        // Attach detector to main terminal's WebSocket
+        if (window.term[0].socket) {
+            const attachWhenReady = () => {
+                if (window.term[0].socket.readyState === WebSocket.OPEN) {
+                    window.thinkingDetector.attach(0, window.term[0].socket);
+                } else {
+                    window.term[0].socket.addEventListener('open', () => {
+                        window.thinkingDetector.attach(0, window.term[0].socket);
+                    }, { once: true });
+                }
+            };
+            attachWhenReady();
+        }
+
+        // Test/demo functions — call from DevTools console (no app restart needed)
+        window.testAdOverlay = (durationMs = 10000) => {
+            if (!window.thinkingDetector || !window.adOverlay) {
+                console.warn('[AdOverlay] System not initialized');
                 return;
             }
-            const urls = fs.readdirSync(dir)
-                .filter(f => /\.(png|jpg|jpeg|gif|svg|webp)$/i.test(f))
-                .map(f => p.join(dir, f));
-            window.adOverlay.setImageUrls(urls);
-            console.log(`[AdOverlay] Loaded ${urls.length} images from ${dir}`);
-            if (urls.length > 0) console.log('[AdOverlay] Files:', urls.map(u => p.basename(u)));
-        } catch (e) {
-            console.error('[AdOverlay] Reload failed:', e);
-        }
-    };
+            window.adOverlay.setEnabled(true);
+            window.thinkingDetector.configure({ enabled: true });
 
-    // Cycle ad mode — call window.toggleAdMode() from DevTools console
-    window.toggleAdMode = () => {
-        if (!window.adOverlay) return;
-        const modes = ['corner', 'fullscreen', 'panel'];
-        const idx = modes.indexOf(window.adOverlay.mode);
-        const newMode = modes[(idx + 1) % modes.length];
-        window.adOverlay.setMode(newMode);
-        console.log(`[AdOverlay] Switched to ${newMode} mode`);
-    };
+            const termIdx = window.currentTerm || 0;
+            console.log(`[AdOverlay] Simulating ${durationMs}ms thinking on terminal ${termIdx} (mode: ${window.adOverlay.mode})...`);
 
-    await _delay(100);
+            window.dispatchEvent(new CustomEvent('thinking-state-changed', {
+                detail: { terminalIndex: termIdx, isThinking: true, method: 'test' }
+            }));
 
-    /* Minimal Redesign: Disabled FilesystemDisplay initialization
-    window.fsDisp = new FilesystemDisplay({
-        parentId: "filesystem"
-    });
-    */
-
-    await _delay(200);
-
-    const filesystemEl = document.getElementById("filesystem");
-    if (filesystemEl) {
-        filesystemEl.setAttribute("style", "opacity: 1;");
-    }
-
-    // Resend terminal CWD to fsDisp if we're hot reloading
-    if (window.performance.navigation.type === 1) {
-        window.term[window.currentTerm].resendCWD();
-    }
-
-    await _delay(200);
-
-    window.updateCheck = new UpdateChecker();
-
-    /* Minimal Redesign: Append placeholders to the bottom of columns using DOM API */
-    const createPlaceholders = (columnId) => {
-        const column = document.getElementById(columnId);
-        if (column) {
-            column.style.opacity = "1"; // Ensure column is visible
-            column.style.display = "flex"; // Ensure flex layout
-
-            // Create placeholders
-            const p1 = document.createElement("div");
-            p1.className = "placeholder-panel";
-            p1.innerHTML = `<h3 class="title"><p>STATUS</p><p>OFFLINE</p></h3><h2 class="placeholder-text">RESERVED</h2>`;
-
-            const p2 = document.createElement("div");
-            p2.className = "placeholder-panel";
-            p2.innerHTML = `<h3 class="title"><p>STATUS</p><p>OFFLINE</p></h3><h2 class="placeholder-text">RESERVED</h2>`;
-
-            column.appendChild(p1);
-            column.appendChild(p2);
-        }
-    };
-
-    /* Placeholder creation removed - replaced by custom widgets */
-    // createPlaceholders("mod_column_left");
-    // createPlaceholders("mod_column_right");
-
-    /* Restore Settings Shortcut (Ctrl+Shift+S) */
-    document.addEventListener("keydown", e => {
-        if (e.ctrlKey && e.shiftKey && (e.key === "s" || e.key === "S")) {
-            window.openSettings();
-        }
-    });
-
-    /* Minimal Redesign: Standalone keyboard sound handler (replaces keyboard.class.js sounds) */
-    window.passwordMode = "false";
-    let lastKeySoundTime = 0;
-    document.addEventListener("keydown", e => {
-        // Skip modifier-only keys and repeated keys for sound
-        if (e.repeat && (e.code.startsWith('Shift') || e.code.startsWith('Alt') ||
-            e.code.startsWith('Control') || e.code.startsWith('Caps'))) {
-            return;
-        }
-        // Throttle sound to avoid overwhelming audio
-        const now = Date.now();
-        if (now - lastKeySoundTime < 30) return;
-        lastKeySoundTime = now;
-
-        if (window.passwordMode === "false") {
-            window.audioManager.stdin.play();
-        }
-    });
-    document.addEventListener("keyup", e => {
-        if (window.passwordMode === "false" && e.key === "Enter") {
-            window.audioManager.granted.play();
-        }
-    });
-
-    /* Self-Test: Verify UI Integrity - Disabled to prevent modal popup */
-    // setTimeout(() => {
-    //     if (window.runUITests) window.runUITests();
-    // }, 2000);
-
-    /* Initialize Voice System */
-    setTimeout(() => {
-        initializeVoice();
-    }, 2500);
-
-    /* Auto-fix grey zone by toggling DevTools at startup (simulates Option+Cmd+I / Ctrl+Shift+I) */
-    setTimeout(() => {
-        const win = remote.getCurrentWindow();
-
-        // Explicitly open DevTools
-        win.webContents.openDevTools();
-
-        // Wait for DevTools to open, then close them
-        setTimeout(() => {
-            win.webContents.closeDevTools();
-
-            // Force terminal resize after closing to ensure proper layout
             setTimeout(() => {
-                if (typeof window.currentTerm !== "undefined" && window.term[window.currentTerm]) {
-                    window.term[window.currentTerm].fit();
-                    window.dispatchEvent(new Event('resize'));
+                window.dispatchEvent(new CustomEvent('thinking-state-changed', {
+                    detail: { terminalIndex: termIdx, isThinking: false, method: null }
+                }));
+                console.log('[AdOverlay] Test complete');
+            }, durationMs);
+        };
+
+        window.testAdMode = (mode) => {
+            if (!window.adOverlay) return;
+            window.adOverlay.setMode(mode);
+            console.log(`[AdOverlay] Switched to ${mode} mode`);
+            window.testAdOverlay();
+        };
+
+        window.testAdReload = () => {
+            try {
+                const fs = require("fs");
+                const p = require("path");
+                const dir = p.join(__dirname, "assets", "ads");
+                if (!fs.existsSync(dir)) {
+                    console.warn(`[AdOverlay] No ads folder at ${dir} — create it and add images`);
+                    return;
                 }
-            }, 150);
-        }, 300);
-    }, 1000);
-}
-
-window.themeChanger = theme => {
-    ipc.send("setThemeOverride", theme);
-    setTimeout(() => {
-        window.location.reload(true);
-    }, 100);
-};
-
-window.remakeKeyboard = layout => {
-    const keyboardEl = document.getElementById("keyboard");
-    if (!keyboardEl) {
-        console.warn("[remakeKeyboard] Keyboard element not found - keyboard disabled in minimal redesign");
-        return;
-    }
-    keyboardEl.innerHTML = "";
-    window.keyboard = new Keyboard({
-        layout: path.join(keyboardsDir, layout + ".json" || settings.keyboard + ".json"),
-        container: "keyboard"
-    });
-    ipc.send("setKbOverride", layout);
-};
-
-window.focusShellTab = number => {
-    window.audioManager.folder.play();
-
-    if (number !== window.currentTerm && window.term[number]) {
-        window.currentTerm = number;
-
-        document.querySelectorAll(`ul#main_shell_tabs > li:not(:nth-child(${number + 1})):not(.shell-dev-btn)`).forEach(e => {
-            e.setAttribute("class", "");
-        });
-        document.getElementById("shell_tab" + number).setAttribute("class", "active");
-
-        document.querySelectorAll(`div#main_shell_innercontainer > pre:not(:nth-child(${number + 1}))`).forEach(e => {
-            e.setAttribute("class", "");
-        });
-        document.getElementById("terminal" + number).setAttribute("class", "active");
-
-        window.term[number].fit();
-        window.term[number].term.focus();
-        window.term[number].resendCWD();
-
-        // Update ad overlay for active terminal (DET-06)
-        if (window.thinkingDetector) {
-            const isThinking = window.thinkingDetector.isThinking(number);
-            if (isThinking && window.adOverlay) {
-                window.adOverlay.show(number);
-            } else if (window.adOverlay) {
-                window.adOverlay.hide();
+                const urls = fs.readdirSync(dir)
+                    .filter(f => /\.(png|jpg|jpeg|gif|svg|webp)$/i.test(f))
+                    .map(f => p.join(dir, f));
+                window.adOverlay.setImageUrls(urls);
+                console.log(`[AdOverlay] Loaded ${urls.length} images from ${dir}`);
+                if (urls.length > 0) console.log('[AdOverlay] Files:', urls.map(u => p.basename(u)));
+            } catch (e) {
+                console.error('[AdOverlay] Reload failed:', e);
             }
-        }
+        };
 
-        // window.fsDisp.followTab();
-    } else if (number > 0 && number <= 4 && window.term[number] !== null && typeof window.term[number] !== "object") {
-        window.term[number] = null;
+        // Cycle ad mode — call window.toggleAdMode() from DevTools console
+        window.toggleAdMode = () => {
+            if (!window.adOverlay) return;
+            const modes = ['corner', 'fullscreen', 'panel'];
+            const idx = modes.indexOf(window.adOverlay.mode);
+            const newMode = modes[(idx + 1) % modes.length];
+            window.adOverlay.setMode(newMode);
+            console.log(`[AdOverlay] Switched to ${newMode} mode`);
+        };
 
-        document.getElementById("shell_tab" + number).innerHTML = "<p>LOADING...</p>";
-        ipc.send("ttyspawn", "true");
-        ipc.once("ttyspawn-reply", (e, r) => {
-            if (r.startsWith("ERROR")) {
-                document.getElementById("shell_tab" + number).innerHTML = "<p>ERROR</p>";
-            } else if (r.startsWith("SUCCESS")) {
-                let port = Number(r.substr(9));
-
-                window.term[number] = new Terminal({
-                    role: "client",
-                    parentId: "terminal" + number,
-                    port
-                });
-
-                window.term[number].onclose = e => {
-                    delete window.term[number].onprocesschange;
-                    // Detach thinking detector from closing terminal
-                    if (window.thinkingDetector) {
-                        window.thinkingDetector.detach(number);
-                    }
-                    // Reset to default name on close
-                    window.terminalNames[number] = "EMPTY";
-                    window.saveTerminalNames();
-                    document.getElementById("shell_tab" + number).innerHTML = "<p>EMPTY</p>";
-                    document.getElementById("terminal" + number).innerHTML = "";
-                    window.term[number].term.dispose();
-                    delete window.term[number];
-                    window.useAppShortcut("PREVIOUS_TAB");
-                };
-
-                window.term[number].onprocesschange = p => {
-                    // Only show process name if user hasn't set a custom name
-                    const defaultName = "EMPTY";
-                    if (window.terminalNames[number] === defaultName || window.terminalNames[number].startsWith('#')) {
-                        document.getElementById("shell_tab" + number).querySelector('p').innerHTML = `#${number + 1} - ${p}`;
-                    }
-                };
-
-                document.getElementById("shell_tab" + number).innerHTML = `<p>::${port}</p>`;
-                window.enableTabRename(number);
-
-                // Attach thinking detector to new terminal (DET-06)
-                if (window.thinkingDetector && window.term[number].socket) {
-                    const attachNewTerm = () => {
-                        if (window.term[number].socket.readyState === WebSocket.OPEN) {
-                            window.thinkingDetector.attach(number, window.term[number].socket);
-                        } else {
-                            window.term[number].socket.addEventListener('open', () => {
-                                window.thinkingDetector.attach(number, window.term[number].socket);
-                            }, { once: true });
-                        }
-                    };
-                    attachNewTerm();
+        // Initialize widget loader
+        const widgetLoader = new WidgetLoader({
+            profiler: profiler,
+            staggerDelay: window.settings.widgetStaggerDelay || 100,
+            onStartupComplete: (prof) => {
+                if (process.env.PROFILE_STARTUP === 'deep') {
+                    ipc.send('stop-content-tracing');
                 }
-
-                setTimeout(() => {
-                    window.focusShellTab(number);
-                }, 500);
+                prof.logSummary();
             }
         });
 
@@ -1280,8 +1007,10 @@ window.focusShellTab = number => {
         const lightweightLoaded = widgetLoader.loadLightweight();
         console.log('[Startup] Lightweight widgets loaded:', lightweightLoaded.join(', '));
 
-        // Assign mods object (lightweight widgets available now)
+        // Assign mods object (lightweight widgets available now), preserving creditDisplay
+        const _creditDisplayRef = window.mods && window.mods.creditDisplay;
         window.mods = widgetLoader.getMods();
+        if (_creditDisplayRef) window.mods.creditDisplay = _creditDisplayRef;
 
         // Defer heavy widgets until terminal is interactive
         setTimeout(async () => {
@@ -1292,8 +1021,10 @@ window.focusShellTab = number => {
             const deferredLoaded = widgetLoader.loadDeferred();
             console.log('[Startup] Deferred widgets loaded:', deferredLoaded.join(', '));
 
-            // Update mods reference
+            // Update mods reference, preserving creditDisplay
+            const _cdRef = window.mods && window.mods.creditDisplay;
             window.mods = widgetLoader.getMods();
+            if (_cdRef) window.mods.creditDisplay = _cdRef;
 
             // Trigger widget fade-in animations
             document.querySelectorAll(".mod_column").forEach(e => {
@@ -1402,19 +1133,37 @@ window.focusShellTab = number => {
             }
         });
 
-        /* Self-Test: Verify UI Integrity (disabled by default, enable in settings.json) */
-        setTimeout(() => {
-            const settings = window.settings || {};
-            if (!settings.disableUITests && window.runUITests) {
-                window.runUITests();
-            }
-        }, 2000);
+        /* Self-Test: Verify UI Integrity - Disabled to prevent modal popup */
+        // setTimeout(() => {
+        //     if (window.runUITests) window.runUITests();
+        // }, 2000);
 
         /* Initialize Voice System */
         profiler.mark('voice-init-start');
         setTimeout(() => {
             initializeVoice();
         }, 2500);
+
+        /* Auto-fix grey zone by toggling DevTools at startup (simulates Option+Cmd+I / Ctrl+Shift+I) */
+        setTimeout(() => {
+            const win = remote.getCurrentWindow();
+
+            // Explicitly open DevTools
+            win.webContents.openDevTools();
+
+            // Wait for DevTools to open, then close them
+            setTimeout(() => {
+                win.webContents.closeDevTools();
+
+                // Force terminal resize after closing to ensure proper layout
+                setTimeout(() => {
+                    if (typeof window.currentTerm !== "undefined" && window.term[window.currentTerm]) {
+                        window.term[window.currentTerm].fit();
+                        window.dispatchEvent(new Event('resize'));
+                    }
+                }, 150);
+            }, 300);
+        }, 1000);
 
         profiler.mark('renderer-ready');
         profiler.measure('renderer-total', 'renderer-start', 'renderer-ready');
@@ -1449,7 +1198,7 @@ window.focusShellTab = number => {
         if (number !== window.currentTerm && window.term[number]) {
             window.currentTerm = number;
 
-            document.querySelectorAll(`ul#main_shell_tabs > li:not(:nth-child(${number + 1}))`).forEach(e => {
+            document.querySelectorAll(`ul#main_shell_tabs > li:not(:nth-child(${number + 1})):not(.shell-dev-btn)`).forEach(e => {
                 e.setAttribute("class", "");
             });
             document.getElementById("shell_tab" + number).setAttribute("class", "active");
@@ -1462,6 +1211,16 @@ window.focusShellTab = number => {
             window.term[number].fit();
             window.term[number].term.focus();
             window.term[number].resendCWD();
+
+            // Update ad overlay for active terminal (DET-06)
+            if (window.thinkingDetector) {
+                const isThinking = window.thinkingDetector.isThinking(number);
+                if (isThinking && window.adOverlay) {
+                    window.adOverlay.show(number);
+                } else if (window.adOverlay) {
+                    window.adOverlay.hide();
+                }
+            }
 
             // Update session mapping for the new active terminal
             if (window.claudeState && window.term[number].cwd) {
@@ -1495,6 +1254,10 @@ window.focusShellTab = number => {
 
                     window.term[number].onclose = e => {
                         delete window.term[number].onprocesschange;
+                        // Detach thinking detector from closing terminal
+                        if (window.thinkingDetector) {
+                            window.thinkingDetector.detach(number);
+                        }
                         // Reset to default name on close
                         window.terminalNames[number] = "EMPTY";
                         window.saveTerminalNames();
@@ -1515,6 +1278,21 @@ window.focusShellTab = number => {
 
                     document.getElementById("shell_tab" + number).innerHTML = `<p>::${port}</p>`;
                     window.enableTabRename(number);
+
+                    // Attach thinking detector to new terminal (DET-06)
+                    if (window.thinkingDetector && window.term[number].socket) {
+                        const attachNewTerm = () => {
+                            if (window.term[number].socket.readyState === WebSocket.OPEN) {
+                                window.thinkingDetector.attach(number, window.term[number].socket);
+                            } else {
+                                window.term[number].socket.addEventListener('open', () => {
+                                    window.thinkingDetector.attach(number, window.term[number].socket);
+                                }, { once: true });
+                            }
+                        };
+                        attachNewTerm();
+                    }
+
                     setTimeout(() => {
                         window.focusShellTab(number);
                     }, 500);
@@ -1772,39 +1550,9 @@ window.focusShellTab = number => {
                 window.keyboard.attach();
             }
 
-window.writeSettingsFile = () => {
-    window.settings = {
-        shell: document.getElementById("settingsEditor-shell").value,
-        shellArgs: document.getElementById("settingsEditor-shellArgs").value,
-        cwd: document.getElementById("settingsEditor-cwd").value,
-        env: document.getElementById("settingsEditor-env").value,
-        username: document.getElementById("settingsEditor-username").value,
-        keyboard: window.settings.keyboard || "en-US",
-        theme: document.getElementById("settingsEditor-theme").value,
-        termFontSize: Number(document.getElementById("settingsEditor-termFontSize").value),
-        audio: (document.getElementById("settingsEditor-audio").value === "true"),
-        audioVolume: Number(document.getElementById("settingsEditor-audioVolume").value),
-        disableFeedbackAudio: (document.getElementById("settingsEditor-disableFeedbackAudio").value === "true"),
-        pingAddr: document.getElementById("settingsEditor-pingAddr").value,
-        clockHours: Number(document.getElementById("settingsEditor-clockHours").value),
-        port: Number(document.getElementById("settingsEditor-port").value),
-        monitor: Number(document.getElementById("settingsEditor-monitor").value),
-        nointro: (document.getElementById("settingsEditor-nointro").value === "true"),
-        nocursor: (document.getElementById("settingsEditor-nocursor").value === "true"),
-        iface: document.getElementById("settingsEditor-iface").value,
-        allowWindowed: (document.getElementById("settingsEditor-allowWindowed").value === "true"),
-        forceFullscreen: window.settings.forceFullscreen,
-        keepGeometry: (document.getElementById("settingsEditor-keepGeometry").value === "true"),
-        excludeThreadsFromToplist: (document.getElementById("settingsEditor-excludeThreadsFromToplist").value === "true"),
-        hideDotfiles: (document.getElementById("settingsEditor-hideDotfiles").value === "true"),
-        fsListView: (document.getElementById("settingsEditor-fsListView").value === "true"),
-        experimentalGlobeFeatures: (document.getElementById("settingsEditor-experimentalGlobeFeatures").value === "true"),
-        experimentalFeatures: (document.getElementById("settingsEditor-experimentalFeatures").value === "true"),
-        contextWarningThreshold: Number(document.getElementById("settingsEditor-contextWarningThreshold")?.value) || 80,
-        adOverlayEnabled: (document.getElementById("settingsEditor-adOverlayEnabled")?.value === "true"),
-        adOverlayMode: document.getElementById("settingsEditor-adOverlayMode")?.value || 'corner',
-        adDebounceMs: Number(document.getElementById("settingsEditor-adDebounceMs")?.value) || 300,
-        adTimeoutMs: Number(document.getElementById("settingsEditor-adTimeoutMs")?.value) || 30000
+            // Focus back on the term
+            window.term[window.currentTerm].term.focus();
+        });
     };
 
     window.writeFile = (filePath) => {
@@ -1848,7 +1596,11 @@ window.writeSettingsFile = () => {
             fsListView: (document.getElementById("settingsEditor-fsListView").value === "true"),
             experimentalGlobeFeatures: (document.getElementById("settingsEditor-experimentalGlobeFeatures").value === "true"),
             experimentalFeatures: (document.getElementById("settingsEditor-experimentalFeatures").value === "true"),
-            contextWarningThreshold: Number(document.getElementById("settingsEditor-contextWarningThreshold")?.value) || 80
+            contextWarningThreshold: Number(document.getElementById("settingsEditor-contextWarningThreshold")?.value) || 80,
+            adOverlayEnabled: (document.getElementById("settingsEditor-adOverlayEnabled")?.value === "true"),
+            adOverlayMode: document.getElementById("settingsEditor-adOverlayMode")?.value || 'corner',
+            adDebounceMs: Number(document.getElementById("settingsEditor-adDebounceMs")?.value) || 300,
+            adTimeoutMs: Number(document.getElementById("settingsEditor-adTimeoutMs")?.value) || 30000
         };
 
         Object.keys(window.settings).forEach(key => {
@@ -2155,9 +1907,41 @@ window.writeSettingsFile = () => {
         }
     };
 
-electronWin.on("leave-full-screen", () => {
-    remote.getCurrentWindow().setSize(960, 540);
-});
+    // See #413
+    window.resizeTimeout = null;
+    let electronWin = remote.getCurrentWindow();
+    electronWin.on("resize", () => {
+        if (settings.keepGeometry === false) return;
+        clearTimeout(window.resizeTimeout);
+        window.resizeTimeout = setTimeout(() => {
+            let win = remote.getCurrentWindow();
+            if (win.isFullScreen()) return false;
+            if (win.isMaximized()) {
+                win.unmaximize();
+                win.setFullScreen(true);
+                return false;
+            }
+
+            let size = win.getSize();
+
+            if (size[0] >= size[1]) {
+                win.setSize(size[0], parseInt(size[0] * 9 / 16));
+            } else {
+                win.setSize(size[1], parseInt(size[1] * 9 / 16));
+            }
+        }, 100);
+    });
+
+    electronWin.on("leave-full-screen", () => {
+        remote.getCurrentWindow().setSize(960, 540);
+    });
+
+} catch (e) {
+    const fs = require('fs');
+    const path = require('path');
+    const logFile = path.join(__dirname, '..', 'renderer_debug.log');
+    try { fs.appendFileSync(logFile, `[FATAL] ${e.message}\n${e.stack}\n`); } catch (err) { }
+}
 
 // Handle DevTools state changes to prevent grey zone
 ipc.on('devtools-state-changed', (event, isOpen) => {

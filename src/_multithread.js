@@ -34,7 +34,22 @@ if (cluster.isMaster) {
         let selectedID = lastID+1;
         if (selectedID > numCPUs-1) selectedID = 0;
 
-        cluster.workers[workers[selectedID]].send(JSON.stringify({
+        const worker = cluster.workers[workers[selectedID]];
+        if (!worker) {
+            // Worker died — fall back to main-process call
+            si[type](arg).then(res => {
+                try {
+                    if (queue[id] && !queue[id].isDestroyed()) {
+                        queue[id].send("systeminformation-reply-"+id, res);
+                        delete queue[id];
+                    }
+                } catch(e) { /* sender gone, ignore */ }
+            });
+            lastID = selectedID;
+            return;
+        }
+
+        worker.send(JSON.stringify({
             id,
             type,
             arg

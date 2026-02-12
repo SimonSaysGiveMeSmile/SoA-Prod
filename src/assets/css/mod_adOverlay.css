@@ -12,33 +12,60 @@
 /* Hidden state */
 .ad-overlay--hidden {
     opacity: 0;
-    pointer-events: none;
+    pointer-events: none !important;
     transform: translateY(10px);
+    z-index: -1;
 }
 
 /* ── Fullscreen mode ──
-   Covers upper portion of terminal, leaves bottom lines visible */
+   Covers the entire viewport with a prominent ad display.
+   Uses position:fixed to break out of the terminal container. */
 .ad-overlay--fullscreen {
+    position: fixed;
     top: 0;
     left: 0;
     right: 0;
-    bottom: 20%;  /* Leave bottom 20% visible so user sees current output */
+    bottom: 0;
     display: flex;
     align-items: center;
     justify-content: center;
-    background: rgba(0, 0, 0, 0.75);
+    background: rgba(0, 0, 0, 0.92);
+    pointer-events: auto;
+    z-index: 1000;
 }
 
 .ad-overlay--fullscreen .ad-overlay__content {
-    width: 70%;
-    max-width: 55vh;
+    width: 80%;
+    max-width: 90vh;
     text-align: center;
+    padding: 3vh;
+    border-width: 0.15vh;
 }
 
 .ad-overlay--fullscreen .ad-overlay__image-container {
     width: 100%;
-    height: 22vh;
-    margin: 1vh 0;
+    height: 50vh;
+    margin: 2vh 0;
+}
+
+.ad-overlay--fullscreen .ad-overlay__badge {
+    font-size: 1.4vh;
+    letter-spacing: 0.3vh;
+    margin-bottom: 1vh;
+}
+
+.ad-overlay--fullscreen .ad-overlay__info {
+    font-size: 1.4vh;
+    margin-top: 1vh;
+}
+
+.ad-overlay--fullscreen .ad-overlay__close {
+    width: 3.5vh;
+    height: 3.5vh;
+    font-size: 1.8vh;
+    line-height: 3.5vh;
+    top: 1vh;
+    right: 1vh;
 }
 
 /* ── Corner mode ──

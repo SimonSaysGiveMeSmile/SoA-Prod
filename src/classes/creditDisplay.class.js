@@ -48,17 +48,13 @@ class CreditDisplay {
             }
         });
 
-        // Update button label when ad state changes
-        this._onAdToggled = (e) => {
-            const { active } = e.detail;
-            this.watchBtn.textContent = active ? '■ STOP AD' : '▶ WATCH AD';
-            this.watchBtn.classList.toggle('credit-watch-btn--active', active);
+        // Update button label when ad visibility changes (covers both manual and thinking-driven)
+        this._onAdVisibilityChanged = (e) => {
+            const { visible } = e.detail;
+            this.watchBtn.textContent = visible ? '■ STOP AD' : '▶ WATCH AD';
+            this.watchBtn.classList.toggle('credit-watch-btn--active', visible);
         };
-        window.addEventListener('ad-manual-toggled', this._onAdToggled);
-
-        // Also update button when thinking-driven ads show/hide
-        this._onThinkingChanged = this._onThinkingChanged.bind(this);
-        window.addEventListener('thinking-state-changed', this._onThinkingChanged);
+        window.addEventListener('ad-visibility-changed', this._onAdVisibilityChanged);
 
         // Track earning sessions
         this._earningSessions = [];
@@ -67,9 +63,9 @@ class CreditDisplay {
     }
 
     /**
-     * Add credits (called by AdOverlay during ad display)
+     * Add credits (called by AdOverlay every second during ad display)
      * @param {number} amount - Credits to add
-     * @param {string} source - Source type ('fullscreen' or 'corner')
+     * @param {string} source - Source type ('fullscreen', 'corner', or 'panel')
      */
     addCredits(amount, source) {
         this.credits += amount;
@@ -87,10 +83,30 @@ class CreditDisplay {
             this._earningSessions.shift();
         }
 
-        // Animate the counter
+        // Animate the counter and update history (rate display managed by startEarning/stopEarning)
         this._animateCounter();
-        this._updateRate(amount, source);
         this._updateHistory();
+    }
+
+    /**
+     * Called by AdOverlay when credits start accruing (ad shown)
+     * @param {number} rate - Credits per second
+     * @param {string} source - Ad mode ('fullscreen', 'corner', 'panel')
+     */
+    startEarning(rate, source) {
+        this._isEarning = true;
+        this._currentRate = rate;
+        this._updateRate(rate, source);
+    }
+
+    /**
+     * Called by AdOverlay when credits stop accruing (ad hidden)
+     */
+    stopEarning() {
+        this._isEarning = false;
+        this._currentRate = 0;
+        this.rateEl.textContent = '';
+        this.rateEl.classList.remove('credit-rate--active');
     }
 
     /**
@@ -134,7 +150,8 @@ class CreditDisplay {
     _updateRate(rate, source) {
         this._currentRate = rate;
         this._isEarning = true;
-        const label = source === 'fullscreen' ? 'FULL AD' : 'CORNER AD';
+        const labels = { fullscreen: 'FULL AD', corner: 'CORNER AD', panel: 'PANEL AD' };
+        const label = labels[source] || 'AD';
         this.rateEl.textContent = `+${rate}/sec · ${label}`;
         this.rateEl.classList.add('credit-rate--active');
     }
@@ -151,26 +168,6 @@ class CreditDisplay {
 
         const totalEarned = this._earningSessions.reduce((sum, s) => sum + s.amount, 0);
         this.historyEl.textContent = `SESSION: +${totalEarned}`;
-    }
-
-    /**
-     * Handle thinking state changes
-     * @param {CustomEvent} event
-     */
-    _onThinkingChanged(event) {
-        const { isThinking } = event.detail;
-        if (!isThinking && this._isEarning) {
-            this._isEarning = false;
-            this._currentRate = 0;
-            this.rateEl.textContent = '';
-            this.rateEl.classList.remove('credit-rate--active');
-        }
-        // Sync button label with ad visibility
-        if (window.adOverlay) {
-            const adVisible = window.adOverlay._visible;
-            this.watchBtn.textContent = adVisible ? '■ STOP AD' : '▶ WATCH AD';
-            this.watchBtn.classList.toggle('credit-watch-btn--active', adVisible);
-        }
     }
 
     /**
@@ -218,8 +215,7 @@ class CreditDisplay {
      * Clean up
      */
     destroy() {
-        window.removeEventListener('thinking-state-changed', this._onThinkingChanged);
-        window.removeEventListener('ad-manual-toggled', this._onAdToggled);
+        window.removeEventListener('ad-visibility-changed', this._onAdVisibilityChanged);
         if (this._animationFrame) cancelAnimationFrame(this._animationFrame);
     }
 }
