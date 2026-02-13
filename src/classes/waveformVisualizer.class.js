@@ -117,7 +117,7 @@ class WaveformVisualizer {
     this.container.querySelector('.voice-waveform__processing').style.display = '';
 
     // Estimate: processing time roughly equals recording time, minimum 3s
-    const estimatedMs = Math.max(3000, recordingDurationMs || 5000);
+    const estimatedMs = Math.max(2000, (recordingDurationMs || 5000) / 2);
     const fill = this.container.querySelector('.voice-waveform__progress-fill');
     const timeEl = this.container.querySelector('.voice-waveform__progress-time');
     const startTime = Date.now();
@@ -174,7 +174,7 @@ class WaveformVisualizer {
     for (let i = 0; i < this.barCount; i++) {
       const level = this.freqLevels[i] || 0;
       const jitter = Math.random() * (0.04 + level * 0.1);
-      const target = Math.max(0.03, Math.min(1, level * 5 + jitter));
+      const target = Math.max(0.03, Math.min(1, level * 1.7 + jitter));
 
       this.displayLevels[i] = target >= this.displayLevels[i]
         ? target
