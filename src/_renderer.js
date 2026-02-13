@@ -522,6 +522,15 @@ try {
                         if (window.interimTranscription && !window.voiceController.useOnDevice) {
                             window.interimTranscription.start();
                         }
+                    } else if (state === VoiceState.PROCESSING && oldState === VoiceState.RECORDING) {
+                        // Show loading animation instead of hiding overlay
+                        window.waveformVisualizer.showProcessing();
+                        // Stop Web Speech API
+                        if (window.interimTranscription && !window.voiceController.useOnDevice) {
+                            window.interimTranscription.stop();
+                        }
+                    } else if (oldState === VoiceState.PROCESSING) {
+                        window.waveformVisualizer.hide();
                     } else if (oldState === VoiceState.RECORDING) {
                         window.waveformVisualizer.hide();
                         // Stop Web Speech API
@@ -541,9 +550,9 @@ try {
                     }
                 },
 
-                onAudioLevel: (level) => {
+                onAudioLevel: (level, freqLevels) => {
                     if (window.waveformVisualizer) {
-                        window.waveformVisualizer.updateLevel(level);
+                        window.waveformVisualizer.updateLevels(freqLevels);
                     }
                 },
 
@@ -1454,6 +1463,14 @@ try {
         document.addEventListener("keydown", e => {
             if (e.ctrlKey && e.shiftKey && (e.key === "s" || e.key === "S")) {
                 window.openSettings();
+            }
+        });
+
+        // Ctrl+Shift+V: Toggle voice dictation
+        document.addEventListener("keydown", e => {
+            if (e.ctrlKey && e.shiftKey && (e.key === "v" || e.key === "V")) {
+                e.preventDefault();
+                window.toggleMic();
             }
         });
 

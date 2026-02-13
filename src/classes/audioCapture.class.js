@@ -106,6 +106,27 @@ class AudioCapture {
   }
 
   /**
+   * Get frequency data spread across N bins for visualization
+   * @param {number} binCount - Number of output bins
+   * @returns {Float32Array} Normalized levels (0-1) per bin
+   */
+  getFrequencyLevels(binCount) {
+    if (!this.analyser) return new Float32Array(binCount);
+    const freqData = new Uint8Array(this.analyser.frequencyBinCount);
+    this.analyser.getByteFrequencyData(freqData);
+    const levels = new Float32Array(binCount);
+    const binsPerBar = Math.floor(freqData.length / binCount);
+    for (let i = 0; i < binCount; i++) {
+      let sum = 0;
+      for (let j = 0; j < binsPerBar; j++) {
+        sum += freqData[i * binsPerBar + j];
+      }
+      levels[i] = (sum / binsPerBar) / 255;
+    }
+    return levels;
+  }
+
+  /**
    * Setup analyser for audio visualization
    */
   setupAnalyser() {

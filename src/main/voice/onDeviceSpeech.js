@@ -1,142 +1,113 @@
 /**
- * On-Device Speech Recognition via macOS SFSpeechRecognizer
- * Spawns a compiled Swift helper and communicates via JSON over stdio.
+ * On-Device Speech Recognition via local Whisper CLI
+ * Uses openai-whisper installed via Homebrew for fully offline transcription.
  */
 
-const { spawn } = require('child_process');
+const { execFile } = require('child_process');
 const path = require('path');
 const fs = require('fs');
+const os = require('os');
 
 class OnDeviceSpeech {
   constructor() {
-    this._proc = null;
     this._ready = false;
     this._onInterim = null;
     this._onFinal = null;
     this._onError = null;
     this._onStopped = null;
-    this._buffer = '';
   }
 
-  /**
-   * Check if the compiled helper binary exists
-   */
   static isAvailable() {
-    const bin = OnDeviceSpeech._binaryPath();
-    return fs.existsSync(bin);
+    if (process.platform !== 'darwin') return false;
+    // Check for local whisper CLI
+    const whisperPath = OnDeviceSpeech._whisperPath();
+    return whisperPath !== null;
   }
 
-  static _binaryPath() {
-    return path.join(__dirname, 'speech_helper');
+  static _whisperPath() {
+    const candidates = [
+      '/opt/homebrew/bin/whisper',
+      '/usr/local/bin/whisper',
+      path.join(os.homedir(), '.local', 'bin', 'whisper'),
+    ];
+    for (const p of candidates) {
+      if (fs.existsSync(p)) return p;
+    }
+    return null;
+  }
+
+  async start() {
+    const wp = OnDeviceSpeech._whisperPath();
+    if (!wp) {
+      throw new Error('Local whisper not found. Install with: brew install openai-whisper');
+    }
+    this._ready = true;
+    console.log('[OnDeviceSpeech] Ready (local whisper at', wp + ')');
+    return true;
   }
 
   /**
-   * Spawn the helper process
-   * @returns {Promise<boolean>} true when ready
+   * Transcribe audio buffer using local whisper CLI
+   * @param {Buffer} audioBuffer - Audio data (webm/opus)
+   * @returns {Promise<string>} Transcribed text
    */
-  start() {
+  transcribeBuffer(audioBuffer) {
     return new Promise((resolve, reject) => {
-      const bin = OnDeviceSpeech._binaryPath();
-      if (!fs.existsSync(bin)) {
-        reject(new Error('speech_helper binary not found'));
+      const whisper = OnDeviceSpeech._whisperPath();
+      if (!whisper) {
+        reject(new Error('whisper not found'));
         return;
       }
 
-      this._proc = spawn(bin, [], {
-        stdio: ['pipe', 'pipe', 'pipe'],
-      });
+      const tmpFile = path.join(os.tmpdir(), `soa_audio_${Date.now()}.webm`);
+      fs.writeFileSync(tmpFile, audioBuffer);
 
-      this._proc.stderr.on('data', (d) => {
-        console.warn('[OnDeviceSpeech] stderr:', d.toString().trim());
-      });
+      const outDir = path.join(os.tmpdir(), `soa_whisper_${Date.now()}`);
+      fs.mkdirSync(outDir, { recursive: true });
 
-      this._proc.on('error', (err) => {
-        console.error('[OnDeviceSpeech] Process error:', err.message);
-        if (this._onError) this._onError(err.message);
-      });
+      console.log('[OnDeviceSpeech] Transcribing', audioBuffer.length, 'bytes...');
 
-      this._proc.on('exit', (code) => {
-        console.log('[OnDeviceSpeech] Process exited:', code);
-        this._proc = null;
-        this._ready = false;
-      });
+      execFile(whisper, [
+        tmpFile,
+        '--model', 'tiny',
+        '--language', 'en',
+        '--output_format', 'txt',
+        '--output_dir', outDir,
+      ], { timeout: 30000 }, (err, stdout, stderr) => {
+        // Read result
+        const baseName = path.basename(tmpFile, path.extname(tmpFile));
+        const txtFile = path.join(outDir, baseName + '.txt');
+        let text = '';
+        try { text = fs.readFileSync(txtFile, 'utf8').trim(); } catch (e) {}
 
-      this._proc.stdout.on('data', (chunk) => {
-        this._buffer += chunk.toString();
-        let nl;
-        while ((nl = this._buffer.indexOf('\n')) !== -1) {
-          const line = this._buffer.slice(0, nl).trim();
-          this._buffer = this._buffer.slice(nl + 1);
-          if (!line) continue;
-          try {
-            const msg = JSON.parse(line);
-            this._handleMessage(msg, resolve);
-          } catch (e) {
-            console.warn('[OnDeviceSpeech] Bad JSON:', line);
-          }
+        // Cleanup
+        try { fs.unlinkSync(tmpFile); } catch (e) {}
+        try { fs.unlinkSync(txtFile); } catch (e) {}
+        try { fs.rmdirSync(outDir); } catch (e) {}
+
+        if (err) {
+          reject(new Error(stderr || err.message));
+          return;
         }
-      });
 
-      // Timeout if helper doesn't become ready
-      setTimeout(() => {
-        if (!this._ready) {
-          reject(new Error('speech_helper timed out'));
-          this.release();
-        }
-      }, 5000);
+        console.log('[OnDeviceSpeech] Transcription:', text);
+        resolve(text);
+      });
     });
   }
 
-  _handleMessage(msg, resolveReady) {
-    switch (msg.type) {
-      case 'ready':
-        this._ready = true;
-        console.log('[OnDeviceSpeech] Ready, onDevice:', msg.onDevice);
-        if (resolveReady) resolveReady(true);
-        break;
-      case 'interim':
-        if (this._onInterim) this._onInterim(msg.text);
-        break;
-      case 'final':
-        if (this._onFinal) this._onFinal(msg.text);
-        break;
-      case 'error':
-        console.warn('[OnDeviceSpeech] Error:', msg.message);
-        if (this._onError) this._onError(msg.message);
-        break;
-      case 'stopped':
-        if (this._onStopped) this._onStopped();
-        break;
-    }
+  startRecognition() {
+    console.log('[OnDeviceSpeech] startRecognition (push-to-talk mode)');
   }
 
-  _send(obj) {
-    if (this._proc && this._proc.stdin.writable) {
-      this._proc.stdin.write(JSON.stringify(obj) + '\n');
-    }
+  stopRecognition() {
+    if (this._onStopped) this._onStopped();
   }
 
-  /** Begin recognition */
-  startRecognition() { this._send({ command: 'start' }); }
-
-  /** End recognition */
-  stopRecognition() { this._send({ command: 'stop' }); }
-
-  /** Kill the helper process */
   release() {
-    if (this._proc) {
-      this._send({ command: 'quit' });
-      setTimeout(() => {
-        if (this._proc) {
-          this._proc.kill();
-          this._proc = null;
-        }
-      }, 500);
-    }
     this._ready = false;
   }
 
-  /** @param {Function} fn - (text: string) => void */
   set onInterim(fn) { this._onInterim = fn; }
   set onFinal(fn) { this._onFinal = fn; }
   set onError(fn) { this._onError = fn; }

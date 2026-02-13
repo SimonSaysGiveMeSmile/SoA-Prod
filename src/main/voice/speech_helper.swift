@@ -40,23 +40,11 @@ class SpeechHelper: NSObject, SFSpeechRecognizerDelegate {
         FileHandle.standardOutput.write(
             Data((json + "\n").utf8)
         )
+        fflush(stdout)
     }
 
     private func emitError(_ msg: String) {
         emit(["type": "error", "message": msg])
-    }
-
-    func requestAuth(
-        completion: @escaping (Bool) -> Void
-    ) {
-        SFSpeechRecognizer.requestAuthorization { status in
-            completion(status == .authorized)
-            if status != .authorized {
-                self.emitError(
-                    "Speech recognition not authorised"
-                )
-            }
-        }
     }
 
     func startRecording() {
@@ -135,39 +123,43 @@ class SpeechHelper: NSObject, SFSpeechRecognizerDelegate {
 
 // MARK: - Entry point
 
+setbuf(stdout, nil)  // Disable stdout buffering for piped IPC
+
+fputs("[speech_helper] Starting...\n", stderr)
+
 let helper = SpeechHelper()
-helper.requestAuth { ok in
-    guard ok else { exit(1) }
 
-    let onDevice = SFSpeechRecognizer(
-        locale: Locale(identifier: "en-US")
-    )?.supportsOnDeviceRecognition ?? false
+// Skip auth check — emit ready immediately.
+// Auth is handled by the parent Electron app; errors surface at startRecording time.
+let onDevice = SFSpeechRecognizer(
+    locale: Locale(identifier: "en-US")
+)?.supportsOnDeviceRecognition ?? false
 
-    let ready = try! JSONSerialization.data(
-        withJSONObject: ["type": "ready", "onDevice": onDevice]
-    )
-    FileHandle.standardOutput.write(ready + Data("\n".utf8))
+let ready = try! JSONSerialization.data(
+    withJSONObject: ["type": "ready", "onDevice": onDevice]
+)
+FileHandle.standardOutput.write(ready + Data("\n".utf8))
+fputs("[speech_helper] Ready, onDevice=\(onDevice)\n", stderr)
 
-    DispatchQueue.global().async {
-        while let line = readLine() {
-            guard let d = line.data(using: .utf8),
-                  let j = try? JSONSerialization.jsonObject(
-                      with: d
-                  ) as? [String: String],
-                  let cmd = j["command"]
-            else { continue }
-            DispatchQueue.main.async {
-                switch cmd {
-                case "start": helper.startRecording()
-                case "stop":  helper.stopRecording()
-                case "quit":  helper.stopRecording(); exit(0)
-                default: break
-                }
+DispatchQueue.global().async {
+    while let line = readLine() {
+        guard let d = line.data(using: .utf8),
+              let j = try? JSONSerialization.jsonObject(
+                  with: d
+              ) as? [String: String],
+              let cmd = j["command"]
+        else { continue }
+        DispatchQueue.main.async {
+            switch cmd {
+            case "start": helper.startRecording()
+            case "stop":  helper.stopRecording()
+            case "quit":  helper.stopRecording(); exit(0)
+            default: break
             }
         }
-        DispatchQueue.main.async {
-            helper.stopRecording(); exit(0)
-        }
+    }
+    DispatchQueue.main.async {
+        helper.stopRecording(); exit(0)
     }
 }
 

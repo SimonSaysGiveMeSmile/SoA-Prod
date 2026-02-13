@@ -108,29 +108,31 @@
   50% { opacity: 0.7; transform: scale(1.1); }
 }
 
-/* Waveform Visualizer (Terminal Bottom) */
+/* Waveform Visualizer (Center Overlay) */
 .voice-waveform {
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  height: 6vh;
-  background: linear-gradient(to top, rgba(0, 0, 0, 0.9) 0%, rgba(0, 0, 0, 0.7) 50%, transparent 100%);
-  border-top: 1px solid rgba(var(--color_r), var(--color_g), var(--color_b), 0.3);
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) scale(0.8);
+  width: 50vw;
+  height: 20vh;
+  background: rgba(0, 0, 0, 0.85);
+  border: 1px solid rgba(var(--color_r), var(--color_g), var(--color_b), 0.4);
+  border-radius: 4px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  z-index: 100;
+  z-index: 1000;
   opacity: 0;
-  transform: translateY(100%);
   transition: opacity 0.3s ease, transform 0.3s ease;
   pointer-events: none;
+  box-shadow: 0 0 40px rgba(var(--color_r), var(--color_g), var(--color_b), 0.15);
 }
 
 .voice-waveform--visible {
   opacity: 1;
-  transform: translateY(0);
+  transform: translate(-50%, -50%) scale(1);
 }
 
 .voice-waveform__label {
@@ -143,18 +145,18 @@
 
 .voice-waveform__bars {
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   justify-content: center;
-  height: 3vh;
-  gap: 2px;
+  height: 10vh;
+  gap: 3px;
 }
 
 .voice-waveform__bar {
-  width: 4px;
-  min-height: 2px;
+  width: 5px;
+  min-height: 3px;
   background: rgb(var(--color_r), var(--color_g), var(--color_b));
-  border-radius: 1px;
-  transition: height 0.15s ease-out;
+  border-radius: 2px;
+  transition: height 0.08s ease-out;
 }
 
 .voice-waveform__status {
@@ -177,4 +179,29 @@
 .term-input--voice-active {
   border-color: rgba(var(--color_r), var(--color_g), var(--color_b), 0.8) !important;
   box-shadow: 0 0 5px rgba(var(--color_r), var(--color_g), var(--color_b), 0.3);
+}
+
+/* Processing State */
+.voice-waveform__processing {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1vh;
+  color: rgba(var(--color_r), var(--color_g), var(--color_b), 0.8);
+  font-family: var(--font_mono);
+  font-size: 1vh;
+  letter-spacing: 0.1vh;
+}
+
+.voice-waveform__spinner {
+  width: 3vh;
+  height: 3vh;
+  border: 2px solid rgba(var(--color_r), var(--color_g), var(--color_b), 0.2);
+  border-top-color: rgb(var(--color_r), var(--color_g), var(--color_b));
+  border-radius: 50%;
+  animation: voice-spin 0.8s linear infinite;
+}
+
+@keyframes voice-spin {
+  to { transform: rotate(360deg); }
 }

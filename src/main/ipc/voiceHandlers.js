@@ -140,26 +140,33 @@ function setupVoiceIPC(window) {
     }
   });
 
-  // Transcribe audio with Whisper (works in both full and direct modes)
+  // Transcribe audio with Whisper (API or local)
   ipcMain.removeHandler('voice:transcribe');
   ipcMain.handle('voice:transcribe', async (event, audioData) => {
-    // Lazy-init whisperClient if we have an API key but it wasn't created yet
-    if (!whisperClient) {
-      const openaiKey = process.env.OPENAI_API_KEY;
-      if (openaiKey) {
-        whisperClient = new WhisperClient(openaiKey);
-      } else {
-        return { success: false, error: 'OPENAI_API_KEY not set in .env' };
-      }
-    }
-
     try {
       const audioBuffer = Buffer.isBuffer(audioData)
         ? audioData
         : Buffer.from(audioData);
 
-      const text = await whisperClient.transcribe(audioBuffer);
-      return { success: true, text };
+      // Try OpenAI Whisper API first
+      const openaiKey = process.env.OPENAI_API_KEY;
+      if (openaiKey) {
+        if (!whisperClient) whisperClient = new WhisperClient(openaiKey);
+        const text = await whisperClient.transcribe(audioBuffer);
+        return { success: true, text };
+      }
+
+      // Fall back to local whisper via OnDeviceSpeech
+      if (!onDeviceSpeech && OnDeviceSpeech.isAvailable()) {
+        onDeviceSpeech = new OnDeviceSpeech();
+        await onDeviceSpeech.start();
+      }
+      if (onDeviceSpeech && onDeviceSpeech.isReady) {
+        const text = await onDeviceSpeech.transcribeBuffer(audioBuffer);
+        return { success: true, text };
+      }
+
+      return { success: false, error: 'No transcription service available' };
     } catch (error) {
       console.error('[VoiceIPC] Transcription failed:', error.message);
       return { success: false, error: error.message };
@@ -180,47 +187,13 @@ function setupVoiceIPC(window) {
   ipcMain.handle('voice:on-device-start', async () => {
     voiceLog('[VoiceIPC] on-device-start called');
     try {
-      // Reset if the process died
-      if (onDeviceSpeech && !onDeviceSpeech.isReady) {
-        voiceLog('[VoiceIPC] Previous speech instance not ready, resetting...');
-        onDeviceSpeech = null;
-      }
-
       if (!onDeviceSpeech) {
         voiceLog('[VoiceIPC] Creating OnDeviceSpeech instance...');
         onDeviceSpeech = new OnDeviceSpeech();
-
-        onDeviceSpeech.onInterim = (text) => {
-          voiceLog('[VoiceIPC] On-device interim:', text);
-          if (mainWindow && !mainWindow.isDestroyed()) {
-            mainWindow.webContents.send('voice:on-device-interim', text);
-          }
-        };
-        onDeviceSpeech.onFinal = (text) => {
-          voiceLog('[VoiceIPC] On-device final:', text);
-          if (mainWindow && !mainWindow.isDestroyed()) {
-            mainWindow.webContents.send('voice:on-device-final', text);
-          }
-        };
-        onDeviceSpeech.onError = (msg) => {
-          voiceLog('[VoiceIPC] On-device error:', msg);
-          if (mainWindow && !mainWindow.isDestroyed()) {
-            mainWindow.webContents.send('voice:on-device-error', msg);
-          }
-        };
-        onDeviceSpeech.onStopped = () => {
-          voiceLog('[VoiceIPC] On-device stopped callback');
-        };
-
-        voiceLog('[VoiceIPC] Starting speech_helper binary...');
         await onDeviceSpeech.start();
-        voiceLog('[VoiceIPC] speech_helper ready, isReady=' + onDeviceSpeech.isReady);
-      } else {
-        voiceLog('[VoiceIPC] Reusing existing speech instance, isReady=' + onDeviceSpeech.isReady);
+        voiceLog('[VoiceIPC] OnDeviceSpeech ready');
       }
-      voiceLog('[VoiceIPC] Calling startRecognition...');
-      onDeviceSpeech.startRecognition();
-      return { success: true, debug: 'isReady=' + onDeviceSpeech.isReady + ', hasProc=' + !!onDeviceSpeech._proc };
+      return { success: true };
     } catch (error) {
       voiceLog('[VoiceIPC] On-device start failed:', error.message);
       return { success: false, error: error.message };

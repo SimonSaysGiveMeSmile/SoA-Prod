@@ -84,11 +84,19 @@ class VoiceController {
 
         this.useFallback = false;
       } else if (availability.hasOnDevice) {
-        // On-device speech recognition via macOS SFSpeechRecognizer
+        // On-device speech recognition via local Whisper (push-to-talk)
+        const hasPermission = await this.audioCapture.requestPermission();
+        if (!hasPermission) {
+          this.onError('Microphone permission denied');
+          this._setState(VoiceState.ERROR);
+          return false;
+        }
         this.useOnDevice = true;
+        this.useDirectWhisper = true; // Reuse push-to-talk recording flow
         this.useFallback = false;
-        this._setupOnDeviceListeners();
-        console.log('[VoiceController] Using on-device speech recognition (SFSpeechRecognizer)');
+        // Initialize on-device transcription backend
+        await window.ipc.invoke('voice:on-device-start');
+        console.log('[VoiceController] Using on-device speech recognition (local Whisper, push-to-talk)');
       } else if (availability.hasOpenAIKey) {
         // Direct Whisper mode: record audio, send to Whisper API
         // No wake word, mic button acts as push-to-talk
@@ -150,9 +158,6 @@ class VoiceController {
       return false;
     }
     this.isEnabled = true;
-    if (this.useOnDevice) {
-      return this._startOnDeviceRecognition();
-    }
     if (this.useDirectWhisper) {
       return this._startDirectRecording();
     }
@@ -167,10 +172,7 @@ class VoiceController {
    */
   disable() {
     this.isEnabled = false;
-    if (this.useOnDevice) {
-      this._stopOnDeviceRecognition();
-    } else if (this.useDirectWhisper) {
-      // _stopDirectRecording is async and manages its own state transitions
+    if (this.useDirectWhisper) {
       this._stopDirectRecording();
       return;
     } else if (this.useFallback) {
@@ -270,12 +272,6 @@ class VoiceController {
     this._clearTimers();
     this._stopAudioLevelPolling();
 
-    if (this.useOnDevice) {
-      this._stopOnDeviceRecognition();
-      this.isEnabled = false;
-      return;
-    }
-
     if (this.useDirectWhisper) {
       this._directRecording = false;
       this.audioCapture.stopRecording();
@@ -337,7 +333,8 @@ class VoiceController {
     this._stopAudioLevelPolling();
     this.audioLevelInterval = setInterval(() => {
       const level = this.audioCapture.getAudioLevel();
-      this.onAudioLevel(level);
+      const freqLevels = this.audioCapture.getFrequencyLevels(32);
+      this.onAudioLevel(level, freqLevels);
     }, 50); // 20fps
   }
 
@@ -526,7 +523,13 @@ class VoiceController {
         console.error('[VoiceController] Fatal speech error:', e.error,
           e.error === 'network' ? '— Web Speech API cannot reach Google servers (expected in Electron)' : '');
         if (window.micMonitor) window.micMonitor.setSpeechStatus('UNAVAILABLE (no cloud service)');
+        // Clear restart timer to prevent onend from restarting
+        if (this._fallbackRestartTimer) {
+          clearTimeout(this._fallbackRestartTimer);
+          this._fallbackRestartTimer = null;
+        }
         this.isEnabled = false;
+        this.useFallback = false;
         this._fallbackRecognition = null;
         this._setState(VoiceState.ERROR);
       }
@@ -645,6 +648,10 @@ class VoiceController {
     this._setState(VoiceState.RECORDING);
     if (window.micMonitor) window.micMonitor.setSpeechStatus('RECORDING (push-to-talk)');
 
+    // Setup analyser for waveform visualization
+    this.audioCapture.setupAnalyser();
+    this._startAudioLevelPolling();
+
     // Start max duration timer
     this._startMaxDurationTimer();
 
@@ -660,6 +667,7 @@ class VoiceController {
     if (!this._directRecording) return;
     this._directRecording = false;
     this._clearTimers();
+    this._stopAudioLevelPolling();
 
     this._setState(VoiceState.PROCESSING);
     if (window.micMonitor) window.micMonitor.setSpeechStatus('PROCESSING...');

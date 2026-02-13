@@ -16,9 +16,9 @@ class WaveformVisualizer {
     this.isVisible = false;
     this.targetTerminalIndex = null;
     this.animationFrame = null;
-    this.levels = new Array(this.barCount).fill(0);
-    this.levelIndex = 0;
-    this.displayLevels = new Array(this.barCount).fill(0); // sustain buffer
+    this.freqLevels = new Float32Array(this.barCount);
+    this.displayLevels = new Float32Array(this.barCount);
+    this._isProcessing = false;
   }
 
   _createDOM() {
@@ -28,6 +28,10 @@ class WaveformVisualizer {
       <div class="voice-waveform__label">VOICE INPUT</div>
       <div class="voice-waveform__bars"></div>
       <div class="voice-waveform__status">Recording...</div>
+      <div class="voice-waveform__processing" style="display:none;">
+        <div class="voice-waveform__spinner"></div>
+        <span>Processing transcription...</span>
+      </div>
     `;
 
     const barsContainer = this.container.querySelector('.voice-waveform__bars');
@@ -47,24 +51,16 @@ class WaveformVisualizer {
     }
 
     this.targetTerminalIndex = terminalIndex;
+    this._isProcessing = false;
 
-    const terminalSelector = `#terminal${terminalIndex}`;
-    const terminalEl = document.querySelector(terminalSelector);
+    if (!this.container) this._createDOM();
+    document.body.appendChild(this.container);
 
-    if (!terminalEl) {
-      const termWrapper = document.querySelector('#main_shell_innercontainer') ||
-                          document.querySelector('#main_shell');
-      if (termWrapper) {
-        if (!this.container) this._createDOM();
-        termWrapper.appendChild(this.container);
-      } else {
-        console.warn('[WaveformVisualizer] Cannot find terminal container');
-        return;
-      }
-    } else {
-      if (!this.container) this._createDOM();
-      terminalEl.appendChild(this.container);
-    }
+    // Reset to recording view
+    this.container.querySelector('.voice-waveform__bars').style.display = '';
+    this.container.querySelector('.voice-waveform__status').style.display = '';
+    this.container.querySelector('.voice-waveform__processing').style.display = 'none';
+    this.container.querySelector('.voice-waveform__status').textContent = 'Recording...';
 
     this.container.classList.add('voice-waveform--visible');
     this.isVisible = true;
@@ -77,6 +73,7 @@ class WaveformVisualizer {
     if (!this.isVisible) return;
 
     this._stopAnimation();
+    this._isProcessing = false;
 
     if (this.container) {
       this.container.classList.remove('voice-waveform--visible');
@@ -92,9 +89,23 @@ class WaveformVisualizer {
     console.log('[WaveformVisualizer] Hidden');
   }
 
+  updateLevels(freqLevels) {
+    if (freqLevels && freqLevels.length) {
+      this.freqLevels = freqLevels;
+    }
+  }
+
+  // Keep old method as fallback
   updateLevel(level) {
-    this.levels[this.levelIndex] = level;
-    this.levelIndex = (this.levelIndex + 1) % this.barCount;
+    this.freqLevels.fill(level);
+  }
+
+  showProcessing() {
+    if (!this.container) return;
+    this._isProcessing = true;
+    this.container.querySelector('.voice-waveform__bars').style.display = 'none';
+    this.container.querySelector('.voice-waveform__status').style.display = 'none';
+    this.container.querySelector('.voice-waveform__processing').style.display = '';
   }
 
   setStatus(status) {
@@ -107,10 +118,6 @@ class WaveformVisualizer {
     }
   }
 
-  /**
-   * Show interim transcription text - KEY LINK for Web Speech API
-   * @param {string} text - Interim transcription from Web Speech API
-   */
   showInterim(text) {
     if (this.container) {
       const statusEl = this.container.querySelector('.voice-waveform__status');
@@ -123,7 +130,7 @@ class WaveformVisualizer {
 
   _startAnimation() {
     const animate = () => {
-      this._renderBars();
+      if (!this._isProcessing) this._renderBars();
       this.animationFrame = requestAnimationFrame(animate);
     };
     animate();
@@ -137,14 +144,12 @@ class WaveformVisualizer {
   }
 
   _renderBars() {
-    const decay = 0.92; // sustain factor — bars decay slowly
+    const decay = 0.88;
     for (let i = 0; i < this.barCount; i++) {
-      const levelIdx = (this.levelIndex + i) % this.barCount;
-      const level = this.levels[levelIdx];
-      const jitter = Math.random() * 0.1;
-      const target = Math.max(0.05, Math.min(1, level + jitter));
+      const level = this.freqLevels[i] || 0;
+      const jitter = Math.random() * (0.04 + level * 0.1);
+      const target = Math.max(0.03, Math.min(1, level * 2.5 + jitter));
 
-      // Sustain: only decay slowly, jump up instantly
       this.displayLevels[i] = target >= this.displayLevels[i]
         ? target
         : Math.max(target, this.displayLevels[i] * decay);
@@ -152,8 +157,8 @@ class WaveformVisualizer {
       const h = this.displayLevels[i];
       this.bars[i].style.height = `${h * 100}%`;
 
-      const intensity = Math.floor(200 + h * 55);
-      this.bars[i].style.backgroundColor = `rgb(${intensity}, ${intensity}, ${intensity})`;
+      const alpha = 0.4 + h * 0.6;
+      this.bars[i].style.backgroundColor = `rgba(var(--color_r), var(--color_g), var(--color_b), ${alpha})`;
     }
   }
 

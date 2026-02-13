@@ -77,7 +77,10 @@
         }
       ],
       "category": "public.app-category.utilities",
-      "icon": "media/icon.icns"
+      "icon": "media/icon.icns",
+      "extendInfo": {
+        "NSSpeechRecognitionUsageDescription": "This app uses speech recognition for voice dictation."
+      }
     },
     "dmg": {
       "artifactName": "Son of Anton-macOS-${arch}.dmg"
