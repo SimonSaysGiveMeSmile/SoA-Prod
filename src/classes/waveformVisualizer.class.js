@@ -116,8 +116,8 @@ class WaveformVisualizer {
     this.container.querySelector('.voice-waveform__status').style.display = 'none';
     this.container.querySelector('.voice-waveform__processing').style.display = '';
 
-    // Estimate: ~1s processing per 5s of audio, minimum 2s
-    const estimatedMs = Math.max(2000, (recordingDurationMs || 5000) / 5 * 1000);
+    // Estimate: processing time roughly equals recording time, minimum 3s
+    const estimatedMs = Math.max(3000, recordingDurationMs || 5000);
     const fill = this.container.querySelector('.voice-waveform__progress-fill');
     const timeEl = this.container.querySelector('.voice-waveform__progress-time');
     const startTime = Date.now();
