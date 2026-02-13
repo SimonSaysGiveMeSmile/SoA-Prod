@@ -49,6 +49,7 @@ class VoiceController {
     this._fallbackRestartTimer = null;
     this._SpeechRecognition = null;
     this._directRecording = false; // Currently recording in direct Whisper mode
+    this._recordingStartTime = null; // Track recording duration
 
     // Bind space key handler
     this._boundKeyHandler = this._handleKeyDown.bind(this);
@@ -312,6 +313,7 @@ class VoiceController {
 
     // Start recording for transcription
     this._setState(VoiceState.RECORDING);
+    this._recordingStartTime = Date.now();
     this.audioCapture.startRecording();
 
     // Setup analyser for waveform visualization
@@ -645,6 +647,7 @@ class VoiceController {
 
     this.audioCapture.startRecording();
     this._directRecording = true;
+    this._recordingStartTime = Date.now();
     this._setState(VoiceState.RECORDING);
     if (window.micMonitor) window.micMonitor.setSpeechStatus('RECORDING (push-to-talk)');
 
@@ -729,6 +732,11 @@ class VoiceController {
    */
   getEnabled() {
     return this.isEnabled;
+  }
+
+  getRecordingDurationMs() {
+    if (!this._recordingStartTime) return 0;
+    return Date.now() - this._recordingStartTime;
   }
 
   /**

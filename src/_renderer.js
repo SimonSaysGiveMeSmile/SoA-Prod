@@ -523,8 +523,9 @@ try {
                             window.interimTranscription.start();
                         }
                     } else if (state === VoiceState.PROCESSING && oldState === VoiceState.RECORDING) {
-                        // Show loading animation instead of hiding overlay
-                        window.waveformVisualizer.showProcessing();
+                        // Show loading animation with progress estimate
+                        const durationMs = window.voiceController.getRecordingDurationMs();
+                        window.waveformVisualizer.showProcessing(durationMs);
                         // Stop Web Speech API
                         if (window.interimTranscription && !window.voiceController.useOnDevice) {
                             window.interimTranscription.stop();

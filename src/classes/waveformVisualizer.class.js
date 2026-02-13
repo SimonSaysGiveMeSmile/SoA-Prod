@@ -19,6 +19,7 @@ class WaveformVisualizer {
     this.freqLevels = new Float32Array(this.barCount);
     this.displayLevels = new Float32Array(this.barCount);
     this._isProcessing = false;
+    this._progressInterval = null;
   }
 
   _createDOM() {
@@ -30,7 +31,11 @@ class WaveformVisualizer {
       <div class="voice-waveform__status">Recording...</div>
       <div class="voice-waveform__processing" style="display:none;">
         <div class="voice-waveform__spinner"></div>
-        <span>Processing transcription...</span>
+        <span class="voice-waveform__processing-text">Processing transcription...</span>
+        <div class="voice-waveform__progress-track">
+          <div class="voice-waveform__progress-fill"></div>
+        </div>
+        <span class="voice-waveform__progress-time"></span>
       </div>
     `;
 
@@ -74,6 +79,10 @@ class WaveformVisualizer {
 
     this._stopAnimation();
     this._isProcessing = false;
+    if (this._progressInterval) {
+      clearInterval(this._progressInterval);
+      this._progressInterval = null;
+    }
 
     if (this.container) {
       this.container.classList.remove('voice-waveform--visible');
@@ -100,12 +109,29 @@ class WaveformVisualizer {
     this.freqLevels.fill(level);
   }
 
-  showProcessing() {
+  showProcessing(recordingDurationMs) {
     if (!this.container) return;
     this._isProcessing = true;
     this.container.querySelector('.voice-waveform__bars').style.display = 'none';
     this.container.querySelector('.voice-waveform__status').style.display = 'none';
     this.container.querySelector('.voice-waveform__processing').style.display = '';
+
+    // Estimate: ~1s processing per 5s of audio, minimum 2s
+    const estimatedMs = Math.max(2000, (recordingDurationMs || 5000) / 5 * 1000);
+    const fill = this.container.querySelector('.voice-waveform__progress-fill');
+    const timeEl = this.container.querySelector('.voice-waveform__progress-time');
+    const startTime = Date.now();
+
+    if (this._progressInterval) clearInterval(this._progressInterval);
+    this._progressInterval = setInterval(() => {
+      const elapsed = Date.now() - startTime;
+      // Ease out — slows down as it approaches 95%
+      const raw = elapsed / estimatedMs;
+      const pct = Math.min(95, raw * 100 / (1 + raw * 0.5));
+      fill.style.width = `${pct}%`;
+      const secsLeft = Math.max(0, Math.ceil((estimatedMs - elapsed) / 1000));
+      timeEl.textContent = `~${secsLeft}s remaining`;
+    }, 100);
   }
 
   setStatus(status) {
