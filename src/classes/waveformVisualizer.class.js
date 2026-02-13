@@ -148,7 +148,7 @@ class WaveformVisualizer {
     for (let i = 0; i < this.barCount; i++) {
       const level = this.freqLevels[i] || 0;
       const jitter = Math.random() * (0.04 + level * 0.1);
-      const target = Math.max(0.03, Math.min(1, level * 2.5 + jitter));
+      const target = Math.max(0.03, Math.min(1, level * 5 + jitter));
 
       this.displayLevels[i] = target >= this.displayLevels[i]
         ? target

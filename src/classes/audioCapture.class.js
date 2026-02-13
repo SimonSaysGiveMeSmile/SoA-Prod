@@ -111,17 +111,17 @@ class AudioCapture {
    * @returns {Float32Array} Normalized levels (0-1) per bin
    */
   getFrequencyLevels(binCount) {
-    if (!this.analyser) return new Float32Array(binCount);
-    const freqData = new Uint8Array(this.analyser.frequencyBinCount);
-    this.analyser.getByteFrequencyData(freqData);
+    if (!this.analyser || !this.dataArray) return new Float32Array(binCount);
+    this.analyser.getByteTimeDomainData(this.dataArray);
     const levels = new Float32Array(binCount);
-    const binsPerBar = Math.floor(freqData.length / binCount);
+    const samplesPerBar = Math.floor(this.dataArray.length / binCount);
     for (let i = 0; i < binCount; i++) {
-      let sum = 0;
-      for (let j = 0; j < binsPerBar; j++) {
-        sum += freqData[i * binsPerBar + j];
+      let peak = 0;
+      for (let j = 0; j < samplesPerBar; j++) {
+        const v = Math.abs(this.dataArray[i * samplesPerBar + j] - 128) / 128;
+        if (v > peak) peak = v;
       }
-      levels[i] = (sum / binsPerBar) / 255;
+      levels[i] = peak;
     }
     return levels;
   }
@@ -137,8 +137,8 @@ class AudioCapture {
     }
 
     this.analyser = this.audioContext.createAnalyser();
-    this.analyser.fftSize = 256;
-    this.dataArray = new Uint8Array(this.analyser.frequencyBinCount);
+    this.analyser.fftSize = 2048;
+    this.dataArray = new Uint8Array(this.analyser.fftSize);
 
     const source = this.audioContext.createMediaStreamSource(this.mediaStream);
     source.connect(this.analyser);
