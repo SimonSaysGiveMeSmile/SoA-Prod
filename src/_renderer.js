@@ -1467,11 +1467,16 @@ try {
             }
         });
 
-        // Caps Lock: Toggle voice dictation
+        // Caps Lock: Sync voice dictation with Caps Lock state
         document.addEventListener("keydown", e => {
-            if (e.code === "CapsLock") {
+            if (e.code === "CapsLock" && window.voiceController) {
                 e.preventDefault();
-                window.toggleMic();
+                const capsOn = e.getModifierState("CapsLock");
+                if (capsOn && !window.voiceController.getEnabled()) {
+                    window.toggleMic();
+                } else if (!capsOn && window.voiceController.getEnabled()) {
+                    window.toggleMic();
+                }
             }
         });
 
