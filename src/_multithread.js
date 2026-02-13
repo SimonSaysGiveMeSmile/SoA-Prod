@@ -28,6 +28,10 @@ if (cluster.isMaster) {
 
     signale.success("Multithreaded controller ready");
 
+    cluster.on("exit", (worker, code, signal) => {
+        signale.warn(`[SI] Worker ${worker.id} (pid ${worker.process.pid}) exited: code=${code} signal=${signal}`);
+    });
+
     var lastID = 0;
 
     function dispatch(type, id, arg) {
@@ -35,7 +39,7 @@ if (cluster.isMaster) {
         if (selectedID > numCPUs-1) selectedID = 0;
 
         const worker = cluster.workers[workers[selectedID]];
-        if (!worker) {
+        if (!worker || worker.isDead()) {
             // Worker died — fall back to main-process call
             si[type](arg).then(res => {
                 try {
@@ -44,6 +48,9 @@ if (cluster.isMaster) {
                         delete queue[id];
                     }
                 } catch(e) { /* sender gone, ignore */ }
+            }).catch(err => {
+                signale.error(`[SI] Fallback ${type} failed:`, err.message);
+                delete queue[id];
             });
             lastID = selectedID;
             return;
@@ -59,17 +66,23 @@ if (cluster.isMaster) {
     }
 
     var queue = {};
+    var siCallCount = 0;
     ipc.on("systeminformation-call", (e, type, id, ...args) => {
+        siCallCount++;
+        if (siCallCount <= 20) signale.info(`[SI] Call #${siCallCount}: ${type} (id=${id.substring(0,6)})`);
+
         if (!si[type]) {
-            signale.warn("Illegal request for systeminformation");
+            signale.warn("Illegal request for systeminformation: " + type);
             return;
         }
 
         if (STATEFUL_SI_FUNCTIONS.includes(type) || args.length > 1 || workers.length <= 0) {
             si[type](...args).then(res => {
-                if (e.sender) {
+                if (e.sender && !e.sender.isDestroyed()) {
                     e.sender.send("systeminformation-reply-"+id, res);
                 }
+            }).catch(err => {
+                signale.error(`[SI] ${type} failed:`, err.message);
             });
         } else {
             queue[id] = e.sender;
@@ -80,12 +93,13 @@ if (cluster.isMaster) {
     cluster.on("message", (worker, msg) => {
         msg = JSON.parse(msg);
         try {
-            if (!queue[msg.id].isDestroyed()) {
+            if (queue[msg.id] && !queue[msg.id].isDestroyed()) {
                 queue[msg.id].send("systeminformation-reply-"+msg.id, msg.res);
-                delete queue[msg.id];
             }
+            delete queue[msg.id];
         } catch(e) {
-            // Window has been closed, ignore.
+            signale.warn("[SI] Reply delivery failed:", e.message);
+            delete queue[msg.id];
         }
     });
 } else if (cluster.isWorker) {
@@ -100,6 +114,12 @@ if (cluster.isMaster) {
             process.send(JSON.stringify({
                 id: msg.id,
                 res
+            }));
+        }).catch(err => {
+            // Send null result so the queue doesn't hang forever
+            process.send(JSON.stringify({
+                id: msg.id,
+                res: null
             }));
         });
     });

@@ -126,7 +126,7 @@ class Cpuinfo {
         window.si.currentLoad().then(data => {
             let average = [[], []];
 
-            if (!data.cpus) return; // Prevent memleak in rare case where systeminformation takes extra time to retrieve CPU info (see github issue #216)
+            if (!data || !data.cpus) return; // Prevent memleak in rare case where systeminformation takes extra time to retrieve CPU info (see github issue #216)
 
             data.cpus.forEach((e, i) => {
                 this.series[i].append(new Date().getTime(), e.load);
@@ -146,21 +146,26 @@ class Cpuinfo {
                     // Fail silently, DOM element is probably getting refreshed (new theme, etc)
                 }
             });
+        }).catch(e => {
+            console.warn("[Cpuinfo] currentLoad failed:", e.message);
+        }).finally(() => {
             this.updatingCPUload = false;
         });
     }
     updateCPUtemp() {
         window.si.cpuTemperature().then(data => {
             try {
-                document.getElementById("mod_cpuinfo_temp").innerText = `${data.max}°C`;
+                if (data && data.max !== null) document.getElementById("mod_cpuinfo_temp").innerText = `${data.max}°C`;
             } catch(e) {
                 // See above notice
             }
+        }).catch(e => {
+            console.warn("[Cpuinfo] cpuTemperature failed:", e.message);
         });
     }
     updateCPUspeed() {
         if (this.updatingCPUspeed) return;
-        this.updatingCPUspeed = true
+        this.updatingCPUspeed = true;
         window.si.cpu().then(data => {
             try {
                 document.getElementById("mod_cpuinfo_speed_min").innerText = `${data.speed}GHz`;
@@ -168,6 +173,9 @@ class Cpuinfo {
             } catch(e) {
                 // See above notice
             }
+        }).catch(e => {
+            console.warn("[Cpuinfo] cpu speed failed:", e.message);
+        }).finally(() => {
             this.updatingCPUspeed = false;
         });
     }
@@ -180,6 +188,9 @@ class Cpuinfo {
             } catch(e) {
                 // See above notice
             }
+        }).catch(e => {
+            console.warn("[Cpuinfo] processes failed:", e.message);
+        }).finally(() => {
             this.updatingCPUtasks = false;
         });
     }

@@ -34,8 +34,8 @@ class HardwareInspector {
                 document.getElementById("mod_hardwareInspector_manufacturer").innerText = this._trimDataString(d.manufacturer);
                 document.getElementById("mod_hardwareInspector_model").innerText = this._trimDataString(d.model, d.manufacturer, e.type);
                 document.getElementById("mod_hardwareInspector_chassis").innerText = e.type;
-            });
-        });
+            }).catch(e => console.warn("[HardwareInspector] chassis failed:", e.message));
+        }).catch(e => console.warn("[HardwareInspector] system failed:", e.message));
     }
     _trimDataString(str, ...filters) {
         return str.trim().split(" ").filter(word => {

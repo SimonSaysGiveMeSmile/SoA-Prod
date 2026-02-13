@@ -128,19 +128,7 @@ div.modal_popup table td {
     font-size: 1.7vh;
 }
 
-div.modal_popup table#settingsEditor tbody {
-	display: block;
-	position: relative;
-	max-height: 60vh;
-	overflow: auto;
-}
-
-div.modal_popup table#settingsEditor tbody tr:first-child {
-	position: sticky;
-	top: 0px;
-}
-
-div.modal_popup table:not(#settingsEditor) td:first-child {
+div.modal_popup table:not(.settings-pane table) td:first-child {
     text-align: center;
 }
 
@@ -210,6 +198,74 @@ h6#settingsEditorStatus {
     margin-top: 1vh;
     font-size: 1.5vh;
     font-style: italic;
+}
+
+/* Tabbed Settings Layout */
+.settings-tabbed {
+    display: flex;
+    min-width: 60vw;
+    min-height: 40vh;
+    max-height: 60vh;
+    gap: 0;
+}
+
+.settings-sidebar {
+    display: flex;
+    flex-direction: column;
+    min-width: 12vh;
+    border-right: 0.15vh solid rgba(var(--color_r), var(--color_g), var(--color_b), 0.3);
+    padding-right: 0;
+}
+
+.settings-tab {
+    padding: 1vh 1.5vh;
+    font-size: 1.5vh;
+    cursor: pointer;
+    color: rgba(var(--color_r), var(--color_g), var(--color_b), 0.6);
+    border-left: 2px solid transparent;
+    transition: all 0.15s ease;
+    white-space: nowrap;
+}
+
+.settings-tab:hover {
+    color: rgb(var(--color_r), var(--color_g), var(--color_b));
+    background: rgba(var(--color_r), var(--color_g), var(--color_b), 0.05);
+}
+
+.settings-tab--active {
+    color: rgb(var(--color_r), var(--color_g), var(--color_b));
+    border-left-color: rgb(var(--color_r), var(--color_g), var(--color_b));
+    background: rgba(var(--color_r), var(--color_g), var(--color_b), 0.1);
+}
+
+.settings-content {
+    flex: 1;
+    padding-left: 2vh;
+    overflow-y: auto;
+}
+
+.settings-pane {
+    display: none;
+}
+
+.settings-pane--active {
+    display: block;
+}
+
+.settings-pane__title {
+    font-size: 2.5vh;
+    margin: 0 0 1.5vh 0;
+    color: rgb(var(--color_r), var(--color_g), var(--color_b));
+}
+
+.settings-pane table {
+    width: 100%;
+}
+
+.settings-pane table tbody {
+    display: table-row-group;
+    max-height: none;
+    overflow: visible;
 }
 
 /* Keyboard shortcuts modal */

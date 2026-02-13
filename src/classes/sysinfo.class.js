@@ -131,7 +131,7 @@ class Sysinfo {
             } else {
                 indicator.innerHTML = "ON";
             }
-        });
+        }).catch(e => console.warn("[Sysinfo] battery failed:", e.message));
     }
 }
 

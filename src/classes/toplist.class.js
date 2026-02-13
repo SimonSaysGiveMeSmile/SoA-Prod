@@ -54,6 +54,9 @@ class Toplist {
                 document.getElementById("mod_toplist_table").append(el);
             });
             this.currentlyUpdating = false;
+        }).catch(e => {
+            console.warn("[Toplist] processes failed:", e.message);
+            this.currentlyUpdating = false;
         });
     }
 
@@ -188,6 +191,9 @@ class Toplist {
                         document.getElementById("processList").append(el);
                     });
                 }
+            }).catch(e => {
+                console.warn("[Toplist] processList update failed:", e.message);
+                currentlyUpdating = false;
             });
         }
 

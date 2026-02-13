@@ -436,15 +436,14 @@ try {
                         timeoutId = setTimeout(() => {
                             ipc.removeListener("systeminformation-reply-" + id, handler);
                             const error = new Error(`IPC timeout: systeminformation.${prop}() did not respond within 30s`);
-                            if (window.settings && window.settings.debug) {
-                                console.error("[Renderer] " + error.message);
-                            }
+                            console.error("[SI Proxy]", error.message);
                             reject(error);
                         }, 30000);
                     });
                 };
             }
         });
+        console.log("[SI Proxy] systeminformation proxy initialized");
     }
 
     // Initialize voice system
@@ -1727,212 +1726,95 @@ try {
         new Modal({
             type: "custom",
             title: `Settings <i>(v${remote.app.getVersion()})</i>`,
-            html: `<table id="settingsEditor">
-                    <tr>
-                        <th>Key</th>
-                        <th>Description</th>
-                        <th>Value</th>
-                    </tr>
-                    <tr>
-                        <td>shell</td>
-                        <td>The program to run as a terminal emulator</td>
-                        <td><input type="text" id="settingsEditor-shell" value="${window.settings.shell}"></td>
-                    </tr>
-                    <tr>
-                        <td>shellArgs</td>
-                        <td>Arguments to pass to the shell</td>
-                        <td><input type="text" id="settingsEditor-shellArgs" value="${window.settings.shellArgs || ''}"></td>
-                    </tr>
-                    <tr>
-                        <td>cwd</td>
-                        <td>Working Directory to start in</td>
-                        <td><input type="text" id="settingsEditor-cwd" value="${window.settings.cwd}"></td>
-                    </tr>
-                    <tr>
-                        <td>env</td>
-                        <td>Custom shell environment override</td>
-                        <td><input type="text" id="settingsEditor-env" value="${window.settings.env}"></td>
-                    </tr>
-                    <tr>
-                        <td>username</td>
-                        <td>Custom username to display at boot</td>
-                        <td><input type="text" id="settingsEditor-username" value="${window.settings.username}"></td>
-                    </tr>
-
-                    <tr>
-                        <td>theme</td>
-                        <td>Name of the theme to load</td>
-                        <td><select id="settingsEditor-theme">
-                            <option>${window.settings.theme}</option>
-                            ${themes}
-                        </select></td>
-                    </tr>
-                    <tr>
-                        <td>termFontSize</td>
-                        <td>Size of the terminal text in pixels</td>
-                        <td><input type="number" id="settingsEditor-termFontSize" value="${window.settings.termFontSize}"></td>
-                    </tr>
-                    <tr>
-                        <td>audio</td>
-                        <td>Activate audio sound effects</td>
-                        <td><select id="settingsEditor-audio">
-                            <option>${window.settings.audio}</option>
-                            <option>${!window.settings.audio}</option>
-                        </select></td>
-                    </tr>
-                    <tr>
-                        <td>audioVolume</td>
-                        <td>Set default volume for sound effects (0.0 - 1.0)</td>
-                        <td><input type="number" id="settingsEditor-audioVolume" value="${window.settings.audioVolume || '1.0'}"></td>
-                    </tr>
-                    <tr>
-                        <td>disableFeedbackAudio</td>
-                        <td>Disable recurring feedback sound FX (input/output, mostly)</td>
-                        <td><select id="settingsEditor-disableFeedbackAudio">
-                            <option>${window.settings.disableFeedbackAudio}</option>
-                            <option>${!window.settings.disableFeedbackAudio}</option>
-                        </select></td>
-                    </tr>
-                    <tr>
-                        <td>port</td>
-                        <td>Local port to use for UI-shell connection</td>
-                        <td><input type="number" id="settingsEditor-port" value="${window.settings.port}"></td>
-                    </tr>
-                    <tr>
-                        <td>pingAddr</td>
-                        <td>IPv4 address to test Internet connectivity</td>
-                        <td><input type="text" id="settingsEditor-pingAddr" value="${window.settings.pingAddr || "1.1.1.1"}"></td>
-                    </tr>
-                    <tr>
-                        <td>clockHours</td>
-                        <td>Clock format (12/24 hours)</td>
-                        <td><select id="settingsEditor-clockHours">
-                            <option>${(window.settings.clockHours === 12) ? "12" : "24"}</option>
-                            <option>${(window.settings.clockHours === 12) ? "24" : "12"}</option>
-                        </select></td>
-                    <tr>
-                        <td>monitor</td>
-                        <td>Which monitor to spawn the UI in (defaults to primary display)</td>
-                        <td><select id="settingsEditor-monitor">
-                            ${(typeof window.settings.monitor !== "undefined") ? "<option>" + window.settings.monitor + "</option>" : ""}
-                            ${monitors}
-                        </select></td>
-                    </tr>
-                    <tr>
-                        <td>nointro</td>
-                        <td>Skip the intro boot log and logo${(window.settings.nointroOverride) ? " (Currently overridden by CLI flag)" : ""}</td>
-                        <td><select id="settingsEditor-nointro">
-                            <option>${window.settings.nointro}</option>
-                            <option>${!window.settings.nointro}</option>
-                        </select></td>
-                    </tr>
-                    <tr>
-                        <td>nocursor</td>
-                        <td>Hide the mouse cursor${(window.settings.nocursorOverride) ? " (Currently overridden by CLI flag)" : ""}</td>
-                        <td><select id="settingsEditor-nocursor">
-                            <option>${window.settings.nocursor}</option>
-                            <option>${!window.settings.nocursor}</option>
-                        </select></td>
-                    </tr>
-                    <tr>
-                        <td>iface</td>
-                        <td>Override the interface used for network monitoring</td>
-                        <td><select id="settingsEditor-iface">
-                            <option>${window.mods.netstat.iface}</option>
-                            ${ifaces}
-                        </select></td>
-                    </tr>
-                    <tr>
-                        <td>allowWindowed</td>
-                        <td>Allow using F11 key to set the UI in windowed mode</td>
-                        <td><select id="settingsEditor-allowWindowed">
-                            <option>${window.settings.allowWindowed}</option>
-                            <option>${!window.settings.allowWindowed}</option>
-                        </select></td>
-                    </tr>
-                    <tr>
-                        <td>keepGeometry</td>
-                        <td>Try to keep a 16:9 aspect ratio in windowed mode</td>
-                        <td><select id="settingsEditor-keepGeometry">
-                            <option>${(window.settings.keepGeometry === false) ? 'false' : 'true'}</option>
-                            <option>${(window.settings.keepGeometry === false) ? 'true' : 'false'}</option>
-                        </select></td>
-                    </tr>
-                    <tr>
-                        <td>excludeThreadsFromToplist</td>
-                        <td>Display threads in the top processes list</td>
-                        <td><select id="settingsEditor-excludeThreadsFromToplist">
-                            <option>${window.settings.excludeThreadsFromToplist}</option>
-                            <option>${!window.settings.excludeThreadsFromToplist}</option>
-                        </select></td>
-                    </tr>
-                    <tr>
-                        <td>hideDotfiles</td>
-                        <td>Hide files and directories starting with a dot in file display</td>
-                        <td><select id="settingsEditor-hideDotfiles">
-                            <option>${window.settings.hideDotfiles}</option>
-                            <option>${!window.settings.hideDotfiles}</option>
-                        </select></td>
-                    </tr>
-                    <tr>
-                        <td>fsListView</td>
-                        <td>Show files in a more detailed list instead of an icon grid</td>
-                        <td><select id="settingsEditor-fsListView">
-                            <option>${window.settings.fsListView}</option>
-                            <option>${!window.settings.fsListView}</option>
-                        </select></td>
-                    </tr>
-                    <tr>
-                        <td>experimentalGlobeFeatures</td>
-                        <td>Toggle experimental features for the network globe</td>
-                        <td><select id="settingsEditor-experimentalGlobeFeatures">
-                            <option>${window.settings.experimentalGlobeFeatures}</option>
-                            <option>${!window.settings.experimentalGlobeFeatures}</option>
-                        </select></td>
-                    </tr>
-                    <tr>
-                        <td>experimentalFeatures</td>
-                        <td>Toggle Chrome's experimental web features (DANGEROUS)</td>
-                        <td><select id="settingsEditor-experimentalFeatures">
-                            <option>${window.settings.experimentalFeatures}</option>
-                            <option>${!window.settings.experimentalFeatures}</option>
-                        </select></td>
-                    </tr>
-                    <tr>
-                        <td>contextWarningThreshold</td>
-                        <td>Context usage percentage to trigger warning (0-100)</td>
-                        <td><input type="number" id="settingsEditor-contextWarningThreshold" value="${window.settings.contextWarningThreshold || 80}" min="0" max="100"></td>
-                    </tr>
-                    <tr>
-                        <td>adOverlayEnabled</td>
-                        <td>Show ad overlay during AI thinking time to earn credits</td>
-                        <td><select id="settingsEditor-adOverlayEnabled">
-                            <option>${window.settings.adOverlayEnabled !== false}</option>
-                            <option>${window.settings.adOverlayEnabled === false}</option>
-                        </select></td>
-                    </tr>
-                    <tr>
-                        <td>adOverlayMode</td>
-                        <td>Ad display: corner, fullscreen (more credits), or panel (hover to view)</td>
-                        <td><select id="settingsEditor-adOverlayMode">
-                            <option value="corner" ${(window.settings.adOverlayMode || 'corner') === 'corner' ? 'selected' : ''}>corner</option>
-                            <option value="fullscreen" ${window.settings.adOverlayMode === 'fullscreen' ? 'selected' : ''}>fullscreen</option>
-                            <option value="panel" ${window.settings.adOverlayMode === 'panel' ? 'selected' : ''}>panel</option>
-                        </select></td>
-                    </tr>
-                    <tr>
-                        <td>adDebounceMs</td>
-                        <td>Debounce delay (ms) before showing/hiding overlay</td>
-                        <td><input type="number" id="settingsEditor-adDebounceMs" value="${window.settings.adDebounceMs || 300}" min="0" max="2000"></td>
-                    </tr>
-                    <tr>
-                        <td>adTimeoutMs</td>
-                        <td>Max overlay display time (ms) before auto-hide</td>
-                        <td><input type="number" id="settingsEditor-adTimeoutMs" value="${window.settings.adTimeoutMs || 30000}" min="5000" max="120000"></td>
-                    </tr>
-                </table>
-                <h6 id="settingsEditorStatus">Loaded values from memory</h6>
-                <br>`,
+            html: `<div id="settingsEditor" class="settings-tabbed">
+                <div class="settings-sidebar">
+                    <div class="settings-tab settings-tab--active" data-tab="general">General</div>
+                    <div class="settings-tab" data-tab="appearance">Appearance</div>
+                    <div class="settings-tab" data-tab="audio">Audio</div>
+                    <div class="settings-tab" data-tab="network">Network</div>
+                    <div class="settings-tab" data-tab="files">Files</div>
+                    <div class="settings-tab" data-tab="advanced">Advanced</div>
+                    <div class="settings-tab" data-tab="ads">Ads & Misc</div>
+                </div>
+                <div class="settings-content">
+                    <div class="settings-pane settings-pane--active" data-pane="general">
+                        <h3 class="settings-pane__title">General</h3>
+                        <table><tr><th>Key</th><th>Description</th><th>Value</th></tr>
+                        <tr><td>shell</td><td>The program to run as a terminal emulator</td><td><input type="text" id="settingsEditor-shell" value="${window.settings.shell}"></td></tr>
+                        <tr><td>shellArgs</td><td>Arguments to pass to the shell</td><td><input type="text" id="settingsEditor-shellArgs" value="${window.settings.shellArgs || ''}"></td></tr>
+                        <tr><td>cwd</td><td>Working Directory to start in</td><td><input type="text" id="settingsEditor-cwd" value="${window.settings.cwd}"></td></tr>
+                        <tr><td>env</td><td>Custom shell environment override</td><td><input type="text" id="settingsEditor-env" value="${window.settings.env}"></td></tr>
+                        <tr><td>username</td><td>Custom username to display at boot</td><td><input type="text" id="settingsEditor-username" value="${window.settings.username}"></td></tr>
+                        </table>
+                    </div>
+                    <div class="settings-pane" data-pane="appearance">
+                        <h3 class="settings-pane__title">Appearance</h3>
+                        <table><tr><th>Key</th><th>Description</th><th>Value</th></tr>
+                        <tr><td>theme</td><td>Name of the theme to load</td><td><select id="settingsEditor-theme"><option>${window.settings.theme}</option>${themes}</select></td></tr>
+                        <tr><td>termFontSize</td><td>Size of the terminal text in pixels</td><td><input type="number" id="settingsEditor-termFontSize" value="${window.settings.termFontSize}"></td></tr>
+                        <tr><td>monitor</td><td>Which monitor to spawn the UI in</td><td><select id="settingsEditor-monitor">${(typeof window.settings.monitor !== "undefined") ? "<option>" + window.settings.monitor + "</option>" : ""}${monitors}</select></td></tr>
+                        <tr><td>allowWindowed</td><td>Allow using F11 key to set the UI in windowed mode</td><td><select id="settingsEditor-allowWindowed"><option>${window.settings.allowWindowed}</option><option>${!window.settings.allowWindowed}</option></select></td></tr>
+                        <tr><td>keepGeometry</td><td>Try to keep a 16:9 aspect ratio in windowed mode</td><td><select id="settingsEditor-keepGeometry"><option>${(window.settings.keepGeometry === false) ? 'false' : 'true'}</option><option>${(window.settings.keepGeometry === false) ? 'true' : 'false'}</option></select></td></tr>
+                        <tr><td>nocursor</td><td>Hide the mouse cursor${(window.settings.nocursorOverride) ? " (Currently overridden by CLI flag)" : ""}</td><td><select id="settingsEditor-nocursor"><option>${window.settings.nocursor}</option><option>${!window.settings.nocursor}</option></select></td></tr>
+                        <tr><td>nointro</td><td>Skip the intro boot log and logo${(window.settings.nointroOverride) ? " (Currently overridden by CLI flag)" : ""}</td><td><select id="settingsEditor-nointro"><option>${window.settings.nointro}</option><option>${!window.settings.nointro}</option></select></td></tr>
+                        </table>
+                    </div>
+                    <div class="settings-pane" data-pane="audio">
+                        <h3 class="settings-pane__title">Audio</h3>
+                        <table><tr><th>Key</th><th>Description</th><th>Value</th></tr>
+                        <tr><td>audio</td><td>Activate audio sound effects</td><td><select id="settingsEditor-audio"><option>${window.settings.audio}</option><option>${!window.settings.audio}</option></select></td></tr>
+                        <tr><td>audioVolume</td><td>Set default volume for sound effects (0.0 - 1.0)</td><td><input type="number" id="settingsEditor-audioVolume" value="${window.settings.audioVolume || '1.0'}"></td></tr>
+                        <tr><td>disableFeedbackAudio</td><td>Disable recurring feedback sound FX (input/output, mostly)</td><td><select id="settingsEditor-disableFeedbackAudio"><option>${window.settings.disableFeedbackAudio}</option><option>${!window.settings.disableFeedbackAudio}</option></select></td></tr>
+                        </table>
+                    </div>
+                    <div class="settings-pane" data-pane="network">
+                        <h3 class="settings-pane__title">Network</h3>
+                        <table><tr><th>Key</th><th>Description</th><th>Value</th></tr>
+                        <tr><td>port</td><td>Local port to use for UI-shell connection</td><td><input type="number" id="settingsEditor-port" value="${window.settings.port}"></td></tr>
+                        <tr><td>pingAddr</td><td>IPv4 address to test Internet connectivity</td><td><input type="text" id="settingsEditor-pingAddr" value="${window.settings.pingAddr || "1.1.1.1"}"></td></tr>
+                        <tr><td>iface</td><td>Override the interface used for network monitoring</td><td><select id="settingsEditor-iface"><option>${window.mods.netstat.iface}</option>${ifaces}</select></td></tr>
+                        </table>
+                    </div>
+                    <div class="settings-pane" data-pane="files">
+                        <h3 class="settings-pane__title">Files</h3>
+                        <table><tr><th>Key</th><th>Description</th><th>Value</th></tr>
+                        <tr><td>hideDotfiles</td><td>Hide files and directories starting with a dot in file display</td><td><select id="settingsEditor-hideDotfiles"><option>${window.settings.hideDotfiles}</option><option>${!window.settings.hideDotfiles}</option></select></td></tr>
+                        <tr><td>fsListView</td><td>Show files in a more detailed list instead of an icon grid</td><td><select id="settingsEditor-fsListView"><option>${window.settings.fsListView}</option><option>${!window.settings.fsListView}</option></select></td></tr>
+                        <tr><td>excludeThreadsFromToplist</td><td>Display threads in the top processes list</td><td><select id="settingsEditor-excludeThreadsFromToplist"><option>${window.settings.excludeThreadsFromToplist}</option><option>${!window.settings.excludeThreadsFromToplist}</option></select></td></tr>
+                        </table>
+                    </div>
+                    <div class="settings-pane" data-pane="advanced">
+                        <h3 class="settings-pane__title">Advanced</h3>
+                        <table><tr><th>Key</th><th>Description</th><th>Value</th></tr>
+                        <tr><td>experimentalGlobeFeatures</td><td>Toggle experimental features for the network globe</td><td><select id="settingsEditor-experimentalGlobeFeatures"><option>${window.settings.experimentalGlobeFeatures}</option><option>${!window.settings.experimentalGlobeFeatures}</option></select></td></tr>
+                        <tr><td>experimentalFeatures</td><td>Toggle Chrome's experimental web features (DANGEROUS)</td><td><select id="settingsEditor-experimentalFeatures"><option>${window.settings.experimentalFeatures}</option><option>${!window.settings.experimentalFeatures}</option></select></td></tr>
+                        <tr><td>contextWarningThreshold</td><td>Context usage percentage to trigger warning (0-100)</td><td><input type="number" id="settingsEditor-contextWarningThreshold" value="${window.settings.contextWarningThreshold || 80}" min="0" max="100"></td></tr>
+                        </table>
+                    </div>
+                    <div class="settings-pane" data-pane="ads">
+                        <h3 class="settings-pane__title">Ads & Misc</h3>
+                        <table><tr><th>Key</th><th>Description</th><th>Value</th></tr>
+                        <tr><td>clockHours</td><td>Clock format (12/24 hours)</td><td><select id="settingsEditor-clockHours"><option>${(window.settings.clockHours === 12) ? "12" : "24"}</option><option>${(window.settings.clockHours === 12) ? "24" : "12"}</option></select></td></tr>
+                        <tr><td>adOverlayEnabled</td><td>Show ad overlay during AI thinking time to earn credits</td><td><select id="settingsEditor-adOverlayEnabled"><option>${window.settings.adOverlayEnabled !== false}</option><option>${window.settings.adOverlayEnabled === false}</option></select></td></tr>
+                        <tr><td>adOverlayMode</td><td>Ad display: corner, fullscreen (more credits), or panel</td><td><select id="settingsEditor-adOverlayMode"><option value="corner" ${(window.settings.adOverlayMode || 'corner') === 'corner' ? 'selected' : ''}>corner</option><option value="fullscreen" ${window.settings.adOverlayMode === 'fullscreen' ? 'selected' : ''}>fullscreen</option><option value="panel" ${window.settings.adOverlayMode === 'panel' ? 'selected' : ''}>panel</option></select></td></tr>
+                        <tr><td>adDebounceMs</td><td>Debounce delay (ms) before showing/hiding overlay</td><td><input type="number" id="settingsEditor-adDebounceMs" value="${window.settings.adDebounceMs || 300}" min="0" max="2000"></td></tr>
+                        <tr><td>adTimeoutMs</td><td>Max overlay display time (ms) before auto-hide</td><td><input type="number" id="settingsEditor-adTimeoutMs" value="${window.settings.adTimeoutMs || 30000}" min="5000" max="120000"></td></tr>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            <script>
+                document.querySelectorAll('.settings-tab').forEach(tab => {
+                    tab.addEventListener('click', () => {
+                        document.querySelectorAll('.settings-tab').forEach(t => t.classList.remove('settings-tab--active'));
+                        document.querySelectorAll('.settings-pane').forEach(p => p.classList.remove('settings-pane--active'));
+                        tab.classList.add('settings-tab--active');
+                        document.querySelector('.settings-pane[data-pane="' + tab.dataset.tab + '"]').classList.add('settings-pane--active');
+                    });
+                });
+            </script>
+            <h6 id="settingsEditorStatus">Loaded values from memory</h6>
+            <br>`,
             buttons: [
                 { label: "Open in External Editor", action: `electron.shell.openPath('${settingsFile}');electronWin.minimize();` },
                 { label: "Save to Disk", action: "window.writeSettingsFile()" },
