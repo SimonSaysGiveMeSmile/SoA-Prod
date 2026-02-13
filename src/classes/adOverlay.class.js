@@ -2,7 +2,7 @@
  * AdOverlay - Displays ads during AI thinking time
  *
  * Three display modes:
- *   - 'fullscreen': Covers upper portion of terminal (leaves bottom visible), higher credits
+ *   - 'fullscreen': Covers upper half of terminal area (side panels and bottom remain visible), higher credits
  *   - 'corner': Small overlay in bottom-right corner, fewer credits
  *   - 'panel': Lives in a side column, only visible on mouse hover
  *
@@ -141,7 +141,7 @@ class AdOverlay {
                         <div class="ad-mode-picker__card" data-mode="fullscreen">
                             <div class="ad-mode-picker__card-icon">⬜</div>
                             <div class="ad-mode-picker__card-name">FULLSCREEN</div>
-                            <div class="ad-mode-picker__card-desc">Covers the terminal for maximum earnings</div>
+                            <div class="ad-mode-picker__card-desc">Covers upper half of terminal area</div>
                             <div class="ad-mode-picker__card-rate">+5 credits/sec</div>
                         </div>
                         <div class="ad-mode-picker__card" data-mode="corner">

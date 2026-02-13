@@ -1,6 +1,6 @@
 section#main_shell {
     width: 65%;
-    height: 95%;
+    height: 97.5%;
     padding: 0.74vh;
     /* border: 0.18vh solid rgba(var(--color_r), var(--color_g), var(--color_b), 0.5); */
     /* border-radius: 0.278vh; */
@@ -207,6 +207,15 @@ ul#main_shell_tabs>li.shell-dev-btn>p {
 /* Mic toggle button in tab bar */
 ul#main_shell_tabs>li.shell-mic-btn {
     transition: opacity 0.2s, background 0.2s, box-shadow 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+ul#main_shell_tabs>li.shell-mic-btn>svg {
+    width: 1.6vh;
+    height: 1.6vh;
+    color: inherit;
 }
 
 ul#main_shell_tabs>li.shell-mic-active {

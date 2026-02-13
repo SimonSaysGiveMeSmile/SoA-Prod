@@ -42,6 +42,10 @@ class VoiceController {
     this.audioLevelInterval = null;
     this.isInitialized = false;
     this.isEnabled = false; // Voice toggle state
+    this.useFallback = false;
+    this._fallbackRecognition = null;
+    this._fallbackRestartTimer = null;
+    this._SpeechRecognition = null;
 
     // Bind space key handler
     this._boundKeyHandler = this._handleKeyDown.bind(this);
@@ -55,36 +59,41 @@ class VoiceController {
     try {
       // Check voice availability via IPC
       const availability = await window.ipc.invoke('voice:check-availability');
-      if (!availability.available) {
-        console.warn('[VoiceController] Voice not available:', availability);
-        this._setState(VoiceState.DISABLED);
-        return false;
+      if (availability.available) {
+        // Full Picovoice + Whisper path
+        const hasPermission = await this.audioCapture.requestPermission();
+        if (!hasPermission) {
+          this.onError('Microphone permission denied');
+          this._setState(VoiceState.ERROR);
+          return false;
+        }
+
+        const result = await window.ipc.invoke('voice:initialize');
+        if (!result.success) {
+          this.onError(result.error || 'Voice initialization failed');
+          this._setState(VoiceState.ERROR);
+          return false;
+        }
+
+        window.ipc.on('voice:wake-word-detected', () => {
+          this._onWakeWordDetected();
+        });
+
+        this.useFallback = false;
+      } else {
+        // Fallback: Web Speech API
+        const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (!SR) {
+          console.warn('[VoiceController] No speech recognition available');
+          this._setState(VoiceState.DISABLED);
+          return false;
+        }
+        this.useFallback = true;
+        this._SpeechRecognition = SR;
+        console.log('[VoiceController] Using Web Speech API fallback');
       }
 
-      // Request microphone permission
-      const hasPermission = await this.audioCapture.requestPermission();
-      if (!hasPermission) {
-        this.onError('Microphone permission denied');
-        this._setState(VoiceState.ERROR);
-        return false;
-      }
-
-      // Initialize voice services in main process
-      const result = await window.ipc.invoke('voice:initialize');
-      if (!result.success) {
-        this.onError(result.error || 'Voice initialization failed');
-        this._setState(VoiceState.ERROR);
-        return false;
-      }
-
-      // Setup wake word detection listener
-      window.ipc.on('voice:wake-word-detected', () => {
-        this._onWakeWordDetected();
-      });
-
-      // Add global key handler for space key cancel
       document.addEventListener('keydown', this._boundKeyHandler);
-
       this.isInitialized = true;
       this._setState(VoiceState.IDLE);
       console.log('[VoiceController] Initialized');
@@ -102,6 +111,7 @@ class VoiceController {
    * @private
    */
   _handleKeyDown(event) {
+    if (this.useFallback) return;
     // Space key cancels listening/recording mode
     if (event.code === 'Space' && (this.state === VoiceState.LISTENING || this.state === VoiceState.RECORDING)) {
       event.preventDefault();
@@ -119,6 +129,9 @@ class VoiceController {
       return false;
     }
     this.isEnabled = true;
+    if (this.useFallback) {
+      return this._startFallbackListening();
+    }
     return this.startListening();
   }
 
@@ -127,7 +140,11 @@ class VoiceController {
    */
   disable() {
     this.isEnabled = false;
-    this.stopListening();
+    if (this.useFallback) {
+      this._stopFallbackListening();
+    } else {
+      this.stopListening();
+    }
     this._setState(VoiceState.IDLE);
   }
 
@@ -207,19 +224,19 @@ class VoiceController {
     this._clearTimers();
     this._stopAudioLevelPolling();
 
+    if (this.useFallback) {
+      this._stopFallbackListening();
+      this.isEnabled = false;
+      this._setState(VoiceState.IDLE);
+      return;
+    }
+
     if (this.state === VoiceState.RECORDING) {
       this.audioCapture.stopRecording(); // Discard audio
     }
 
     // Return to listening if enabled
-    if (this.isEnabled) {
-      this._setState(VoiceState.LISTENING);
-      this.audioCapture.startFrameCapture((frame) => {
-        window.ipc.send('voice:audio-frame', Array.from(frame));
-      });
-    } else {
-      this._setState(VoiceState.IDLE);
-    }
+    this._returnToListening();
   }
 
   /**
@@ -385,11 +402,100 @@ class VoiceController {
   _returnToListening() {
     if (this.isEnabled) {
       this._setState(VoiceState.LISTENING);
-      this.audioCapture.startFrameCapture((frame) => {
-        window.ipc.send('voice:audio-frame', Array.from(frame));
-      });
+      if (!this.useFallback) {
+        this.audioCapture.startFrameCapture((frame) => {
+          window.ipc.send('voice:audio-frame', Array.from(frame));
+        });
+      }
     } else {
       this._setState(VoiceState.IDLE);
+    }
+  }
+
+  /**
+   * Start Web Speech API fallback listening
+   * @private
+   */
+  _startFallbackListening() {
+    if (this._fallbackRecognition) return true;
+
+    const recognition = new this._SpeechRecognition();
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.lang = 'en-US';
+    recognition.maxAlternatives = 1;
+
+    recognition.onresult = (event) => {
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        if (event.results[i].isFinal) {
+          const text = event.results[i][0].transcript.trim();
+          if (text) {
+            console.log('[VoiceController] Fallback transcription:', text);
+            this.onTranscription(text, true);
+          }
+        } else {
+          this.onInterimTranscription(event.results[i][0].transcript);
+        }
+      }
+    };
+
+    recognition.onaudiostart = () => {
+      console.log('[VoiceController] Fallback audio started');
+    };
+
+    recognition.onerror = (e) => {
+      if (e.error === 'no-speech' || e.error === 'aborted') return;
+      console.warn('[VoiceController] Fallback error:', e.error);
+      this.onError(e.error);
+      // Fatal errors that mean we should stop trying
+      if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
+        this.isEnabled = false;
+        this._fallbackRecognition = null;
+        this._setState(VoiceState.ERROR);
+      }
+    };
+
+    recognition.onend = () => {
+      // Only restart if still enabled; use a delay to prevent rapid restart loop
+      if (this.isEnabled && this.useFallback && this._fallbackRecognition) {
+        this._fallbackRestartTimer = setTimeout(() => {
+          if (this.isEnabled && this.useFallback && this._fallbackRecognition) {
+            try {
+              recognition.start();
+              console.log('[VoiceController] Fallback restarted');
+            } catch (e) {
+              console.warn('[VoiceController] Fallback restart failed:', e.message);
+            }
+          }
+        }, 300);
+      }
+    };
+
+    try {
+      recognition.start();
+      this._fallbackRecognition = recognition;
+      this._setState(VoiceState.LISTENING);
+      console.log('[VoiceController] Fallback listening started');
+      return true;
+    } catch (e) {
+      console.error('[VoiceController] Fallback start failed:', e.message);
+      return false;
+    }
+  }
+
+  /**
+   * Stop Web Speech API fallback listening
+   * @private
+   */
+  _stopFallbackListening() {
+    if (this._fallbackRestartTimer) {
+      clearTimeout(this._fallbackRestartTimer);
+      this._fallbackRestartTimer = null;
+    }
+    if (this._fallbackRecognition) {
+      this._fallbackRecognition.onend = null;
+      this._fallbackRecognition.stop();
+      this._fallbackRecognition = null;
     }
   }
 
@@ -426,6 +532,7 @@ class VoiceController {
   release() {
     this._clearTimers();
     this._stopAudioLevelPolling();
+    this._stopFallbackListening();
     document.removeEventListener('keydown', this._boundKeyHandler);
     this.audioCapture.release();
     window.ipc.send('voice:release');

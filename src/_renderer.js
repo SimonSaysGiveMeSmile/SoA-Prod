@@ -568,11 +568,14 @@ try {
     function insertTranscriptionIntoTerminal(text) {
         const activeTerminal = window.currentTerm || 0;
 
-        // Try xterm terminal write
-        if (window.term && window.term[activeTerminal] && window.term[activeTerminal].term) {
-            const term = window.term[activeTerminal].term;
-            term.write(text);
-            console.log('[Voice] Wrote transcription to xterm', activeTerminal);
+        if (window.term && window.term[activeTerminal]) {
+            const terminal = window.term[activeTerminal];
+            if (terminal.socket && terminal.socket.readyState === WebSocket.OPEN) {
+                terminal.write(text);
+                console.log('[Voice] Sent transcription to terminal', activeTerminal, ':', text);
+            } else {
+                console.warn('[Voice] Terminal socket not open for index', activeTerminal);
+            }
             return;
         }
 
@@ -826,7 +829,7 @@ try {
             <li id="shell_tab2" onclick="window.focusShellTab(2);"><p>${window._escapeHtml(window.terminalNames[2])}</p></li>
             <li id="shell_tab3" onclick="window.focusShellTab(3);"><p>${window._escapeHtml(window.terminalNames[3])}</p></li>
             <li id="shell_tab4" onclick="window.focusShellTab(4);"><p>${window._escapeHtml(window.terminalNames[4])}</p></li>
-            <li id="shell_mic_btn" class="shell-dev-btn shell-mic-btn" onclick="window.toggleMic();" title="Toggle Microphone"><p>🎙</p></li>
+            <li id="shell_mic_btn" class="shell-dev-btn shell-mic-btn" onclick="window.toggleMic();" title="Toggle Microphone"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg></li>
             <li id="shell_settings_btn" class="shell-dev-btn" onclick="window.openSettings();" title="Settings"><p>⚙</p></li>
             <li id="shell_reload_btn" class="shell-dev-btn" onclick="window.location.reload(true);" title="Reload UI (Ctrl+Shift+F5)"><p>⟳</p></li>
             <li id="shell_restart_btn" class="shell-dev-btn" onclick="remote.app.relaunch();remote.app.quit();" title="Full Restart"><p>⏻</p></li>
@@ -1518,6 +1521,9 @@ try {
     window.focusShellTab = number => {
         window.audioManager.folder.play();
 
+        // Close InputComposer on tab switch
+        InputComposer.closeIfOpen();
+
         if (number !== window.currentTerm && window.term[number]) {
             window.currentTerm = number;
 
@@ -1627,17 +1633,16 @@ try {
 
     // Mic toggle in tab bar
     window.toggleMic = () => {
-        const btn = document.getElementById('shell_mic_btn');
         if (!window.voiceController) {
-            console.warn('[Mic] Voice controller not initialized');
+            console.warn('[Mic] Voice controller not available');
             return;
         }
         const newState = window.voiceController.toggle();
+        // Update title (CSS state is managed by onStateChange callback)
+        const btn = document.getElementById('shell_mic_btn');
         if (btn) {
-            btn.classList.toggle('shell-mic-active', newState);
             btn.title = newState ? 'Microphone ON (click to disable)' : 'Toggle Microphone';
         }
-        // Keep the sidebar widget in sync if it exists
         if (window.voiceToggleWidget) {
             window.voiceToggleWidget.setEnabled(newState);
         }
@@ -1993,6 +1998,7 @@ try {
             "SHORTCUTS": "List and edit available keyboard shortcuts.",
             "FUZZY_SEARCH": "Search for entries in the current working directory.",
             "TEXT_EDITOR": "Open a text editor overlay for composing and editing text before sending to the terminal.",
+            "INPUT_COMPOSER": "Open an inline composer bar at the bottom of the terminal for quick text editing.",
             "FS_LIST_VIEW": "Toggle between list and grid view in the file browser.",
             "FS_DOTFILES": "Toggle hidden files and directories in the file browser.",
             "KB_PASSMODE": "Toggle the on-screen keyboard's \"Password Mode\", which allows you to safely<br>type sensitive information even if your screen might be recorded (disable visual input feedback).",
@@ -2162,7 +2168,11 @@ try {
                 window.activeFuzzyFinder = new FuzzyFinder();
                 return true;
             case "TEXT_EDITOR":
+                InputComposer.closeIfOpen();
                 new TextEditor();
+                return true;
+            case "INPUT_COMPOSER":
+                new InputComposer();
                 return true;
             case "FS_LIST_VIEW":
                 if (window.fsDisp && window.fsDisp.toggleListview) {
@@ -2232,6 +2242,14 @@ try {
         if (e.ctrlKey && e.shiftKey && e.key === "E") {
             e.preventDefault();
             window.useAppShortcut("TEXT_EDITOR");
+        }
+    });
+
+    // Fallback: Ctrl+Space opens InputComposer
+    document.addEventListener("keydown", (e) => {
+        if (e.ctrlKey && e.key === " ") {
+            e.preventDefault();
+            window.useAppShortcut("INPUT_COMPOSER");
         }
     });
 
