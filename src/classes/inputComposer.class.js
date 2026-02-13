@@ -110,7 +110,7 @@ class InputComposer {
         // Hints strip
         const hints = document.createElement("div");
         hints.className = "inputcomposer-hints";
-        hints.textContent = "Ctrl+Enter: send | Tab: complete | Esc: close";
+        hints.textContent = "Shift+Enter: send | Tab: complete | Esc: close";
 
         this.bar.appendChild(hints);
         this.bar.appendChild(prompt);
@@ -132,15 +132,15 @@ class InputComposer {
             const atStart = this.textarea.selectionStart === 0 && this.textarea.selectionEnd === 0;
             const atEnd = this.textarea.selectionStart === text.length && this.textarea.selectionEnd === text.length;
 
-            // --- Ctrl+Enter: send text + execute ---
-            if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
+            // --- Shift+Enter: send text + execute ---
+            if (e.key === "Enter" && e.shiftKey) {
                 e.preventDefault();
                 this._sendAndExecute();
                 return;
             }
 
             // --- Enter: insert newline (default textarea behavior, just stop propagation) ---
-            if (e.key === "Enter" && !e.shiftKey) {
+            if (e.key === "Enter" && !e.ctrlKey && !e.metaKey) {
                 e.stopPropagation();
                 return;
             }

@@ -30,7 +30,7 @@ class TextEditor {
         const header = document.createElement("div");
         header.id = "texteditor_header";
         header.innerHTML = `<span class="texteditor_title">TEXT EDITOR</span>
-            <span class="texteditor_hint">Ctrl+Enter to send | Escape to cancel</span>`;
+            <span class="texteditor_hint">Shift+Enter to send | Escape to cancel</span>`;
 
         // Textarea
         this.textarea = document.createElement("textarea");
@@ -73,14 +73,14 @@ class TextEditor {
 
     _bindEvents() {
         this._keyHandler = (e) => {
-            // Ctrl+Enter = send with newline
-            if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
+            // Shift+Enter = send with newline
+            if (e.key === "Enter" && e.shiftKey) {
                 e.preventDefault();
                 this._send(true);
                 return;
             }
-            // Shift+Enter = send without trailing enter
-            if (e.key === "Enter" && e.shiftKey) {
+            // Ctrl+Enter = send without trailing enter
+            if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
                 e.preventDefault();
                 this._send(false);
                 return;
