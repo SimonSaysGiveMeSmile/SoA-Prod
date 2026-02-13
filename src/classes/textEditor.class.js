@@ -79,12 +79,6 @@ class TextEditor {
                 this._send(true);
                 return;
             }
-            // Ctrl+Enter = send without trailing enter
-            if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
-                e.preventDefault();
-                this._send(false);
-                return;
-            }
             // Escape = close
             if (e.key === "Escape") {
                 e.preventDefault();

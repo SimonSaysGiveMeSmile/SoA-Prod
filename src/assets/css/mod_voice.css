@@ -154,7 +154,7 @@
   min-height: 2px;
   background: rgb(var(--color_r), var(--color_g), var(--color_b));
   border-radius: 1px;
-  transition: height 0.05s ease-out;
+  transition: height 0.15s ease-out;
 }
 
 .voice-waveform__status {

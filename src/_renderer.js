@@ -140,6 +140,11 @@ try {
         },
     };
 
+    // Forward main process voice debug logs to DevTools console
+    ipc.on('voice:debug-log', (event, msg) => {
+        console.log('%c[MAIN]', 'color: #ff9800; font-weight: bold', msg);
+    });
+
     window.enableTabRename = (tabIndex) => {
         const tabElement = document.getElementById(`shell_tab${tabIndex}`);
         const textElement = tabElement.querySelector('p');
@@ -513,14 +518,14 @@ try {
                     if (state === VoiceState.RECORDING) {
                         const activeTerminal = window.currentTerm || 0;
                         window.waveformVisualizer.show(activeTerminal);
-                        // Start Web Speech API for interim results
-                        if (window.interimTranscription) {
+                        // Start Web Speech API for interim results (skip for on-device — it has its own)
+                        if (window.interimTranscription && !window.voiceController.useOnDevice) {
                             window.interimTranscription.start();
                         }
                     } else if (oldState === VoiceState.RECORDING) {
                         window.waveformVisualizer.hide();
                         // Stop Web Speech API
-                        if (window.interimTranscription) {
+                        if (window.interimTranscription && !window.voiceController.useOnDevice) {
                             window.interimTranscription.stop();
                         }
                     }
@@ -866,13 +871,7 @@ try {
         };
         window.currentTerm = 0;
         window.autoCompose = true;
-        window.isClaudeCodeActive = () => {
-            const term = window.term && window.term[window.currentTerm];
-            const proc = term && term._currentProcess;
-            return proc && /claude/i.test(proc);
-        };
         window.term[0].onprocesschange = p => {
-            window.term[0]._currentProcess = p;
             // Only show process name if user hasn't set a custom name
             if (window.terminalNames[0] === "MAIN SHELL") {
                 document.getElementById("shell_tab0").querySelector('p').innerHTML = `MAIN - ${p}`;
@@ -959,7 +958,6 @@ try {
                     };
 
                     window.term[idx].onprocesschange = p => {
-                        window.term[idx]._currentProcess = p;
                         if (window.terminalNames[idx] === "EMPTY" || window.terminalNames[idx].startsWith('#')) {
                             document.getElementById("shell_tab" + idx).querySelector('p').innerHTML = `#${idx + 1} - ${p}`;
                         }
@@ -1623,7 +1621,6 @@ try {
                     };
 
                     window.term[number].onprocesschange = p => {
-                        window.term[number]._currentProcess = p;
                         // Only show process name if user hasn't set a custom name
                         const defaultName = "EMPTY";
                         if (window.terminalNames[number] === defaultName || window.terminalNames[number].startsWith('#')) {
@@ -2201,12 +2198,10 @@ try {
                 window.activeFuzzyFinder = new FuzzyFinder();
                 return true;
             case "TEXT_EDITOR":
-                if (!window.isClaudeCodeActive || !window.isClaudeCodeActive()) return true;
                 InputComposer.closeIfOpen();
                 new TextEditor();
                 return true;
             case "INPUT_COMPOSER":
-                if (!window.isClaudeCodeActive || !window.isClaudeCodeActive()) return true;
                 new InputComposer();
                 return true;
             case "FS_LIST_VIEW":

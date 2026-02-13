@@ -197,7 +197,7 @@ class VoiceController {
   /**
    * Start listening for wake word
    */
-  startListening() {
+  async startListening() {
     if (!this.isInitialized) {
       console.warn('[VoiceController] Not initialized');
       return false;
@@ -211,6 +211,15 @@ class VoiceController {
     if (this.state === VoiceState.RECORDING || this.state === VoiceState.PROCESSING) {
       console.warn('[VoiceController] Cannot start listening from state:', this.state);
       return false;
+    }
+
+    // Ensure media stream is available (on-device path skips requestPermission during init)
+    if (!this.audioCapture.hasPermission()) {
+      const granted = await this.audioCapture.requestPermission();
+      if (!granted) {
+        console.error('[VoiceController] Cannot start listening: mic permission denied');
+        return false;
+      }
     }
 
     // Start sending audio frames to main process for wake word detection
@@ -227,7 +236,7 @@ class VoiceController {
   /**
    * Stop listening (but don't disable)
    */
-  stopListening() {
+  async stopListening() {
     this._clearTimers();
     this._stopAudioLevelPolling();
     this.audioCapture.stopFrameCapture();
@@ -237,6 +246,10 @@ class VoiceController {
     }
 
     if (this.isEnabled && this.isInitialized) {
+      // Ensure media stream is available before restarting frame capture
+      if (!this.audioCapture.hasPermission()) {
+        await this.audioCapture.requestPermission();
+      }
       this._setState(VoiceState.LISTENING);
       // Restart listening for wake word
       this.audioCapture.startFrameCapture((frame) => {
@@ -568,18 +581,18 @@ class VoiceController {
   // --- On-device speech (macOS SFSpeechRecognizer) ---
 
   _setupOnDeviceListeners() {
-    window.ipc.on('voice:on-device-interim', (_event, text) => {
+    window.ipc.on('voice:on-device-interim', (text) => {
       if (window.micMonitor) window.micMonitor.setSpeechStatus('INTERIM: ' + text.substring(0, 30));
       this.onInterimTranscription(text);
     });
 
-    window.ipc.on('voice:on-device-final', (_event, text) => {
+    window.ipc.on('voice:on-device-final', (text) => {
       console.log('[VoiceController] On-device transcription:', text);
       if (window.micMonitor) window.micMonitor.setSpeechStatus('RESULT: ' + text.substring(0, 30));
       this.onTranscription(text, true);
     });
 
-    window.ipc.on('voice:on-device-error', (_event, msg) => {
+    window.ipc.on('voice:on-device-error', (msg) => {
       console.warn('[VoiceController] On-device error:', msg);
       if (window.micMonitor) window.micMonitor.setSpeechStatus('ERR: ' + msg.substring(0, 30));
       this.onError(msg);
@@ -589,10 +602,23 @@ class VoiceController {
   async _startOnDeviceRecognition() {
     this._setState(VoiceState.RECORDING);
     if (window.micMonitor) window.micMonitor.setSpeechStatus('ON-DEVICE LISTENING');
+    console.log('[VoiceController] Invoking voice:on-device-start...');
     const result = await window.ipc.invoke('voice:on-device-start');
+    console.log('[VoiceController] on-device-start result:', JSON.stringify(result));
     if (!result.success) {
-      console.error('[VoiceController] On-device start failed:', result.error);
-      if (window.micMonitor) window.micMonitor.setSpeechStatus('ERR: ' + result.error);
+      console.warn('[VoiceController] On-device start failed:', result.error, '— falling back');
+      this.useOnDevice = false;
+      // Try direct Whisper if OpenAI key is available
+      const avail = await window.ipc.invoke('voice:check-availability');
+      if (avail.hasOpenAIKey) {
+        const hasMic = await this.audioCapture.requestPermission();
+        if (hasMic) {
+          this.useDirectWhisper = true;
+          this._setState(VoiceState.IDLE);
+          console.log('[VoiceController] Fell back to direct Whisper mode');
+          return false;
+        }
+      }
       this._setState(VoiceState.ERROR);
       return false;
     }

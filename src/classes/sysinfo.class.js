@@ -119,6 +119,7 @@ class Sysinfo {
     updateBattery() {
         window.si.battery().then(bat => {
             let indicator = document.querySelector("#mod_sysinfo > div:last-child > h2");
+            if (!indicator) return;
             if (bat.hasBattery) {
                 if (bat.isCharging) {
                     indicator.innerHTML = "CHARGE";

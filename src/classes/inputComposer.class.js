@@ -140,7 +140,7 @@ class InputComposer {
             }
 
             // --- Enter: insert newline (default textarea behavior, just stop propagation) ---
-            if (e.key === "Enter" && !e.ctrlKey && !e.metaKey) {
+            if (e.key === "Enter" && !e.shiftKey) {
                 e.stopPropagation();
                 return;
             }

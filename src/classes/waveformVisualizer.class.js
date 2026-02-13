@@ -18,6 +18,7 @@ class WaveformVisualizer {
     this.animationFrame = null;
     this.levels = new Array(this.barCount).fill(0);
     this.levelIndex = 0;
+    this.displayLevels = new Array(this.barCount).fill(0); // sustain buffer
   }
 
   _createDOM() {
@@ -136,15 +137,22 @@ class WaveformVisualizer {
   }
 
   _renderBars() {
+    const decay = 0.92; // sustain factor — bars decay slowly
     for (let i = 0; i < this.barCount; i++) {
       const levelIdx = (this.levelIndex + i) % this.barCount;
       const level = this.levels[levelIdx];
       const jitter = Math.random() * 0.1;
-      const height = Math.max(0.05, Math.min(1, level + jitter));
+      const target = Math.max(0.05, Math.min(1, level + jitter));
 
-      this.bars[i].style.height = `${height * 100}%`;
+      // Sustain: only decay slowly, jump up instantly
+      this.displayLevels[i] = target >= this.displayLevels[i]
+        ? target
+        : Math.max(target, this.displayLevels[i] * decay);
 
-      const intensity = Math.floor(200 + level * 55);
+      const h = this.displayLevels[i];
+      this.bars[i].style.height = `${h * 100}%`;
+
+      const intensity = Math.floor(200 + h * 55);
       this.bars[i].style.backgroundColor = `rgb(${intensity}, ${intensity}, ${intensity})`;
     }
   }

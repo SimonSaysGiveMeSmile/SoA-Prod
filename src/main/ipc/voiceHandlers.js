@@ -168,34 +168,61 @@ function setupVoiceIPC(window) {
 
   // --- On-device speech (macOS SFSpeechRecognizer) ---
 
+  // Helper to log to both main process console and renderer DevTools
+  function voiceLog(...args) {
+    console.log(...args);
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('voice:debug-log', args.map(String).join(' '));
+    }
+  }
+
   ipcMain.removeHandler('voice:on-device-start');
   ipcMain.handle('voice:on-device-start', async () => {
+    voiceLog('[VoiceIPC] on-device-start called');
     try {
+      // Reset if the process died
+      if (onDeviceSpeech && !onDeviceSpeech.isReady) {
+        voiceLog('[VoiceIPC] Previous speech instance not ready, resetting...');
+        onDeviceSpeech = null;
+      }
+
       if (!onDeviceSpeech) {
+        voiceLog('[VoiceIPC] Creating OnDeviceSpeech instance...');
         onDeviceSpeech = new OnDeviceSpeech();
 
         onDeviceSpeech.onInterim = (text) => {
+          voiceLog('[VoiceIPC] On-device interim:', text);
           if (mainWindow && !mainWindow.isDestroyed()) {
             mainWindow.webContents.send('voice:on-device-interim', text);
           }
         };
         onDeviceSpeech.onFinal = (text) => {
+          voiceLog('[VoiceIPC] On-device final:', text);
           if (mainWindow && !mainWindow.isDestroyed()) {
             mainWindow.webContents.send('voice:on-device-final', text);
           }
         };
         onDeviceSpeech.onError = (msg) => {
+          voiceLog('[VoiceIPC] On-device error:', msg);
           if (mainWindow && !mainWindow.isDestroyed()) {
             mainWindow.webContents.send('voice:on-device-error', msg);
           }
         };
+        onDeviceSpeech.onStopped = () => {
+          voiceLog('[VoiceIPC] On-device stopped callback');
+        };
 
+        voiceLog('[VoiceIPC] Starting speech_helper binary...');
         await onDeviceSpeech.start();
+        voiceLog('[VoiceIPC] speech_helper ready, isReady=' + onDeviceSpeech.isReady);
+      } else {
+        voiceLog('[VoiceIPC] Reusing existing speech instance, isReady=' + onDeviceSpeech.isReady);
       }
+      voiceLog('[VoiceIPC] Calling startRecognition...');
       onDeviceSpeech.startRecognition();
-      return { success: true };
+      return { success: true, debug: 'isReady=' + onDeviceSpeech.isReady + ', hasProc=' + !!onDeviceSpeech._proc };
     } catch (error) {
-      console.error('[VoiceIPC] On-device start failed:', error.message);
+      voiceLog('[VoiceIPC] On-device start failed:', error.message);
       return { success: false, error: error.message };
     }
   });

@@ -5,6 +5,7 @@ div#mod_micMonitor {
     color: rgb(var(--color_r), var(--color_g), var(--color_b));
     cursor: pointer;
     user-select: none;
+    position: relative;
 }
 
 div#mod_micMonitor:hover {
@@ -15,6 +16,12 @@ div#mod_micMonitor_inner {
     padding: 0.5vh 0;
 }
 
+.mic-monitor-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
 div#mod_micMonitor h1 {
     font-size: 1.2vh;
     letter-spacing: 0.2vh;
@@ -22,6 +29,17 @@ div#mod_micMonitor h1 {
     padding: 0;
     color: rgba(var(--color_r), var(--color_g), var(--color_b), 0.5);
     font-weight: normal;
+}
+
+.mic-monitor-gear {
+    font-size: 1.4vh;
+    color: rgba(var(--color_r), var(--color_g), var(--color_b), 0.35);
+    cursor: pointer;
+    transition: color 0.15s ease;
+}
+
+.mic-monitor-gear:hover {
+    color: rgba(var(--color_r), var(--color_g), var(--color_b), 0.8);
 }
 
 #mod_micMonitor_canvas {
@@ -58,10 +76,62 @@ div#mod_micMonitor h1 {
     50% { opacity: 0.5; }
 }
 
+.mic-monitor-source-label {
+    font-size: 0.8vh;
+    font-family: var(--font_mono), monospace;
+    color: rgba(var(--color_r), var(--color_g), var(--color_b), 0.35);
+    margin-top: 0.2vh;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
 .mic-monitor-speech-status {
     font-size: 0.85vh;
     font-family: var(--font_mono), monospace;
     color: rgba(var(--color_r), var(--color_g), var(--color_b), 0.4);
     margin-top: 0.3vh;
     letter-spacing: 0.05vh;
+}
+
+/* Input Source Overlay */
+.mic-monitor-source-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 120;
+    background: rgba(0, 0, 0, 0.92);
+    border: 0.05vh solid rgba(var(--color_r), var(--color_g), var(--color_b), 0.25);
+    padding: 0.6vh;
+    animation: inputcomposer_fadeIn 0.12s ease-out;
+}
+
+.mic-monitor-source-overlay__title {
+    font-size: 1vh;
+    letter-spacing: 0.2vh;
+    color: rgba(var(--color_r), var(--color_g), var(--color_b), 0.5);
+    margin-bottom: 0.5vh;
+}
+
+.mic-monitor-source-overlay__item {
+    font-size: 0.9vh;
+    font-family: var(--font_mono), monospace;
+    color: rgba(var(--color_r), var(--color_g), var(--color_b), 0.7);
+    padding: 0.4vh 0.5vh;
+    cursor: pointer;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    transition: background 0.1s ease;
+}
+
+.mic-monitor-source-overlay__item:hover {
+    background: rgba(var(--color_r), var(--color_g), var(--color_b), 0.1);
+}
+
+.mic-monitor-source-overlay__item--active {
+    color: rgb(var(--color_r), var(--color_g), var(--color_b));
+    border-left: 0.2vh solid rgb(var(--color_r), var(--color_g), var(--color_b));
+    padding-left: 0.5vh;
 }

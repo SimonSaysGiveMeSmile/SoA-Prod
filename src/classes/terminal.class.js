@@ -149,7 +149,6 @@ class Terminal {
                 // Auto-compose: intercept printable chars to open InputComposer inline
                 if (
                     window.autoCompose
-                    && window.isClaudeCodeActive && window.isClaudeCodeActive()
                     && e.type === "keydown"
                     && e.key.length === 1
                     && !e.ctrlKey && !e.metaKey && !e.altKey

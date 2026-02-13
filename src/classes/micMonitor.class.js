@@ -16,6 +16,8 @@ class MicMonitor {
         this._ctx = null;
         this._active = false;
         this._peakLevel = 0;
+        this._selectedDeviceId = null;
+        this._prevWaveform = null; // sustain buffer
 
         this._buildDOM();
     }
@@ -26,13 +28,21 @@ class MicMonitor {
         wrapper.style.animationPlayState = 'running';
         wrapper.innerHTML = `
             <div id="mod_micMonitor_inner">
-                <h1>MIC INPUT</h1>
+                <div class="mic-monitor-header">
+                    <h1>MIC INPUT</h1>
+                    <span class="mic-monitor-gear" title="Input Source">&#9881;</span>
+                </div>
                 <canvas id="mod_micMonitor_canvas" width="200" height="60"></canvas>
                 <div class="mic-monitor-info">
                     <span class="mic-monitor-level">—</span>
                     <span class="mic-monitor-status">OFF</span>
                 </div>
+                <div class="mic-monitor-source-label">Source: Default</div>
                 <div class="mic-monitor-speech-status">SPEECH: —</div>
+            </div>
+            <div class="mic-monitor-source-overlay" style="display:none;">
+                <div class="mic-monitor-source-overlay__title">INPUT SOURCE</div>
+                <div class="mic-monitor-source-overlay__list"></div>
             </div>`;
         this.parent.appendChild(wrapper);
 
@@ -41,20 +51,76 @@ class MicMonitor {
         this._levelEl = wrapper.querySelector('.mic-monitor-level');
         this._statusEl = wrapper.querySelector('.mic-monitor-status');
         this._speechStatusEl = wrapper.querySelector('.mic-monitor-speech-status');
+        this._sourceLabel = wrapper.querySelector('.mic-monitor-source-label');
+        this._sourceOverlay = wrapper.querySelector('.mic-monitor-source-overlay');
+        this._sourceList = wrapper.querySelector('.mic-monitor-source-overlay__list');
         this._wrapperEl = wrapper;
+
+        // Gear button opens input source overlay
+        wrapper.querySelector('.mic-monitor-gear').addEventListener('click', (e) => {
+            e.stopPropagation();
+            this._toggleSourceOverlay();
+        });
 
         // Click delegates to the global mic toggle so everything stays in sync
         wrapper.addEventListener('click', (e) => {
-            // Don't toggle if clicking the drag handle
+            // Don't toggle if clicking the drag handle, gear, or source overlay
             if (e.target.classList.contains('soa-drag-handle')) return;
+            if (e.target.closest('.mic-monitor-gear')) return;
+            if (e.target.closest('.mic-monitor-source-overlay')) return;
             if (window.toggleMic) window.toggleMic();
         });
+    }
+
+    async _toggleSourceOverlay() {
+        const visible = this._sourceOverlay.style.display !== 'none';
+        if (visible) {
+            this._sourceOverlay.style.display = 'none';
+            return;
+        }
+        // Enumerate audio input devices
+        try {
+            const devices = await navigator.mediaDevices.enumerateDevices();
+            const audioInputs = devices.filter(d => d.kind === 'audioinput');
+            this._sourceList.innerHTML = '';
+            audioInputs.forEach(device => {
+                const item = document.createElement('div');
+                item.className = 'mic-monitor-source-overlay__item';
+                if (this._selectedDeviceId === device.deviceId ||
+                    (!this._selectedDeviceId && device.deviceId === 'default')) {
+                    item.classList.add('mic-monitor-source-overlay__item--active');
+                }
+                item.textContent = device.label || `Microphone (${device.deviceId.substring(0, 8)})`;
+                item.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    this._selectDevice(device.deviceId, item.textContent);
+                });
+                this._sourceList.appendChild(item);
+            });
+        } catch (e) {
+            this._sourceList.innerHTML = '<div class="mic-monitor-source-overlay__item">No devices found</div>';
+        }
+        this._sourceOverlay.style.display = '';
+    }
+
+    _selectDevice(deviceId, label) {
+        this._selectedDeviceId = deviceId;
+        this._sourceLabel.textContent = `Source: ${label}`;
+        this._sourceOverlay.style.display = 'none';
+        // Restart stream with new device if active
+        if (this._active) {
+            this.stop();
+            this.start();
+        }
     }
 
     async start() {
         if (this._active) return;
         try {
-            this._stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            const constraints = { audio: this._selectedDeviceId
+                ? { deviceId: { exact: this._selectedDeviceId } }
+                : true };
+            this._stream = await navigator.mediaDevices.getUserMedia(constraints);
             this._audioCtx = new AudioContext();
             const source = this._audioCtx.createMediaStreamSource(this._stream);
 
@@ -99,6 +165,7 @@ class MicMonitor {
             this._audioCtx = null;
         }
         this._analyser = null;
+        this._prevWaveform = null;
         this._statusEl.textContent = 'OFF';
         this._statusEl.classList.remove('mic-monitor-status--live');
         this._levelEl.textContent = '—';
@@ -124,6 +191,21 @@ class MicMonitor {
 
         this._analyser.getByteTimeDomainData(this._dataArray);
 
+        // Sustain: blend current frame with previous (keep 92% of old displacement)
+        if (!this._prevWaveform) {
+            this._prevWaveform = new Uint8Array(this._dataArray.length);
+            this._prevWaveform.fill(128);
+        }
+        const sustain = 0.92;
+        for (let i = 0; i < this._dataArray.length; i++) {
+            const cur = this._dataArray[i] - 128;
+            const prev = this._prevWaveform[i] - 128;
+            // Keep whichever displacement is larger, with decay on previous
+            const blended = Math.abs(cur) >= Math.abs(prev * sustain)
+                ? cur : prev * sustain;
+            this._prevWaveform[i] = 128 + blended;
+        }
+
         const canvas = this._canvas;
         const ctx = this._ctx;
         const w = this._drawWidth || canvas.width;
@@ -145,13 +227,26 @@ class MicMonitor {
         ctx.lineTo(w, h / 2);
         ctx.stroke();
 
-        // Draw waveform
+        // Draw sustained waveform (faded)
+        ctx.strokeStyle = `rgba(${r}, ${g}, ${b}, 0.35)`;
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        const sliceWidth = w / this._prevWaveform.length;
+        let x = 0;
+        for (let i = 0; i < this._prevWaveform.length; i++) {
+            const v = this._prevWaveform[i] / 128.0;
+            const y = (v * h) / 2;
+            if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+            x += sliceWidth;
+        }
+        ctx.stroke();
+
+        // Draw current waveform
         ctx.strokeStyle = `rgb(${r}, ${g}, ${b})`;
         ctx.lineWidth = 1.5;
         ctx.beginPath();
 
-        const sliceWidth = w / this._dataArray.length;
-        let x = 0;
+        x = 0;
         let rmsSum = 0;
 
         for (let i = 0; i < this._dataArray.length; i++) {
@@ -171,7 +266,8 @@ class MicMonitor {
         // Calculate RMS level
         const rms = Math.sqrt(rmsSum / this._dataArray.length);
         const dbLevel = Math.round(rms * 100);
-        this._peakLevel = Math.max(this._peakLevel * 0.95, dbLevel);
+        const maxLevel = 30;
+        this._peakLevel = Math.max(this._peakLevel * 0.985, dbLevel);
         this._levelEl.textContent = `${dbLevel}% (peak ${Math.round(this._peakLevel)}%)`;
 
         // Draw level bar at bottom
@@ -180,7 +276,7 @@ class MicMonitor {
         ctx.fillRect(0, h - barH, w, barH);
         const levelColor = dbLevel > 5 ? `rgb(${r}, ${g}, ${b})` : `rgba(${r}, ${g}, ${b}, 0.4)`;
         ctx.fillStyle = levelColor;
-        ctx.fillRect(0, h - barH, (dbLevel / 100) * w, barH);
+        ctx.fillRect(0, h - barH, Math.min(dbLevel / maxLevel, 1) * w, barH);
 
         this._animFrame = requestAnimationFrame(() => this._draw());
     }
