@@ -1,8 +1,8 @@
 section.mod_column {
     width: 17%;
-    top: 1.2vh;
+    top: 2.5vh;
     min-height: 10%;
-    max-height: 98%;
+    max-height: 96%;
     padding: 1.39vh;
     padding-bottom: 0vh;
     box-sizing: border-box;
@@ -13,6 +13,7 @@ section.mod_column {
     justify-content: flex-start;
     gap: 1vh;
     overflow-y: auto;
+    scrollbar-width: none; /* Firefox */
 
     opacity: 0;
     transition: opacity .5s cubic-bezier(0.4, 0, 1, 1);
@@ -20,6 +21,10 @@ section.mod_column {
 
 section.mod_column.activated {
     opacity: 1;
+}
+
+section.mod_column::-webkit-scrollbar {
+    display: none;
 }
 
 section.mod_column > h3.title {
@@ -57,6 +62,7 @@ section#mod_column_left > h3.title {
 section#mod_column_right {
     right: -0.555vh;
     align-items: flex-start;
+    overflow-x: hidden;
 }
 
 section#mod_column_right > h3.title {

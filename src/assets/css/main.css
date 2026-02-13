@@ -7,7 +7,7 @@ html, body {
 }
 body {
     user-select: none !important;
-    padding-top: 0.6vh;
+    padding-top: 0.85vh;
     color: rgb(var(--color_r), var(--color_g), var(--color_b));
     display: flex;
     flex-direction: row;

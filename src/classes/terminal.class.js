@@ -145,6 +145,23 @@ class Terminal {
                 if (window.keyboard && window.keyboard.keydownHandler) {
                     window.keyboard.keydownHandler(e);
                 }
+
+                // Auto-compose: intercept printable chars to open InputComposer inline
+                if (
+                    window.autoCompose
+                    && e.type === "keydown"
+                    && e.key.length === 1
+                    && !e.ctrlKey && !e.metaKey && !e.altKey
+                    && !document.getElementById("inputcomposer_bar")
+                    && !document.getElementById("texteditor_overlay")
+                    && this.term.buffer.active.type !== "alternate"
+                ) {
+                    window._interceptedChar = e.key;
+                    window._interceptedTermInstance = this;
+                    new InputComposer({ autoActivated: true });
+                    return false;
+                }
+
                 return true;
             });
             // Prevent soft-keyboard on touch devices #733

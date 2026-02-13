@@ -102,3 +102,32 @@
     white-space: nowrap;
     letter-spacing: 0.03vh;
 }
+
+/* --- Inline variant (auto-activated at cursor row) --- */
+
+#inputcomposer_bar.inputcomposer-inline {
+    bottom: auto;
+    animation: inputcomposer_fadeIn 0.12s ease-out;
+}
+
+#inputcomposer_bar.inputcomposer-inline.closing {
+    animation: inputcomposer_fadeOut 0.12s ease-in forwards;
+}
+
+#inputcomposer_bar.inputcomposer-inline .inputcomposer-hints {
+    position: relative;
+    top: auto;
+    order: -1;
+    width: 100%;
+    margin-bottom: 0.3vh;
+}
+
+@keyframes inputcomposer_fadeIn {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+}
+
+@keyframes inputcomposer_fadeOut {
+    from { opacity: 1; }
+    to   { opacity: 0; }
+}

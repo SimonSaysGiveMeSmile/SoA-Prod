@@ -43,9 +43,12 @@ class VoiceController {
     this.isInitialized = false;
     this.isEnabled = false; // Voice toggle state
     this.useFallback = false;
+    this.useOnDevice = false; // macOS SFSpeechRecognizer via helper process
+    this.useDirectWhisper = false; // Direct Whisper mode (record + send to API)
     this._fallbackRecognition = null;
     this._fallbackRestartTimer = null;
     this._SpeechRecognition = null;
+    this._directRecording = false; // Currently recording in direct Whisper mode
 
     // Bind space key handler
     this._boundKeyHandler = this._handleKeyDown.bind(this);
@@ -80,8 +83,26 @@ class VoiceController {
         });
 
         this.useFallback = false;
+      } else if (availability.hasOnDevice) {
+        // On-device speech recognition via macOS SFSpeechRecognizer
+        this.useOnDevice = true;
+        this.useFallback = false;
+        this._setupOnDeviceListeners();
+        console.log('[VoiceController] Using on-device speech recognition (SFSpeechRecognizer)');
+      } else if (availability.hasOpenAIKey) {
+        // Direct Whisper mode: record audio, send to Whisper API
+        // No wake word, mic button acts as push-to-talk
+        const hasPermission = await this.audioCapture.requestPermission();
+        if (!hasPermission) {
+          this.onError('Microphone permission denied');
+          this._setState(VoiceState.ERROR);
+          return false;
+        }
+        this.useDirectWhisper = true;
+        this.useFallback = false;
+        console.log('[VoiceController] Using direct Whisper API mode (push-to-talk)');
       } else {
-        // Fallback: Web Speech API
+        // Last resort: Web Speech API (will likely fail with network error in Electron)
         const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
         if (!SR) {
           console.warn('[VoiceController] No speech recognition available');
@@ -123,12 +144,18 @@ class VoiceController {
   /**
    * Enable voice listening (toggle on)
    */
-  enable() {
+  async enable() {
     if (!this.isInitialized) {
       console.warn('[VoiceController] Not initialized, cannot enable');
       return false;
     }
     this.isEnabled = true;
+    if (this.useOnDevice) {
+      return this._startOnDeviceRecognition();
+    }
+    if (this.useDirectWhisper) {
+      return this._startDirectRecording();
+    }
     if (this.useFallback) {
       return this._startFallbackListening();
     }
@@ -140,7 +167,13 @@ class VoiceController {
    */
   disable() {
     this.isEnabled = false;
-    if (this.useFallback) {
+    if (this.useOnDevice) {
+      this._stopOnDeviceRecognition();
+    } else if (this.useDirectWhisper) {
+      // _stopDirectRecording is async and manages its own state transitions
+      this._stopDirectRecording();
+      return;
+    } else if (this.useFallback) {
       this._stopFallbackListening();
     } else {
       this.stopListening();
@@ -223,6 +256,20 @@ class VoiceController {
     console.log('[VoiceController] Recording cancelled');
     this._clearTimers();
     this._stopAudioLevelPolling();
+
+    if (this.useOnDevice) {
+      this._stopOnDeviceRecognition();
+      this.isEnabled = false;
+      return;
+    }
+
+    if (this.useDirectWhisper) {
+      this._directRecording = false;
+      this.audioCapture.stopRecording();
+      this.isEnabled = false;
+      this._setState(VoiceState.IDLE);
+      return;
+    }
 
     if (this.useFallback) {
       this._stopFallbackListening();
@@ -416,8 +463,12 @@ class VoiceController {
    * Start Web Speech API fallback listening
    * @private
    */
-  _startFallbackListening() {
+  async _startFallbackListening() {
     if (this._fallbackRecognition) return true;
+
+    // Note: persistent mic stream removed — MicMonitor widget now keeps
+    // the macOS indicator solid, so we don't need a duplicate stream here
+    // that could interfere with SpeechRecognition audio capture.
 
     const recognition = new this._SpeechRecognition();
     recognition.continuous = true;
@@ -431,24 +482,37 @@ class VoiceController {
           const text = event.results[i][0].transcript.trim();
           if (text) {
             console.log('[VoiceController] Fallback transcription:', text);
+            if (window.micMonitor) window.micMonitor.setSpeechStatus('RESULT: ' + text.substring(0, 30));
             this.onTranscription(text, true);
           }
         } else {
-          this.onInterimTranscription(event.results[i][0].transcript);
+          const interim = event.results[i][0].transcript;
+          if (window.micMonitor) window.micMonitor.setSpeechStatus('INTERIM: ' + interim.substring(0, 30));
+          this.onInterimTranscription(interim);
         }
       }
     };
 
     recognition.onaudiostart = () => {
-      console.log('[VoiceController] Fallback audio started');
+      console.log('[VoiceController] Fallback audio started — mic is capturing');
+      if (window.micMonitor) window.micMonitor.setSpeechStatus('AUDIO CAPTURE');
+    };
+
+    recognition.onspeechstart = () => {
+      console.log('[VoiceController] Speech detected');
+      if (window.micMonitor) window.micMonitor.setSpeechStatus('SPEECH DETECTED');
     };
 
     recognition.onerror = (e) => {
-      if (e.error === 'no-speech' || e.error === 'aborted') return;
       console.warn('[VoiceController] Fallback error:', e.error);
+      if (window.micMonitor) window.micMonitor.setSpeechStatus('ERR: ' + e.error);
+      if (e.error === 'no-speech' || e.error === 'aborted') return;
       this.onError(e.error);
       // Fatal errors that mean we should stop trying
-      if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
+      if (e.error === 'not-allowed' || e.error === 'service-not-allowed' || e.error === 'network') {
+        console.error('[VoiceController] Fatal speech error:', e.error,
+          e.error === 'network' ? '— Web Speech API cannot reach Google servers (expected in Electron)' : '');
+        if (window.micMonitor) window.micMonitor.setSpeechStatus('UNAVAILABLE (no cloud service)');
         this.isEnabled = false;
         this._fallbackRecognition = null;
         this._setState(VoiceState.ERROR);
@@ -458,6 +522,7 @@ class VoiceController {
     recognition.onend = () => {
       // Only restart if still enabled; use a delay to prevent rapid restart loop
       if (this.isEnabled && this.useFallback && this._fallbackRecognition) {
+        if (window.micMonitor) window.micMonitor.setSpeechStatus('RESTARTING...');
         this._fallbackRestartTimer = setTimeout(() => {
           if (this.isEnabled && this.useFallback && this._fallbackRecognition) {
             try {
@@ -475,6 +540,7 @@ class VoiceController {
       recognition.start();
       this._fallbackRecognition = recognition;
       this._setState(VoiceState.LISTENING);
+      if (window.micMonitor) window.micMonitor.setSpeechStatus('LISTENING');
       console.log('[VoiceController] Fallback listening started');
       return true;
     } catch (e) {
@@ -497,6 +563,111 @@ class VoiceController {
       this._fallbackRecognition.stop();
       this._fallbackRecognition = null;
     }
+  }
+
+  // --- On-device speech (macOS SFSpeechRecognizer) ---
+
+  _setupOnDeviceListeners() {
+    window.ipc.on('voice:on-device-interim', (_event, text) => {
+      if (window.micMonitor) window.micMonitor.setSpeechStatus('INTERIM: ' + text.substring(0, 30));
+      this.onInterimTranscription(text);
+    });
+
+    window.ipc.on('voice:on-device-final', (_event, text) => {
+      console.log('[VoiceController] On-device transcription:', text);
+      if (window.micMonitor) window.micMonitor.setSpeechStatus('RESULT: ' + text.substring(0, 30));
+      this.onTranscription(text, true);
+    });
+
+    window.ipc.on('voice:on-device-error', (_event, msg) => {
+      console.warn('[VoiceController] On-device error:', msg);
+      if (window.micMonitor) window.micMonitor.setSpeechStatus('ERR: ' + msg.substring(0, 30));
+      this.onError(msg);
+    });
+  }
+
+  async _startOnDeviceRecognition() {
+    this._setState(VoiceState.RECORDING);
+    if (window.micMonitor) window.micMonitor.setSpeechStatus('ON-DEVICE LISTENING');
+    const result = await window.ipc.invoke('voice:on-device-start');
+    if (!result.success) {
+      console.error('[VoiceController] On-device start failed:', result.error);
+      if (window.micMonitor) window.micMonitor.setSpeechStatus('ERR: ' + result.error);
+      this._setState(VoiceState.ERROR);
+      return false;
+    }
+    return true;
+  }
+
+  async _stopOnDeviceRecognition() {
+    await window.ipc.invoke('voice:on-device-stop');
+    this._setState(VoiceState.IDLE);
+    if (window.micMonitor) window.micMonitor.setSpeechStatus('STOPPED');
+  }
+
+  // --- Direct Whisper mode (push-to-talk) ---
+
+  /**
+   * Start recording for direct Whisper transcription
+   * @private
+   */
+  _startDirectRecording() {
+    if (this._directRecording) return true;
+
+    this.audioCapture.startRecording();
+    this._directRecording = true;
+    this._setState(VoiceState.RECORDING);
+    if (window.micMonitor) window.micMonitor.setSpeechStatus('RECORDING (push-to-talk)');
+
+    // Start max duration timer
+    this._startMaxDurationTimer();
+
+    console.log('[VoiceController] Direct Whisper recording started');
+    return true;
+  }
+
+  /**
+   * Stop recording and send audio to Whisper for transcription
+   * @private
+   */
+  async _stopDirectRecording() {
+    if (!this._directRecording) return;
+    this._directRecording = false;
+    this._clearTimers();
+
+    this._setState(VoiceState.PROCESSING);
+    if (window.micMonitor) window.micMonitor.setSpeechStatus('PROCESSING...');
+
+    try {
+      const audioBlob = await this.audioCapture.stopRecording();
+      if (audioBlob.size === 0) {
+        console.warn('[VoiceController] No audio captured');
+        if (window.micMonitor) window.micMonitor.setSpeechStatus('NO AUDIO');
+        return;
+      }
+
+      console.log('[VoiceController] Sending', audioBlob.size, 'bytes to Whisper');
+      const arrayBuffer = await audioBlob.arrayBuffer();
+      const audioData = Array.from(new Uint8Array(arrayBuffer));
+
+      const result = await window.ipc.invoke('voice:transcribe', audioData);
+
+      if (result.success && result.text) {
+        console.log('[VoiceController] Whisper transcription:', result.text);
+        if (window.micMonitor) window.micMonitor.setSpeechStatus('RESULT: ' + result.text.substring(0, 30));
+        this.onTranscription(result.text, true);
+      } else {
+        console.warn('[VoiceController] Whisper failed:', result.error);
+        if (window.micMonitor) window.micMonitor.setSpeechStatus('ERR: ' + (result.error || 'unknown'));
+        this.onError(result.error || 'Transcription failed');
+      }
+    } catch (error) {
+      console.error('[VoiceController] Direct Whisper error:', error.message);
+      if (window.micMonitor) window.micMonitor.setSpeechStatus('ERR: ' + error.message);
+      this.onError(error.message);
+    }
+
+    this._setState(VoiceState.IDLE);
   }
 
   /**

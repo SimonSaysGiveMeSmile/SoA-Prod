@@ -122,6 +122,7 @@ try {
     window.voiceToggleWidget = null;
     window.interimTranscription = null;
     window.activeTerminal = 0; // Track current terminal for voice integration
+    window.micMonitor = null;
 
     // Ad overlay / thinking detection instances
     window.thinkingDetector = null;
@@ -544,6 +545,12 @@ try {
                 onError: (error) => {
                     console.error('[Voice] Error:', error);
                 },
+
+                onInterimTranscription: (text) => {
+                    if (window.waveformVisualizer) {
+                        window.waveformVisualizer.showInterim(text);
+                    }
+                },
             });
 
             const initialized = await window.voiceController.initialize();
@@ -556,6 +563,15 @@ try {
 
                 if (!initialized) {
                     window.voiceToggleWidget.showUnavailable();
+                }
+
+                // Mic monitor — live waveform for diagnostics
+                const { MicMonitor } = require('./classes/micMonitor.class');
+                window.micMonitor = new MicMonitor('mod_column_right');
+
+                // Register with DragManager (created after initial scan)
+                if (window.dragManager && window.micMonitor._wrapperEl) {
+                    window.dragManager.register(window.micMonitor._wrapperEl);
                 }
             }
 
@@ -849,6 +865,7 @@ try {
             })
         };
         window.currentTerm = 0;
+        window.autoCompose = true;
         window.term[0].onprocesschange = p => {
             // Only show process name if user hasn't set a custom name
             if (window.terminalNames[0] === "MAIN SHELL") {
@@ -1645,6 +1662,14 @@ try {
         }
         if (window.voiceToggleWidget) {
             window.voiceToggleWidget.setEnabled(newState);
+        }
+        // Sync MicMonitor with mic toggle
+        if (window.micMonitor) {
+            if (newState) {
+                window.micMonitor.start();
+            } else {
+                window.micMonitor.stop();
+            }
         }
         console.log('[Mic] Toggled to:', newState ? 'ON' : 'OFF');
     };

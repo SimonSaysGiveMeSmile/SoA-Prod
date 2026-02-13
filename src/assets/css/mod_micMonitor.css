@@ -1,0 +1,67 @@
+/* Mic Monitor - Live microphone waveform widget */
+
+div#mod_micMonitor {
+    font-family: var(--font_main), sans-serif;
+    color: rgb(var(--color_r), var(--color_g), var(--color_b));
+    cursor: pointer;
+    user-select: none;
+}
+
+div#mod_micMonitor:hover {
+    background: rgba(var(--color_r), var(--color_g), var(--color_b), 0.04);
+}
+
+div#mod_micMonitor_inner {
+    padding: 0.5vh 0;
+}
+
+div#mod_micMonitor h1 {
+    font-size: 1.2vh;
+    letter-spacing: 0.2vh;
+    margin: 0;
+    padding: 0;
+    color: rgba(var(--color_r), var(--color_g), var(--color_b), 0.5);
+    font-weight: normal;
+}
+
+#mod_micMonitor_canvas {
+    width: 100%;
+    height: 6vh;
+    margin: 0.4vh 0;
+    background: rgba(0, 0, 0, 0.3);
+    border: 0.05vh solid rgba(var(--color_r), var(--color_g), var(--color_b), 0.15);
+    display: block;
+}
+
+.mic-monitor-info {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.9vh;
+    color: rgba(var(--color_r), var(--color_g), var(--color_b), 0.5);
+}
+
+.mic-monitor-level {
+    font-family: var(--font_mono), monospace;
+}
+
+.mic-monitor-status {
+    letter-spacing: 0.15vh;
+}
+
+.mic-monitor-status--live {
+    color: #00e676;
+    animation: micMonitorPulse 2s ease-in-out infinite;
+}
+
+@keyframes micMonitorPulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+.mic-monitor-speech-status {
+    font-size: 0.85vh;
+    font-family: var(--font_mono), monospace;
+    color: rgba(var(--color_r), var(--color_g), var(--color_b), 0.4);
+    margin-top: 0.3vh;
+    letter-spacing: 0.05vh;
+}

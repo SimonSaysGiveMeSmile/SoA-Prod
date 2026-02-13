@@ -12,9 +12,11 @@ require('dotenv').config({ path: path.join(__dirname, '../../..', '.env') });
 
 const { WakeWordDetector } = require('../voice/wakeWordDetector');
 const { WhisperClient } = require('../voice/whisperClient');
+const { OnDeviceSpeech } = require('../voice/onDeviceSpeech');
 
 let wakeWordDetector = null;
 let whisperClient = null;
+let onDeviceSpeech = null;
 let mainWindow = null;
 
 /**
@@ -65,18 +67,21 @@ function setupVoiceIPC(window) {
     const openaiKey = process.env.OPENAI_API_KEY;
     const modelPath = getModelPath();
     const modelExists = fs.existsSync(modelPath);
+    const hasOnDevice = OnDeviceSpeech.isAvailable();
 
     console.log('[VoiceIPC] Checking availability:');
     console.log('[VoiceIPC]   - PICOVOICE_ACCESS_KEY:', accessKey ? 'set' : 'not set');
     console.log('[VoiceIPC]   - OPENAI_API_KEY:', openaiKey ? 'set' : 'not set');
     console.log('[VoiceIPC]   - Model path:', modelPath);
     console.log('[VoiceIPC]   - Model exists:', modelExists);
+    console.log('[VoiceIPC]   - On-device speech:', hasOnDevice);
 
     return {
       available: !!(accessKey && openaiKey && modelExists),
       hasAccessKey: !!accessKey,
       hasOpenAIKey: !!openaiKey,
       hasModel: modelExists,
+      hasOnDevice,
       modelPath: modelExists ? modelPath : null,
     };
   });
@@ -135,15 +140,20 @@ function setupVoiceIPC(window) {
     }
   });
 
-  // Transcribe audio with Whisper
+  // Transcribe audio with Whisper (works in both full and direct modes)
   ipcMain.removeHandler('voice:transcribe');
   ipcMain.handle('voice:transcribe', async (event, audioData) => {
+    // Lazy-init whisperClient if we have an API key but it wasn't created yet
     if (!whisperClient) {
-      return { success: false, error: 'Whisper client not initialized' };
+      const openaiKey = process.env.OPENAI_API_KEY;
+      if (openaiKey) {
+        whisperClient = new WhisperClient(openaiKey);
+      } else {
+        return { success: false, error: 'OPENAI_API_KEY not set in .env' };
+      }
     }
 
     try {
-      // Convert from regular array to Buffer if needed
       const audioBuffer = Buffer.isBuffer(audioData)
         ? audioData
         : Buffer.from(audioData);
@@ -156,11 +166,57 @@ function setupVoiceIPC(window) {
     }
   });
 
+  // --- On-device speech (macOS SFSpeechRecognizer) ---
+
+  ipcMain.removeHandler('voice:on-device-start');
+  ipcMain.handle('voice:on-device-start', async () => {
+    try {
+      if (!onDeviceSpeech) {
+        onDeviceSpeech = new OnDeviceSpeech();
+
+        onDeviceSpeech.onInterim = (text) => {
+          if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.send('voice:on-device-interim', text);
+          }
+        };
+        onDeviceSpeech.onFinal = (text) => {
+          if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.send('voice:on-device-final', text);
+          }
+        };
+        onDeviceSpeech.onError = (msg) => {
+          if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.send('voice:on-device-error', msg);
+          }
+        };
+
+        await onDeviceSpeech.start();
+      }
+      onDeviceSpeech.startRecognition();
+      return { success: true };
+    } catch (error) {
+      console.error('[VoiceIPC] On-device start failed:', error.message);
+      return { success: false, error: error.message };
+    }
+  });
+
+  ipcMain.removeHandler('voice:on-device-stop');
+  ipcMain.handle('voice:on-device-stop', async () => {
+    if (onDeviceSpeech) {
+      onDeviceSpeech.stopRecognition();
+    }
+    return { success: true };
+  });
+
   // Release voice services
   ipcMain.on('voice:release', () => {
     if (wakeWordDetector) {
       wakeWordDetector.release();
       wakeWordDetector = null;
+    }
+    if (onDeviceSpeech) {
+      onDeviceSpeech.release();
+      onDeviceSpeech = null;
     }
     whisperClient = null;
     console.log('[VoiceIPC] Voice services released');
@@ -175,6 +231,8 @@ function cleanupVoiceIPC() {
   ipcMain.removeHandler('voice:check-availability');
   ipcMain.removeHandler('voice:initialize');
   ipcMain.removeHandler('voice:transcribe');
+  ipcMain.removeHandler('voice:on-device-start');
+  ipcMain.removeHandler('voice:on-device-stop');
   ipcMain.removeAllListeners('voice:audio-frame');
   ipcMain.removeAllListeners('voice:release');
 
@@ -186,6 +244,10 @@ function cleanupVoiceIPC() {
       console.warn('[VoiceIPC] Error releasing wake word detector:', e.message);
     }
     wakeWordDetector = null;
+  }
+  if (onDeviceSpeech) {
+    onDeviceSpeech.release();
+    onDeviceSpeech = null;
   }
   whisperClient = null;
   mainWindow = null;
