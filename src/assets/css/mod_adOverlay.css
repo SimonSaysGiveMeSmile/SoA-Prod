@@ -23,7 +23,7 @@
    and the bottom half visible so you can still see AI output. */
 .ad-overlay--fullscreen {
     position: fixed;
-    top: 5vh;
+    top: calc(5vh + 10px);
     left: 17.5%;
     width: 65%;
     height: 62%;

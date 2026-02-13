@@ -1466,9 +1466,9 @@ try {
             }
         });
 
-        // Ctrl+Shift+V: Toggle voice dictation
+        // Caps Lock: Toggle voice dictation
         document.addEventListener("keydown", e => {
-            if (e.ctrlKey && e.shiftKey && (e.key === "v" || e.key === "V")) {
+            if (e.code === "CapsLock") {
                 e.preventDefault();
                 window.toggleMic();
             }

@@ -130,7 +130,11 @@ class AudioCapture {
    * Setup analyser for audio visualization
    */
   setupAnalyser() {
-    if (!this.audioContext || !this.mediaStream) return;
+    if (!this.mediaStream) return;
+
+    if (!this.audioContext) {
+      this.audioContext = new AudioContext({ sampleRate: 16000 });
+    }
 
     this.analyser = this.audioContext.createAnalyser();
     this.analyser.fftSize = 256;

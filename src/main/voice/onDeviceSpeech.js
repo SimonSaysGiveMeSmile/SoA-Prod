@@ -85,12 +85,19 @@ class OnDeviceSpeech {
         try { fs.unlinkSync(txtFile); } catch (e) {}
         try { fs.rmdirSync(outDir); } catch (e) {}
 
+        // If we got text output, treat as success even if stderr has warnings (e.g. FP16)
+        if (text) {
+          console.log('[OnDeviceSpeech] Transcription:', text);
+          resolve(text);
+          return;
+        }
+
         if (err) {
           reject(new Error(stderr || err.message));
           return;
         }
 
-        console.log('[OnDeviceSpeech] Transcription:', text);
+        console.log('[OnDeviceSpeech] Transcription: (empty)');
         resolve(text);
       });
     });
