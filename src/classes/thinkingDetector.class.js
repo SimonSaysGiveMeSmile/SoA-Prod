@@ -11,10 +11,10 @@
  */
 class ThinkingDetector {
     constructor(opts = {}) {
-        this.debounceStartMs = opts.debounceStartMs || opts.debounceMs || 300;  // DET-03
-        this.debounceEndMs = opts.debounceEndMs || 500;   // Longer end debounce to avoid premature end
+        this.debounceStartMs = opts.debounceStartMs || opts.debounceMs || 100;  // DET-03
+        this.debounceEndMs = opts.debounceEndMs || 200;   // Shorter end debounce for responsiveness
         this.timeoutMs = opts.timeoutMs || 30000;         // DET-04
-        this._cooldownMs = opts.cooldownMs || 2000;       // Cooldown after thinking ends
+        this._cooldownMs = opts.cooldownMs || 500;        // Cooldown after thinking ends
         this.enabled = opts.enabled !== false;
 
         // Per-terminal thinking state (DET-06)

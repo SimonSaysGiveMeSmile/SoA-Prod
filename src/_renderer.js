@@ -1319,7 +1319,7 @@ try {
         // Update on Claude state changes (session mapping, live context)
         window.addEventListener('claude-state-changed', () => window.updateTabStatuses());
         // Periodic refresh for time-based transitions (input → completed)
-        setInterval(() => window.updateTabStatuses(), 5000);
+        setInterval(() => window.updateTabStatuses(), 2000);
 
         // Initialize widget loader
         const widgetLoader = new WidgetLoader({
