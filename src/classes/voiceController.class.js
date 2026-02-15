@@ -159,13 +159,18 @@ class VoiceController {
       return false;
     }
     this.isEnabled = true;
+    let result;
     if (this.useDirectWhisper) {
-      return this._startDirectRecording();
+      result = this._startDirectRecording();
+    } else if (this.useFallback) {
+      result = await this._startFallbackListening();
+    } else {
+      result = await this.startListening();
     }
-    if (this.useFallback) {
-      return this._startFallbackListening();
+    if (!result) {
+      this.isEnabled = false;
     }
-    return this.startListening();
+    return result;
   }
 
   /**
@@ -188,11 +193,11 @@ class VoiceController {
    * Toggle voice on/off
    * @returns {boolean} New enabled state
    */
-  toggle() {
+  async toggle() {
     if (this.isEnabled) {
       this.disable();
     } else {
-      this.enable();
+      await this.enable();
     }
     return this.isEnabled;
   }
@@ -645,7 +650,13 @@ class VoiceController {
   _startDirectRecording() {
     if (this._directRecording) return true;
 
-    this.audioCapture.startRecording();
+    const started = this.audioCapture.startRecording();
+    if (!started) {
+      console.error('[VoiceController] Failed to start recording — no media stream');
+      if (window.micMonitor) window.micMonitor.setSpeechStatus('MIC ERROR');
+      this.onError('Failed to start recording');
+      return false;
+    }
     this._directRecording = true;
     this._recordingStartTime = Date.now();
     this._setState(VoiceState.RECORDING);
@@ -677,9 +688,10 @@ class VoiceController {
 
     try {
       const audioBlob = await this.audioCapture.stopRecording();
-      if (audioBlob.size === 0) {
-        console.warn('[VoiceController] No audio captured');
-        if (window.micMonitor) window.micMonitor.setSpeechStatus('NO AUDIO');
+      if (audioBlob.size < 2000) {
+        console.warn('[VoiceController] Audio too short (' + audioBlob.size + ' bytes), skipping');
+        if (window.micMonitor) window.micMonitor.setSpeechStatus('TOO SHORT');
+        this._setState(VoiceState.IDLE);
         return;
       }
 
@@ -693,6 +705,9 @@ class VoiceController {
         console.log('[VoiceController] Whisper transcription:', result.text);
         if (window.micMonitor) window.micMonitor.setSpeechStatus('RESULT: ' + result.text.substring(0, 30));
         this.onTranscription(result.text, true);
+      } else if (result.success && !result.text) {
+        console.warn('[VoiceController] Whisper returned empty transcription (silence?)');
+        if (window.micMonitor) window.micMonitor.setSpeechStatus('NO SPEECH');
       } else {
         console.warn('[VoiceController] Whisper failed:', result.error);
         if (window.micMonitor) window.micMonitor.setSpeechStatus('ERR: ' + (result.error || 'unknown'));

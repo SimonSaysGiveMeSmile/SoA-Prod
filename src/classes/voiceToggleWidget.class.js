@@ -44,13 +44,13 @@ class VoiceToggleWidget {
     return this.element;
   }
 
-  _handleClick() {
+  async _handleClick() {
     if (!this.voiceController) {
       console.warn('[VoiceToggle] No voice controller');
       return;
     }
 
-    const newState = this.voiceController.toggle();
+    const newState = await this.voiceController.toggle();
     this.isEnabled = newState;
     this._updateVisualState();
 

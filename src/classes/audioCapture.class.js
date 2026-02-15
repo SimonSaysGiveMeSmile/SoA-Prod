@@ -14,6 +14,7 @@ class AudioCapture {
     this.onAudioFrame = null;
     this.analyser = null;
     this.dataArray = null;
+    this._analyserSource = null;
   }
 
   /**
@@ -142,6 +143,7 @@ class AudioCapture {
 
     const source = this.audioContext.createMediaStreamSource(this.mediaStream);
     source.connect(this.analyser);
+    this._analyserSource = source; // prevent GC
   }
 
   /**

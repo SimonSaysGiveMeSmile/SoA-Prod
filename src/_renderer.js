@@ -1284,41 +1284,39 @@ try {
                     continue;
                 }
 
-                // Check thinking state from detector
+                // Check thinking and attention state from detector
                 const isThinking = window.thinkingDetector && window.thinkingDetector.isThinking(i);
+                const needsAttention = window.thinkingDetector && window.thinkingDetector.isNeedingAttention(i);
 
-                if (isThinking) {
-                    tabEl.setAttribute('data-claude-status', 'running');
-                    continue;
-                }
-
-                // Not thinking — determine if waiting for input or completed
-                const liveCtx = window.claudeState && window.claudeState.liveContext;
-                const isLiveSession = liveCtx && String(liveCtx.session_id) === String(sessionId);
-                const liveAge = isLiveSession ? (Date.now() - (liveCtx.timestamp || 0)) : Infinity;
-
-                // Also check detector's last activity for this terminal
-                const detState = window.thinkingDetector && window.thinkingDetector._terminals[i];
-                const lastEnd = detState ? detState.lastThinkingEndTime : 0;
-                const lastOutput = detState ? detState.lastOutputTime : 0;
-                const recentActivity = Math.max(lastEnd, lastOutput);
-                const timeSinceActivity = recentActivity ? (Date.now() - recentActivity) : Infinity;
-
-                if (liveAge < 120000 || timeSinceActivity < 120000) {
+                if (isThinking && needsAttention) {
+                    // Thinking + needs attention → input (red)
                     tabEl.setAttribute('data-claude-status', 'input');
-                } else if (recentActivity > 0) {
-                    tabEl.setAttribute('data-claude-status', 'completed');
+                } else if (isThinking) {
+                    // Thinking + no attention needed → running (green)
+                    tabEl.setAttribute('data-claude-status', 'running');
                 } else {
-                    tabEl.setAttribute('data-claude-status', 'idle');
+                    // Not thinking — check if there was a recent session
+                    const detState = window.thinkingDetector && window.thinkingDetector._terminals[i];
+                    const lastEnd = detState ? detState.lastThinkingEndTime : 0;
+
+                    if (lastEnd > 0) {
+                        // Had a thinking session before → completed (orange)
+                        tabEl.setAttribute('data-claude-status', 'completed');
+                    } else {
+                        // Never had a thinking session → idle (blue)
+                        tabEl.setAttribute('data-claude-status', 'idle');
+                    }
                 }
             }
         };
 
         // Update on thinking state changes
         window.addEventListener('thinking-state-changed', () => window.updateTabStatuses());
+        // Update on attention state changes (permission prompts detected)
+        window.addEventListener('claude-attention-changed', () => window.updateTabStatuses());
         // Update on Claude state changes (session mapping, live context)
         window.addEventListener('claude-state-changed', () => window.updateTabStatuses());
-        // Periodic refresh for time-based transitions (input → completed)
+        // Periodic refresh as safety net
         setInterval(() => window.updateTabStatuses(), 2000);
 
         // Initialize widget loader
@@ -1671,12 +1669,12 @@ try {
     };
 
     // Mic toggle in tab bar
-    window.toggleMic = () => {
+    window.toggleMic = async () => {
         if (!window.voiceController) {
             console.warn('[Mic] Voice controller not available');
             return;
         }
-        const newState = window.voiceController.toggle();
+        const newState = await window.voiceController.toggle();
         // Update title (CSS state is managed by onStateChange callback)
         const btn = document.getElementById('shell_mic_btn');
         if (btn) {
@@ -1886,6 +1884,11 @@ try {
                 delete window.settings[key];
             }
         });
+
+        // Sync ad mode preference to localStorage so it persists across sessions
+        if (window.settings.adOverlayMode) {
+            localStorage.setItem('soa_ad_mode', window.settings.adOverlayMode);
+        }
 
         try {
             fs.writeFileSync(settingsFile, JSON.stringify(window.settings, "", 4));

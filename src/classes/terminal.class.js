@@ -146,20 +146,24 @@ class Terminal {
                     window.keyboard.keydownHandler(e);
                 }
 
-                // Auto-compose: intercept printable chars to open InputComposer inline
+                // Double-space: open TextEditor overlay
                 if (
                     window.autoCompose
                     && e.type === "keydown"
-                    && e.key.length === 1
+                    && e.key === " "
                     && !e.ctrlKey && !e.metaKey && !e.altKey
                     && !document.getElementById("inputcomposer_bar")
                     && !document.getElementById("texteditor_overlay")
                     && this.term.buffer.active.type !== "alternate"
                 ) {
-                    window._interceptedChar = e.key;
-                    window._interceptedTermInstance = this;
-                    new InputComposer({ autoActivated: true });
-                    return false;
+                    const now = Date.now();
+                    if (window._lastSpaceTime && (now - window._lastSpaceTime) < 300) {
+                        window._lastSpaceTime = 0;
+                        InputComposer.closeIfOpen();
+                        new TextEditor();
+                        return false;
+                    }
+                    window._lastSpaceTime = now;
                 }
 
                 return true;

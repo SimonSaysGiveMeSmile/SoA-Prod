@@ -73,6 +73,7 @@ class OnDeviceSpeech {
         '--language', 'en',
         '--output_format', 'txt',
         '--output_dir', outDir,
+        '--fp16', 'False',
       ], { timeout: 30000 }, (err, stdout, stderr) => {
         // Read result
         const baseName = path.basename(tmpFile, path.extname(tmpFile));
@@ -85,20 +86,26 @@ class OnDeviceSpeech {
         try { fs.unlinkSync(txtFile); } catch (e) {}
         try { fs.rmdirSync(outDir); } catch (e) {}
 
-        // If we got text output, treat as success even if stderr has warnings (e.g. FP16)
+        // If we got text output, treat as success even if stderr has warnings
         if (text) {
           console.log('[OnDeviceSpeech] Transcription:', text);
           resolve(text);
           return;
         }
 
-        if (err) {
-          reject(new Error(stderr || err.message));
+        // Filter out known harmless warnings from stderr
+        const realErrors = (stderr || '').split('\n').filter(line =>
+          line.trim() && !line.includes('FP16 is not supported') && !line.includes('UserWarning')
+        ).join('\n').trim();
+
+        if (err && realErrors) {
+          reject(new Error(realErrors));
           return;
         }
 
+        // No text but no real error either — just silence/unintelligible audio
         console.log('[OnDeviceSpeech] Transcription: (empty)');
-        resolve(text);
+        resolve('');
       });
     });
   }

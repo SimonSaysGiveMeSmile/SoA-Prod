@@ -8,6 +8,7 @@
  *
  * Events emitted on window:
  *   'thinking-state-changed' => { detail: { terminalIndex, isThinking, method } }
+ *   'claude-attention-changed' => { detail: { terminalIndex, needsAttention } }
  */
 class ThinkingDetector {
     constructor(opts = {}) {
@@ -41,6 +42,18 @@ class ThinkingDetector {
             ]
         };
 
+        // Attention patterns — detect Claude Code permission/input prompts
+        this._attentionPatterns = [
+            /Allow\s+\w+/,                          // Permission prompts (Allow Read, Allow Bash, etc.)
+            /\(Y\)es\s*\/\s*\(N\)o/,                // (Y)es / (N)o choices
+            /\[Y\/n\]/i,                             // [Y/n] or [y/N] prompts
+            /\(y\/n\)/i,                             // (y/n) prompts
+            /Do you want to proceed/i,               // Proceed confirmation
+            /Do you want to continue/i,              // Continue confirmation
+            /approve/i,                              // Approval prompts
+            /continue\?\s*$/m,                       // "continue?" at end of line
+        ];
+
         // Accumulation buffer for detecting multi-chunk patterns
         this._bufferSize = 2048;
 
@@ -59,6 +72,7 @@ class ThinkingDetector {
         // Initialize per-terminal state
         this._terminals[terminalIndex] = {
             isThinking: false,
+            needsAttention: false,
             buffer: '',
             debounceTimer: null,
             timeoutTimer: null,
@@ -120,6 +134,14 @@ class ThinkingDetector {
         // Update buffer (rolling window) — used for end-of-thinking prompt detection
         state.buffer = (state.buffer + data).slice(-this._bufferSize);
         state.lastOutputTime = Date.now();
+
+        // Scan for attention patterns while thinking is active
+        if (state.isThinking && !state.needsAttention) {
+            const needsAttention = this._attentionPatterns.some(p => p.test(data));
+            if (needsAttention) {
+                this._setAttention(terminalIndex, true);
+            }
+        }
 
         // Use raw data chunk for start detection (avoids stale buffer false positives)
         // Use buffer tail for end detection (prompt patterns may span chunks)
@@ -207,12 +229,23 @@ class ThinkingDetector {
                 this._setThinking(terminalIndex, false, null);
             }, this.timeoutMs);
 
+            // Clear attention when thinking starts fresh (user answered, Claude continues)
+            if (state.needsAttention) {
+                this._setAttention(terminalIndex, false);
+            }
+
             this._onThinkingStart(terminalIndex, method);
         } else {
             clearTimeout(state.timeoutTimer);
             // Aggressively clear buffer and record end time for cooldown
             state.buffer = '';
             state.lastThinkingEndTime = Date.now();
+
+            // Clear attention when thinking ends
+            if (state.needsAttention) {
+                this._setAttention(terminalIndex, false);
+            }
+
             this._onThinkingEnd(terminalIndex);
         }
 
@@ -230,6 +263,32 @@ class ThinkingDetector {
     isThinking(terminalIndex) {
         const state = this._terminals[terminalIndex];
         return state ? state.isThinking : false;
+    }
+
+    /**
+     * Set attention state and emit event
+     * @param {number} terminalIndex
+     * @param {boolean} needsAttention
+     */
+    _setAttention(terminalIndex, needsAttention) {
+        const state = this._terminals[terminalIndex];
+        if (!state || state.needsAttention === needsAttention) return;
+
+        state.needsAttention = needsAttention;
+
+        window.dispatchEvent(new CustomEvent('claude-attention-changed', {
+            detail: { terminalIndex, needsAttention }
+        }));
+    }
+
+    /**
+     * Get attention state for a terminal
+     * @param {number} terminalIndex
+     * @returns {boolean}
+     */
+    isNeedingAttention(terminalIndex) {
+        const state = this._terminals[terminalIndex];
+        return state ? state.needsAttention : false;
     }
 
     /**
