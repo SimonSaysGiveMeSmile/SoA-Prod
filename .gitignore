@@ -76,4 +76,8 @@ Desktop.ini
 debug.log
 launch.log
 launch_fixed.log
-dist/
+
+# Build output (unpacked apps, keep only DMGs via LFS)
+dist/mac/
+dist/mac-arm64/
+dist/builder-debug.yml
