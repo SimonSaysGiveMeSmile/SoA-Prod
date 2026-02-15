@@ -29,6 +29,72 @@ Run Claude Code inside Son of Anton and get real-time visibility into your AI co
 
 The integration works automatically by parsing Claude Code's terminal output - no API keys or configuration required.
 
+### Tab Status Indicator
+
+Color-coded dot on each terminal tab showing Claude Code's current state at a glance:
+
+- **Green (pulsing)** - Claude is actively generating or executing tools
+- **Red (blinking)** - Claude needs user approval or input
+- **Orange (solid)** - Execution finished successfully
+- **Blue (faded)** - Session active but idle
+
+Detected automatically by monitoring terminal output for tool use indicators, spinner characters, and permission prompts.
+
+### Voice Input
+
+Hands-free voice dictation with multiple speech recognition backends:
+
+- **Picovoice + Whisper** - Wake word detection ("Hey Anton") followed by Whisper API transcription
+- **On-Device (macOS)** - Local speech recognition using SFSpeechRecognizer (push-to-talk)
+- **Direct Whisper** - Push-to-talk recording sent to OpenAI Whisper API
+- **Web Speech API** - Browser-based continuous recognition as fallback
+
+Includes a real-time waveform visualizer (32-bar frequency display), 60-second recording limit, 2-second silence auto-stop, and automatic fallback between recognition modes. Toggle with Caps Lock.
+
+### Input Composer (Text Box)
+
+Multi-line text editor overlay for composing complex prompts before sending:
+
+- **Ctrl+Space** to open a bottom-docked composer bar
+- Auto-activates inline at cursor position when typing starts
+- **Shift+Enter** to send, **Enter** for newline, **Tab** for shell completion
+- Auto-expands vertically as content grows
+- Pre-populates with existing terminal line text
+- Shell history navigation with Up/Down arrows
+
+### Ad Overlay & Credits
+
+Displays ads during AI thinking time to earn virtual credits — a gamification layer on top of Claude Code sessions:
+
+- **Three display modes:** Fullscreen (5 credits/sec), Panel (3 credits/sec), Corner (2 credits/sec)
+- Automatically triggers when Claude is processing
+- Draggable corner mode with position persistence
+- Credits accumulate in real-time and persist across sessions
+- Credit display widget with earning rate, session history, and manual "WATCH AD" toggle
+
+### Movable Widgets
+
+All side panel widgets (system monitors, Claude widgets, credit display, mic monitor) are drag-and-drop reorderable:
+
+- Drag handles on each widget for repositioning
+- Cross-column support (move between left and right panels)
+- Layout persists across sessions via localStorage
+- Visual placeholder feedback during drag operations
+
+### Settings Panel
+
+Tabbed settings interface (Apple Settings style) with sidebar navigation:
+
+- **General** - Shell, shell args, working directory, environment, username
+- **Appearance** - Theme, font size, monitor selection, windowed mode, cursor visibility, intro skip
+- **Audio** - Sound effects toggle, volume, feedback audio
+- **Network** - Port, ping address, network interface selection
+- **Files** - Dotfiles visibility, list/grid view, thread exclusion
+- **Advanced** - Experimental features, context warning threshold
+- **Ads & Misc** - Clock format (12/24h), ad overlay settings
+
+Includes save to disk, open in external editor, reload UI, restart app, and quit actions.
+
 ### Terminal Emulator
 
 - Multi-tab terminal with full color and mouse support
