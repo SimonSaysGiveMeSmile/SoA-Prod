@@ -71,11 +71,11 @@
 }
 
 /* ── Corner mode ──
-   Small overlay in bottom-right, fixed to viewport */
+   Small overlay in bottom-right of terminal area, clear of side panels */
 .ad-overlay--corner {
     position: fixed;
-    bottom: 4vh;
-    right: 18vw;
+    bottom: 6vh;
+    right: 20vw;
     width: 22vh;
     visibility: visible;
     pointer-events: auto;

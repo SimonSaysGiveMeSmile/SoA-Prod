@@ -31,7 +31,7 @@ class ThinkingDetector {
             ],
             toolUseEnd: [
                 /\$\s*$/m,                                 // Shell prompt returned
-                /❯\s*$/m,                                  // Alternative prompt (zsh/fish)
+                /❯\s*$/m,                                  // Alternative prompt (zsh/fish) — only bare ❯ at line end
                 /\w+@\w+.*[\$#]\s*$/m,                     // user@host prompt (specific, not just >)
             ],
             statusMessages: [
@@ -135,8 +135,9 @@ class ThinkingDetector {
         state.buffer = (state.buffer + data).slice(-this._bufferSize);
         state.lastOutputTime = Date.now();
 
-        // Scan for attention patterns while thinking is active
-        if (state.isThinking && !state.needsAttention) {
+        // Scan for attention patterns — check regardless of thinking state
+        // Claude Code permission prompts may appear before thinking is detected
+        if (!state.needsAttention) {
             const needsAttention = this._attentionPatterns.some(p => p.test(data));
             if (needsAttention) {
                 this._setAttention(terminalIndex, true);

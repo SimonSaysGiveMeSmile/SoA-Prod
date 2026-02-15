@@ -860,6 +860,7 @@ try {
             <li id="shell_tab3" onclick="window.focusShellTab(3);"><p>${window._escapeHtml(window.terminalNames[3])}</p></li>
             <li id="shell_tab4" onclick="window.focusShellTab(4);"><p>${window._escapeHtml(window.terminalNames[4])}</p></li>
             <li id="shell_mic_btn" class="shell-dev-btn shell-mic-btn" onclick="window.toggleMic();" title="Toggle Microphone"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg></li>
+            <li id="shell_permission_btn" class="shell-dev-btn shell-permission-btn" onclick="window.cyclePermissionMode();" title="Permission Mode: ${window.settings.permissionMode || 'default'}" data-mode="${window.settings.permissionMode || 'default'}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></li>
             <li id="shell_settings_btn" class="shell-dev-btn" onclick="window.openSettings();" title="Settings"><p>⚙</p></li>
             <li id="shell_reload_btn" class="shell-dev-btn" onclick="window.location.reload(true);" title="Reload UI (Ctrl+Shift+F5)"><p>⟳</p></li>
             <li id="shell_restart_btn" class="shell-dev-btn" onclick="remote.app.relaunch();remote.app.quit();" title="Full Restart"><p>⏻</p></li>
@@ -1314,6 +1315,73 @@ try {
         window.addEventListener('thinking-state-changed', () => window.updateTabStatuses());
         // Update on attention state changes (permission prompts detected)
         window.addEventListener('claude-attention-changed', () => window.updateTabStatuses());
+
+        // Permission mode: auto-grant logic for YOLO mode
+        window.addEventListener('claude-attention-changed', (e) => {
+            const { terminalIndex, needsAttention } = e.detail;
+            if (!needsAttention) return;
+
+            const mode = window.settings.permissionMode || 'default';
+
+            if (mode === 'yolo') {
+                // Auto-grant: send Enter to accept default menu selection (Claude Code uses interactive menus)
+                // Then retry with "y" + Enter for classic y/n prompts if attention persists
+                setTimeout(() => {
+                    if (window.term && window.term[terminalIndex] && window.term[terminalIndex].socket) {
+                        window.term[terminalIndex].socket.send("\r");
+                    }
+                    // Fallback: if still needs attention after 500ms, try "y" + Enter for y/n prompts
+                    setTimeout(() => {
+                        const state = window.thinkingDetector && window.thinkingDetector._terminals[terminalIndex];
+                        if (state && state.needsAttention && window.term[terminalIndex] && window.term[terminalIndex].socket) {
+                            window.term[terminalIndex].socket.send("y\r");
+                        }
+                    }, 500);
+                }, 200);
+            } else if (mode === 'ask') {
+                // Ask Everything: flash the window and play alert sound
+                if (remote.getCurrentWindow && !remote.getCurrentWindow().isFocused()) {
+                    remote.getCurrentWindow().flashFrame(true);
+                }
+                if (window.settings.audio) {
+                    try {
+                        const audio = new Audio('assets/audio/alert.ogg');
+                        audio.volume = (window.settings.audioVolume || 1.0) * 0.5;
+                        audio.play().catch(() => {});
+                    } catch(e) {}
+                }
+            }
+        });
+
+        // Permission mode cycling (ask -> default -> yolo -> ask)
+        window.cyclePermissionMode = () => {
+            const modes = ['ask', 'default', 'yolo'];
+            const labels = { ask: 'Ask Everything', default: 'Default', yolo: 'YOLO' };
+            const current = window.settings.permissionMode || 'default';
+            const idx = modes.indexOf(current);
+            const next = modes[(idx + 1) % modes.length];
+
+            window.settings.permissionMode = next;
+
+            // Update button state
+            const btn = document.getElementById('shell_permission_btn');
+            if (btn) {
+                btn.dataset.mode = next;
+                btn.title = `Permission Mode: ${labels[next]}`;
+            }
+
+            // Persist to settings file
+            try {
+                fs.writeFileSync(settingsFile, JSON.stringify(window.settings, "", 4));
+            } catch (err) {}
+
+            // Brief visual feedback
+            if (window.term && window.term[window.currentTerm]) {
+                window.term[window.currentTerm].term.writeln(
+                    `\x1b[90m[Son of Anton] Permission mode: \x1b[1m${labels[next]}\x1b[0m`
+                );
+            }
+        };
         // Update on Claude state changes (session mapping, live context)
         window.addEventListener('claude-state-changed', () => window.updateTabStatuses());
         // Periodic refresh as safety net
@@ -1787,6 +1855,7 @@ try {
                         <tr><td>experimentalGlobeFeatures</td><td>Toggle experimental features for the network globe</td><td><select id="settingsEditor-experimentalGlobeFeatures"><option>${window.settings.experimentalGlobeFeatures}</option><option>${!window.settings.experimentalGlobeFeatures}</option></select></td></tr>
                         <tr><td>experimentalFeatures</td><td>Toggle Chrome's experimental web features (DANGEROUS)</td><td><select id="settingsEditor-experimentalFeatures"><option>${window.settings.experimentalFeatures}</option><option>${!window.settings.experimentalFeatures}</option></select></td></tr>
                         <tr><td>contextWarningThreshold</td><td>Context usage percentage to trigger warning (0-100)</td><td><input type="number" id="settingsEditor-contextWarningThreshold" value="${window.settings.contextWarningThreshold || 80}" min="0" max="100"></td></tr>
+                        <tr><td>permissionMode</td><td>Agent permission level: Ask Everything, Default, or YOLO (auto-grant all)</td><td><select id="settingsEditor-permissionMode"><option value="ask" ${(window.settings.permissionMode || 'default') === 'ask' ? 'selected' : ''}>Ask Everything</option><option value="default" ${(window.settings.permissionMode || 'default') === 'default' ? 'selected' : ''}>Default</option><option value="yolo" ${window.settings.permissionMode === 'yolo' ? 'selected' : ''}>YOLO</option></select></td></tr>
                         </table>
                     </div>
                     <div class="settings-pane" data-pane="ads">
@@ -1873,6 +1942,7 @@ try {
             experimentalGlobeFeatures: (document.getElementById("settingsEditor-experimentalGlobeFeatures").value === "true"),
             experimentalFeatures: (document.getElementById("settingsEditor-experimentalFeatures").value === "true"),
             contextWarningThreshold: Number(document.getElementById("settingsEditor-contextWarningThreshold")?.value) || 80,
+            permissionMode: document.getElementById("settingsEditor-permissionMode")?.value || 'default',
             adOverlayEnabled: (document.getElementById("settingsEditor-adOverlayEnabled")?.value === "true"),
             adOverlayMode: document.getElementById("settingsEditor-adOverlayMode")?.value || 'corner',
             adDebounceMs: Number(document.getElementById("settingsEditor-adDebounceMs")?.value) || 300,
@@ -1888,6 +1958,14 @@ try {
         // Sync ad mode preference to localStorage so it persists across sessions
         if (window.settings.adOverlayMode) {
             localStorage.setItem('soa_ad_mode', window.settings.adOverlayMode);
+        }
+
+        // Sync permission mode button with saved setting
+        const permBtn = document.getElementById('shell_permission_btn');
+        if (permBtn) {
+            const labels = { ask: 'Ask Everything', default: 'Default', yolo: 'YOLO' };
+            permBtn.dataset.mode = window.settings.permissionMode || 'default';
+            permBtn.title = `Permission Mode: ${labels[window.settings.permissionMode] || 'Default'}`;
         }
 
         try {

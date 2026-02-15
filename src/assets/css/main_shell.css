@@ -240,6 +240,37 @@ ul#main_shell_tabs>li.shell-mic-processing {
     50% { opacity: 0.5; }
 }
 
+/* Permission mode button in tab bar */
+ul#main_shell_tabs>li.shell-permission-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: opacity 0.2s, background 0.2s, box-shadow 0.2s;
+}
+
+ul#main_shell_tabs>li.shell-permission-btn>svg {
+    width: 1.4vh;
+    height: 1.4vh;
+    color: inherit;
+}
+
+ul#main_shell_tabs>li.shell-permission-btn[data-mode="ask"] {
+    opacity: 0.8;
+    color: #f59e0b;
+    box-shadow: inset 0 -2px 0 #f59e0b;
+}
+
+ul#main_shell_tabs>li.shell-permission-btn[data-mode="default"] {
+    opacity: 0.4;
+}
+
+ul#main_shell_tabs>li.shell-permission-btn[data-mode="yolo"] {
+    opacity: 1;
+    color: #22c55e;
+    background: rgba(34, 197, 94, 0.1);
+    box-shadow: inset 0 -2px 0 #22c55e;
+}
+
 div#main_shell_innercontainer,
 div#main_shell_innercontainer pre {
     height: 100%;

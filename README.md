@@ -40,6 +40,16 @@ Color-coded dot on each terminal tab showing Claude Code's current state at a gl
 
 Detected automatically by monitoring terminal output for tool use indicators, spinner characters, and permission prompts.
 
+### Agent Permission Mode (WIP)
+
+Universal permission control for Claude Code and other AI agents, accessible via the shield icon in the toolbar:
+
+- **Ask Everything** - Enhanced alerts (window flash + audio) when any agent needs permission
+- **Default** - Standard behavior with tab status indicator turning red
+- **YOLO** - Automatically grants all permission prompts, preventing interruptions during code generation
+
+Click the shield icon to cycle through modes, or configure in Settings > Advanced. The setting persists across sessions.
+
 ### Voice Input
 
 Hands-free voice dictation with multiple speech recognition backends:
@@ -90,7 +100,7 @@ Tabbed settings interface (Apple Settings style) with sidebar navigation:
 - **Audio** - Sound effects toggle, volume, feedback audio
 - **Network** - Port, ping address, network interface selection
 - **Files** - Dotfiles visibility, list/grid view, thread exclusion
-- **Advanced** - Experimental features, context warning threshold
+- **Advanced** - Experimental features, context warning threshold, agent permission mode
 - **Ads & Misc** - Clock format (12/24h), ad overlay settings
 
 Includes save to disk, open in external editor, reload UI, restart app, and quit actions.
