@@ -27,6 +27,8 @@
     left: 17.5%;
     width: 65%;
     height: 62%;
+    max-height: calc(100vh - 5vh - 10px);
+    max-width: calc(100vw - 17.5% - 17.5%);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -34,6 +36,7 @@
     pointer-events: auto;
     z-index: 1000;
     visibility: visible;
+    overflow: hidden;
 }
 
 .ad-overlay--fullscreen .ad-overlay__content {
@@ -77,9 +80,12 @@
     bottom: 6vh;
     right: 20vw;
     width: 22vh;
+    max-width: calc(100vw - 20vw);
+    max-height: calc(100vh - 6vh);
     visibility: visible;
     pointer-events: auto;
     z-index: 900;
+    overflow: hidden;
 }
 
 .ad-overlay--corner .ad-overlay__content {

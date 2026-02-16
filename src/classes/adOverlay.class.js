@@ -43,6 +43,7 @@ class AdOverlay {
         this._onDragStart = this._onDragStart.bind(this);
         this._onDragMove = this._onDragMove.bind(this);
         this._onDragEnd = this._onDragEnd.bind(this);
+        this._onResize = this._onResize.bind(this);
 
         this._onThinkingChanged = this._onThinkingChanged.bind(this);
         this._onCloseClick = this._onCloseClick.bind(this);
@@ -80,6 +81,7 @@ class AdOverlay {
         }
 
         window.addEventListener('thinking-state-changed', this._onThinkingChanged);
+        window.addEventListener('resize', this._onResize);
     }
 
     // ── HTML builders ──
@@ -209,14 +211,19 @@ class AdOverlay {
             content.addEventListener('mousedown', this._onDragStart);
             this._overlayEl.classList.add('ad-overlay--draggable');
         }
-        // Restore saved position
+        // Restore saved position, clamped to current viewport
         const saved = localStorage.getItem('soa_ad_position');
         if (saved) {
             try {
                 const pos = JSON.parse(saved);
+                const rect = this._overlayEl.getBoundingClientRect();
+                const vw = window.innerWidth;
+                const vh = window.innerHeight;
+                const clampedLeft = Math.max(0, Math.min(pos.left, vw - rect.width));
+                const clampedTop = Math.max(0, Math.min(pos.top, vh - rect.height));
                 this._overlayEl.style.position = 'fixed';
-                this._overlayEl.style.top = pos.top + 'px';
-                this._overlayEl.style.left = pos.left + 'px';
+                this._overlayEl.style.top = clampedTop + 'px';
+                this._overlayEl.style.left = clampedLeft + 'px';
                 this._overlayEl.style.bottom = 'auto';
                 this._overlayEl.style.right = 'auto';
             } catch (_) { /* ignore bad data */ }
@@ -244,8 +251,14 @@ class AdOverlay {
 
     _onDragMove(e) {
         if (!this._isDragging) return;
-        const x = e.clientX - this._dragOffsetX;
-        const y = e.clientY - this._dragOffsetY;
+        const rect = this._overlayEl.getBoundingClientRect();
+        const vw = window.innerWidth;
+        const vh = window.innerHeight;
+        let x = e.clientX - this._dragOffsetX;
+        let y = e.clientY - this._dragOffsetY;
+        // Clamp to viewport boundaries
+        x = Math.max(0, Math.min(x, vw - rect.width));
+        y = Math.max(0, Math.min(y, vh - rect.height));
         this._overlayEl.style.left = x + 'px';
         this._overlayEl.style.top = y + 'px';
     }
@@ -261,6 +274,22 @@ class AdOverlay {
         localStorage.setItem('soa_ad_position', JSON.stringify({
             top: rect.top, left: rect.left
         }));
+    }
+
+    _onResize() {
+        if (!this._visible || !this._overlayEl) return;
+        // Re-clamp overlay position to new viewport bounds
+        if (this._overlayEl.style.position === 'fixed' && this.mode === 'corner') {
+            const rect = this._overlayEl.getBoundingClientRect();
+            const vw = window.innerWidth;
+            const vh = window.innerHeight;
+            const clampedLeft = Math.max(0, Math.min(rect.left, vw - rect.width));
+            const clampedTop = Math.max(0, Math.min(rect.top, vh - rect.height));
+            if (clampedLeft !== rect.left || clampedTop !== rect.top) {
+                this._overlayEl.style.left = clampedLeft + 'px';
+                this._overlayEl.style.top = clampedTop + 'px';
+            }
+        }
     }
 
     _cleanupDrag() {
@@ -545,6 +574,7 @@ class AdOverlay {
         this._stopImageRotation();
         this._cleanupDrag();
         window.removeEventListener('thinking-state-changed', this._onThinkingChanged);
+        window.removeEventListener('resize', this._onResize);
         if (this._overlayEl && this._overlayEl.parentNode) {
             this._overlayEl.parentNode.removeChild(this._overlayEl);
         }

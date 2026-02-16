@@ -1870,16 +1870,6 @@ try {
                     </div>
                 </div>
             </div>
-            <script>
-                document.querySelectorAll('.settings-tab').forEach(tab => {
-                    tab.addEventListener('click', () => {
-                        document.querySelectorAll('.settings-tab').forEach(t => t.classList.remove('settings-tab--active'));
-                        document.querySelectorAll('.settings-pane').forEach(p => p.classList.remove('settings-pane--active'));
-                        tab.classList.add('settings-tab--active');
-                        document.querySelector('.settings-pane[data-pane="' + tab.dataset.tab + '"]').classList.add('settings-pane--active');
-                    });
-                });
-            </script>
             <h6 id="settingsEditorStatus">Loaded values from memory</h6>
             <br>`,
             buttons: [
@@ -1897,6 +1887,17 @@ try {
 
             // Focus back on the term
             window.term[window.currentTerm].term.focus();
+        });
+
+        // Attach tab switching listeners after modal is in the DOM
+        // (inline <script> tags don't execute when inserted via innerHTML)
+        document.querySelectorAll('.settings-tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                document.querySelectorAll('.settings-tab').forEach(t => t.classList.remove('settings-tab--active'));
+                document.querySelectorAll('.settings-pane').forEach(p => p.classList.remove('settings-pane--active'));
+                tab.classList.add('settings-tab--active');
+                document.querySelector('.settings-pane[data-pane="' + tab.dataset.tab + '"]').classList.add('settings-pane--active');
+            });
         });
     };
 

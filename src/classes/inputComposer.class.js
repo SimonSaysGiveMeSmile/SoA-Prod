@@ -13,6 +13,8 @@ class InputComposer {
         this._existingLineText = "";
         this._cursorRow = -1;
         this._cellHeight = 0;
+        this._attachedImages = [];
+        this._dragCounter = 0;
 
         // Read terminal line state before building DOM
         if (this._autoActivated) {
@@ -112,9 +114,30 @@ class InputComposer {
         hints.className = "inputcomposer-hints";
         hints.textContent = "Shift+Enter: send | Tab: complete | Esc: close";
 
+        // Hidden file input for image selection
+        this.fileInput = document.createElement("input");
+        this.fileInput.type = "file";
+        this.fileInput.accept = "image/png,image/jpeg,image/gif,image/bmp,image/webp,image/svg+xml,image/x-icon";
+        this.fileInput.multiple = true;
+        this.fileInput.style.display = "none";
+
+        // Attach image button
+        this.attachBtn = document.createElement("button");
+        this.attachBtn.className = "inputcomposer-attach-btn";
+        this.attachBtn.title = "Attach image";
+        this.attachBtn.setAttribute("aria-label", "Attach image");
+        this.attachBtn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>`;
+
+        // Image preview strip
+        this.previewStrip = document.createElement("div");
+        this.previewStrip.className = "inputcomposer-preview-strip";
+
         this.bar.appendChild(hints);
         this.bar.appendChild(prompt);
         this.bar.appendChild(this.textarea);
+        this.bar.appendChild(this.attachBtn);
+        this.bar.appendChild(this.fileInput);
+        this.bar.appendChild(this.previewStrip);
         container.appendChild(this.bar);
     }
 
@@ -190,6 +213,143 @@ class InputComposer {
         };
 
         this.textarea.addEventListener("keydown", this._keyHandler);
+
+        // --- Paste handler for images ---
+        this._pasteHandler = (e) => {
+            const items = (e.clipboardData || {}).items;
+            if (!items) return;
+            for (let i = 0; i < items.length; i++) {
+                if (items[i].type.startsWith("image/")) {
+                    e.preventDefault();
+                    const blob = items[i].getAsFile();
+                    if (!blob) return;
+                    const reader = new FileReader();
+                    reader.onload = () => {
+                        const dataUrl = reader.result;
+                        const ext = blob.type.split("/")[1] || "png";
+                        const tmpDir = require("os").tmpdir();
+                        const tmpPath = require("path").join(tmpDir, `clipboard_${Date.now()}.${ext}`);
+                        const buf = Buffer.from(dataUrl.split(",")[1], "base64");
+                        require("fs").writeFile(tmpPath, buf, (err) => {
+                            if (err) return;
+                            this._insertImagePath(tmpPath);
+                            this._addImagePreview(dataUrl, tmpPath, "Clipboard image");
+                        });
+                    };
+                    reader.readAsDataURL(blob);
+                    break;
+                }
+            }
+        };
+        this.textarea.addEventListener("paste", this._pasteHandler);
+
+        // --- Attach button + file input ---
+        this.attachBtn.addEventListener("click", () => {
+            this.fileInput.click();
+        });
+        this.fileInput.addEventListener("change", () => {
+            const files = this.fileInput.files;
+            if (!files) return;
+            for (let i = 0; i < files.length; i++) {
+                const file = files[i];
+                if (file.type.startsWith("image/") || /\.(png|jpe?g|gif|bmp|webp|svg|ico)$/i.test(file.name)) {
+                    const src = "file://" + file.path.replace(/#/g, "%23");
+                    this._insertImagePath(file.path);
+                    this._addImagePreview(src, file.path, file.name);
+                }
+            }
+            this.fileInput.value = "";
+        });
+
+        // --- Drag-and-drop handlers ---
+        this.bar.addEventListener("dragenter", (e) => {
+            e.preventDefault();
+            this._dragCounter++;
+            this.bar.classList.add("inputcomposer-dragover");
+        });
+        this.bar.addEventListener("dragover", (e) => {
+            e.preventDefault();
+        });
+        this.bar.addEventListener("dragleave", () => {
+            this._dragCounter--;
+            if (this._dragCounter <= 0) {
+                this._dragCounter = 0;
+                this.bar.classList.remove("inputcomposer-dragover");
+            }
+        });
+        this.bar.addEventListener("drop", (e) => {
+            e.preventDefault();
+            this._dragCounter = 0;
+            this.bar.classList.remove("inputcomposer-dragover");
+            const files = e.dataTransfer.files;
+            if (!files || files.length === 0) return;
+            for (let i = 0; i < files.length; i++) {
+                const file = files[i];
+                if (file.type.startsWith("image/") || /\.(png|jpe?g|gif|bmp|webp|svg|ico)$/i.test(file.name)) {
+                    const src = "file://" + file.path.replace(/#/g, "%23");
+                    this._insertImagePath(file.path);
+                    this._addImagePreview(src, file.path, file.name);
+                }
+            }
+        });
+    }
+
+    _insertImagePath(filePath) {
+        const escaped = filePath.includes(" ") ? `"${filePath}"` : filePath;
+        const ta = this.textarea;
+        const before = ta.value;
+        const sep = before.length > 0 && !before.endsWith(" ") ? " " : "";
+        ta.value = before + sep + escaped + " ";
+        ta.dispatchEvent(new Event("input"));
+    }
+
+    _addImagePreview(src, filePath, label) {
+        const idx = this._attachedImages.length;
+        this._attachedImages.push({ src, filePath, label });
+
+        const item = document.createElement("div");
+        item.className = "inputcomposer-preview-item";
+        item.title = label;
+
+        const img = document.createElement("img");
+        img.src = src;
+        img.setAttribute("draggable", "false");
+
+        const removeBtn = document.createElement("span");
+        removeBtn.className = "inputcomposer-preview-remove";
+        removeBtn.textContent = "\u2715";
+
+        removeBtn.addEventListener("click", (e) => {
+            e.stopPropagation();
+            this._removeImage(idx);
+        });
+
+        item.addEventListener("click", () => {
+            if (window.showTerminalImagePreview) {
+                window.showTerminalImagePreview(src, label + " \u2014 " + filePath);
+            }
+        });
+
+        item.appendChild(img);
+        item.appendChild(removeBtn);
+        this.previewStrip.appendChild(item);
+    }
+
+    _removeImage(index) {
+        const entry = this._attachedImages[index];
+        if (!entry) return;
+
+        // Remove path from textarea
+        const escaped = entry.filePath.includes(" ") ? `"${entry.filePath}"` : entry.filePath;
+        const ta = this.textarea;
+        ta.value = ta.value.replace(escaped, "").replace(/  +/g, " ").trim();
+        ta.dispatchEvent(new Event("input"));
+
+        // Remove thumbnail
+        const items = this.previewStrip.querySelectorAll(".inputcomposer-preview-item");
+        if (items[index]) items[index].remove();
+
+        this._attachedImages[index] = null;
     }
 
     _getTerminal() {
