@@ -1,11 +1,11 @@
 version: 2.2.8
 files:
   - url: Son-of-Anton-macOS-x64.dmg
-    sha512: 8KgIUIEil28ATetnVtw/tvjYg5YGSx4C9vpo3siMPnvVWt4sRCcJqimFivAueDIj92L83XEfBAqIRj27EJ51Fw==
-    size: 128623513
+    sha512: l1AVhDB8WqG2jDgrygMXf7gSICo5PyOJTL3H49UjtKY53MqQTBGRNLu7XkiAGSO5aeiAcitkY9OsSMhmdaSfUg==
+    size: 128622462
   - url: Son-of-Anton-macOS-arm64.dmg
-    sha512: VSR9E40Hd8cS3rfKaqspoYnRijKqZ510iPlLXRLMHYovhRRSy37XQm8jebdC8T8bmmwJem0GI3eNhqmOqfu0dw==
-    size: 121097072
+    sha512: CjWWBTObV8AJm2Yerawz4p0NjD6gwUYMEbCfjnpGRU/msWJxKh1GV48pLckVE/EbMEAtuNwF6h9bNaSAuj4FjA==
+    size: 121107720
 path: Son-of-Anton-macOS-x64.dmg
-sha512: 8KgIUIEil28ATetnVtw/tvjYg5YGSx4C9vpo3siMPnvVWt4sRCcJqimFivAueDIj92L83XEfBAqIRj27EJ51Fw==
-releaseDate: '2026-02-15T21:48:38.964Z'
+sha512: l1AVhDB8WqG2jDgrygMXf7gSICo5PyOJTL3H49UjtKY53MqQTBGRNLu7XkiAGSO5aeiAcitkY9OsSMhmdaSfUg==
+releaseDate: '2026-02-16T20:18:35.005Z'
