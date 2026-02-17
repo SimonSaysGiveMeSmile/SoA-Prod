@@ -157,7 +157,7 @@ class Terminal {
                     && this.term.buffer.active.type !== "alternate"
                 ) {
                     const now = Date.now();
-                    if (window._lastSpaceTime && (now - window._lastSpaceTime) < 300) {
+                    if (window._lastSpaceTime && (now - window._lastSpaceTime) < 150) {
                         window._lastSpaceTime = 0;
                         InputComposer.closeIfOpen();
                         new TextEditor();

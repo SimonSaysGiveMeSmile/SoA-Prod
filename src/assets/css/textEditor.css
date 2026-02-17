@@ -85,9 +85,9 @@
     resize: vertical;
     box-sizing: border-box;
     tab-size: 4;
-    white-space: pre;
-    overflow-wrap: normal;
-    overflow-x: auto;
+    white-space: pre-wrap;
+    overflow-wrap: break-word;
+    overflow-x: hidden;
 }
 
 #texteditor_textarea:focus {
