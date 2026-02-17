@@ -18,10 +18,39 @@ class AudioCapture {
   }
 
   /**
-   * Request microphone permission
+   * Check microphone permission without holding the stream open.
+   * Acquires a stream briefly to trigger the browser permission prompt,
+   * then immediately releases it so the mic is not occupied.
    * @returns {Promise<boolean>} True if permission granted
    */
   async requestPermission() {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          sampleRate: 16000,
+          channelCount: 1,
+          echoCancellation: true,
+          noiseSuppression: true,
+        },
+      });
+      // Release immediately — we only needed to check permission
+      stream.getTracks().forEach(track => track.stop());
+      this._permissionGranted = true;
+      console.log('[AudioCapture] Microphone permission granted');
+      return true;
+    } catch (error) {
+      console.error('[AudioCapture] Microphone permission denied:', error.message);
+      this._permissionGranted = false;
+      return false;
+    }
+  }
+
+  /**
+   * Acquire the microphone stream. Call this before startFrameCapture/startRecording.
+   * @returns {Promise<boolean>} True if stream acquired
+   */
+  async acquireStream() {
+    if (this.mediaStream) return true;
     try {
       this.mediaStream = await navigator.mediaDevices.getUserMedia({
         audio: {
@@ -31,19 +60,31 @@ class AudioCapture {
           noiseSuppression: true,
         },
       });
-      console.log('[AudioCapture] Microphone permission granted');
+      this._permissionGranted = true;
+      console.log('[AudioCapture] Stream acquired');
       return true;
     } catch (error) {
-      console.error('[AudioCapture] Microphone permission denied:', error.message);
+      console.error('[AudioCapture] Failed to acquire stream:', error.message);
       return false;
     }
   }
 
   /**
-   * Check if microphone is available
+   * Release the microphone stream without tearing down the whole instance.
+   */
+  releaseStream() {
+    if (this.mediaStream) {
+      this.mediaStream.getTracks().forEach(track => track.stop());
+      this.mediaStream = null;
+      console.log('[AudioCapture] Stream released');
+    }
+  }
+
+  /**
+   * Check if microphone permission was granted
    */
   hasPermission() {
-    return this.mediaStream !== null;
+    return this._permissionGranted === true || this.mediaStream !== null;
   }
 
   /**
@@ -214,10 +255,7 @@ class AudioCapture {
    */
   release() {
     this.stopFrameCapture();
-    if (this.mediaStream) {
-      this.mediaStream.getTracks().forEach(track => track.stop());
-      this.mediaStream = null;
-    }
+    this.releaseStream();
     console.log('[AudioCapture] Released');
   }
 }

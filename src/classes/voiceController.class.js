@@ -158,6 +158,14 @@ class VoiceController {
       console.warn('[VoiceController] Not initialized, cannot enable');
       return false;
     }
+    // Acquire mic stream on demand
+    if (!this.audioCapture.mediaStream) {
+      const acquired = await this.audioCapture.acquireStream();
+      if (!acquired) {
+        this.onError('Failed to acquire microphone');
+        return false;
+      }
+    }
     this.isEnabled = true;
     let result;
     if (this.useDirectWhisper) {
@@ -169,6 +177,7 @@ class VoiceController {
     }
     if (!result) {
       this.isEnabled = false;
+      this.audioCapture.releaseStream();
     }
     return result;
   }
@@ -176,16 +185,17 @@ class VoiceController {
   /**
    * Disable voice listening (toggle off)
    */
-  disable() {
+  async disable() {
     this.isEnabled = false;
     if (this.useDirectWhisper) {
-      this._stopDirectRecording();
-      return;
+      await this._stopDirectRecording();
     } else if (this.useFallback) {
       this._stopFallbackListening();
     } else {
       this.stopListening();
     }
+    // Release mic stream so the audio channel is freed
+    this.audioCapture.releaseStream();
     this._setState(VoiceState.IDLE);
   }
 
@@ -195,7 +205,7 @@ class VoiceController {
    */
   async toggle() {
     if (this.isEnabled) {
-      this.disable();
+      await this.disable();
     } else {
       await this.enable();
     }
@@ -221,11 +231,11 @@ class VoiceController {
       return false;
     }
 
-    // Ensure media stream is available (on-device path skips requestPermission during init)
-    if (!this.audioCapture.hasPermission()) {
-      const granted = await this.audioCapture.requestPermission();
-      if (!granted) {
-        console.error('[VoiceController] Cannot start listening: mic permission denied');
+    // Ensure media stream is available
+    if (!this.audioCapture.mediaStream) {
+      const acquired = await this.audioCapture.acquireStream();
+      if (!acquired) {
+        console.error('[VoiceController] Cannot start listening: mic acquisition failed');
         return false;
       }
     }
@@ -255,8 +265,8 @@ class VoiceController {
 
     if (this.isEnabled && this.isInitialized) {
       // Ensure media stream is available before restarting frame capture
-      if (!this.audioCapture.hasPermission()) {
-        await this.audioCapture.requestPermission();
+      if (!this.audioCapture.mediaStream) {
+        await this.audioCapture.acquireStream();
       }
       this._setState(VoiceState.LISTENING);
       // Restart listening for wake word
@@ -282,6 +292,7 @@ class VoiceController {
       this._directRecording = false;
       this.audioCapture.stopRecording();
       this.isEnabled = false;
+      this.audioCapture.releaseStream();
       this._setState(VoiceState.IDLE);
       return;
     }
@@ -289,6 +300,7 @@ class VoiceController {
     if (this.useFallback) {
       this._stopFallbackListening();
       this.isEnabled = false;
+      this.audioCapture.releaseStream();
       this._setState(VoiceState.IDLE);
       return;
     }
@@ -472,6 +484,7 @@ class VoiceController {
         });
       }
     } else {
+      this.audioCapture.releaseStream();
       this._setState(VoiceState.IDLE);
     }
   }
@@ -621,7 +634,7 @@ class VoiceController {
       // Try direct Whisper if OpenAI key is available
       const avail = await window.ipc.invoke('voice:check-availability');
       if (avail.hasOpenAIKey) {
-        const hasMic = await this.audioCapture.requestPermission();
+        const hasMic = await this.audioCapture.acquireStream();
         if (hasMic) {
           this.useDirectWhisper = true;
           this._setState(VoiceState.IDLE);

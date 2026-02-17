@@ -902,6 +902,14 @@ try {
 
         // Save terminal state before unload for hot-reload preservation
         window.addEventListener("beforeunload", () => {
+            // Release voice/mic resources so the audio channel is freed
+            if (window.voiceController) {
+                window.voiceController.release();
+            }
+            if (window.micMonitor) {
+                window.micMonitor.release();
+            }
+
             let ports = {};
             let buffers = {};
             Object.keys(window.term).forEach(idx => {
