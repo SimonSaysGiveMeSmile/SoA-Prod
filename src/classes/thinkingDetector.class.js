@@ -242,10 +242,9 @@ class ThinkingDetector {
             state.buffer = '';
             state.lastThinkingEndTime = Date.now();
 
-            // Clear attention when thinking ends
-            if (state.needsAttention) {
-                this._setAttention(terminalIndex, false);
-            }
+            // Don't clear attention here — if a permission prompt is showing,
+            // it should remain until the user (or YOLO mode) answers it.
+            // Attention is cleared when thinking starts again (user answered).
 
             this._onThinkingEnd(terminalIndex);
         }

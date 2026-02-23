@@ -166,6 +166,32 @@ class Terminal {
                     window._lastSpaceTime = now;
                 }
 
+                // Browser command detection: check for "browse", "back", "forward", "refresh" on Enter
+                if (e.type === "keydown" && e.key === "Enter") {
+                    // Get the current line from the terminal
+                    const buffer = this.term.buffer.active;
+                    const cursorRow = buffer.baseY + buffer.cursorY;
+                    const currentLine = buffer.getLine(cursorRow);
+                    if (currentLine) {
+                        const lineText = currentLine.translateToString(true).trim();
+                        // Strip shell prompt to get the actual command
+                        // Match common prompt endings: $ > # %
+                        const promptMatch = lineText.match(/[$>#%]\s*(.*)$/);
+                        const cmd = promptMatch ? promptMatch[1].trim() : lineText;
+                        // Check for browser commands
+                        if (cmd.startsWith('browse ') || cmd === 'browse' || cmd === 'back' || cmd === 'forward' || cmd === 'refresh') {
+                            const parts = cmd.split(' ');
+                            const action = parts[0];
+                            const args = parts.slice(1);
+                            if (window.handleBrowserCommand && window.handleBrowserCommand(action, args)) {
+                                // Clear the command line
+                                this.term.write('\r\x1b[K');
+                                return false;
+                            }
+                        }
+                    }
+                }
+
                 return true;
             });
             // Prevent soft-keyboard on touch devices #733

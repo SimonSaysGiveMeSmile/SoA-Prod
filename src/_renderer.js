@@ -91,16 +91,20 @@ try {
         log(`Error loading window state: ${e.message}`);
     }
 
-    // Load terminal names with fallback to defaults
+    // Load terminal names with fallback to defaults (support up to 10 tabs)
+    const defaultTerminalNames = {};
+    for (let i = 0; i < 10; i++) {
+        defaultTerminalNames[i] = i === 0 ? "MAIN SHELL" : "EMPTY";
+    }
     try {
         if (fs.existsSync(terminalNamesFile)) {
             window.terminalNames = JSON.parse(fs.readFileSync(terminalNamesFile, 'utf-8'));
         } else {
-            window.terminalNames = { 0: "MAIN SHELL", 1: "EMPTY", 2: "EMPTY", 3: "EMPTY", 4: "EMPTY" };
+            window.terminalNames = defaultTerminalNames;
         }
     } catch (e) {
         console.error("Failed to load terminal names:", e);
-        window.terminalNames = { 0: "MAIN SHELL", 1: "EMPTY", 2: "EMPTY", 3: "EMPTY", 4: "EMPTY" };
+        window.terminalNames = defaultTerminalNames;
     }
 
     window.saveTerminalNames = () => {
@@ -147,7 +151,9 @@ try {
 
     window.enableTabRename = (tabIndex) => {
         const tabElement = document.getElementById(`shell_tab${tabIndex}`);
+        if (!tabElement) return; // Tab doesn't exist yet (tabs 5-9)
         const textElement = tabElement.querySelector('p');
+        if (!textElement) return;
 
         textElement.addEventListener('dblclick', (e) => {
             e.stopPropagation(); // Prevent tab switch
@@ -852,13 +858,18 @@ try {
         // Initialize the terminal FIRST (critical path for interactivity)
         profiler.mark('terminal-init-start');
         let shellContainer = document.getElementById("main_shell");
+
+        // Generate initial 5 tabs dynamically
+        let tabsHtml = '';
+        for (let i = 0; i < 5; i++) {
+            tabsHtml += `<li id="shell_tab${i}" onclick="window.focusShellTab(${i});"${i === 0 ? ' class="active"' : ''}><p>${window._escapeHtml(window.terminalNames[i])}</p></li>`;
+        }
+        // Add + button for creating new tabs (up to 10 total)
+        tabsHtml += `<li id="shell_add_tab" class="shell-add-tab" onclick="window.addShellTab();" title="New Tab (Ctrl+Shift+T)"><p>+</p></li>`;
+
         shellContainer.innerHTML += `
         <ul id="main_shell_tabs">
-            <li id="shell_tab0" onclick="window.focusShellTab(0);" class="active"><p>${window._escapeHtml(window.terminalNames[0])}</p></li>
-            <li id="shell_tab1" onclick="window.focusShellTab(1);"><p>${window._escapeHtml(window.terminalNames[1])}</p></li>
-            <li id="shell_tab2" onclick="window.focusShellTab(2);"><p>${window._escapeHtml(window.terminalNames[2])}</p></li>
-            <li id="shell_tab3" onclick="window.focusShellTab(3);"><p>${window._escapeHtml(window.terminalNames[3])}</p></li>
-            <li id="shell_tab4" onclick="window.focusShellTab(4);"><p>${window._escapeHtml(window.terminalNames[4])}</p></li>
+            ${tabsHtml}
             <li id="shell_mic_btn" class="shell-dev-btn shell-mic-btn" onclick="window.toggleMic();" title="Toggle Microphone"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg></li>
             <li id="shell_permission_btn" class="shell-dev-btn shell-permission-btn" onclick="window.cyclePermissionMode();" title="Permission Mode: ${window.settings.permissionMode || 'default'}" data-mode="${window.settings.permissionMode || 'default'}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></li>
             <li id="shell_settings_btn" class="shell-dev-btn" onclick="window.openSettings();" title="Settings"><p>⚙</p></li>
@@ -871,7 +882,8 @@ try {
             <pre id="terminal2"></pre>
             <pre id="terminal3"></pre>
             <pre id="terminal4"></pre>
-        </div>`;
+        </div>
+        <div id="browser_container"></div>`;
         window.term = {
             0: new Terminal({
                 role: "client",
@@ -890,8 +902,8 @@ try {
         profiler.mark('terminal-ready');
         profiler.measure('terminal-creation', 'terminal-init-start', 'terminal-ready');
         profiler.measure('terminal-client', 'terminal-init-start', 'terminal-ready');
-        // Enable rename on all tabs
-        for (let i = 0; i < 5; i++) {
+        // Enable rename on all tabs (up to 10)
+        for (let i = 0; i < 10; i++) {
             window.enableTabRename(i);
         }
         // Prevent losing hardware keyboard focus on the terminal when using touch keyboard
@@ -976,7 +988,8 @@ try {
                     };
 
                     window.term[idx].onprocesschange = p => {
-                        if (window.terminalNames[idx] === "EMPTY" || window.terminalNames[idx].startsWith('#')) {
+                        const currentName = window.terminalNames[idx];
+                        if (!currentName || currentName === "EMPTY" || currentName.startsWith('#')) {
                             document.getElementById("shell_tab" + idx).querySelector('p').innerHTML = `#${idx + 1} - ${p}`;
                         }
                     };
@@ -1152,8 +1165,9 @@ try {
         window.mods.creditDisplay = new CreditDisplay("mod_column_right");
 
         // Thinking detector (DET-01 through DET-06)
+        // Always enabled — serves both ad overlay and permission mode
         window.thinkingDetector = new ThinkingDetector({
-            enabled: adOverlayEnabled,
+            enabled: true,
             debounceMs: adDebounceMs,
             timeoutMs: adTimeoutMs
         });
@@ -1279,7 +1293,6 @@ try {
                 if (!tabEl || tabEl.classList.contains('shell-dev-btn')) continue;
 
                 const term = window.term && window.term[i];
-                const sessionId = window.terminalSessions && window.terminalSessions[i];
 
                 // No terminal instance → no indicator
                 if (!term || typeof term !== 'object') {
@@ -1287,18 +1300,12 @@ try {
                     continue;
                 }
 
-                // Terminal exists but no Claude session → idle (blue)
-                if (!sessionId) {
-                    tabEl.setAttribute('data-claude-status', 'idle');
-                    continue;
-                }
-
                 // Check thinking and attention state from detector
                 const isThinking = window.thinkingDetector && window.thinkingDetector.isThinking(i);
                 const needsAttention = window.thinkingDetector && window.thinkingDetector.isNeedingAttention(i);
 
-                if (isThinking && needsAttention) {
-                    // Thinking + needs attention → input (red)
+                if (needsAttention) {
+                    // Needs attention → input (red) — regardless of thinking state
                     tabEl.setAttribute('data-claude-status', 'input');
                 } else if (isThinking) {
                     // Thinking + no attention needed → running (green)
@@ -1437,12 +1444,20 @@ try {
 
         // Defer heavy widgets until terminal is interactive
         setTimeout(async () => {
-            const heavyLoaded = await widgetLoader.loadHeavyDeferred();
-            console.log('[Startup] Heavy widgets loaded:', heavyLoaded.join(', '));
+            try {
+                const heavyLoaded = await widgetLoader.loadHeavyDeferred();
+                console.log('[Startup] Heavy widgets loaded:', heavyLoaded.join(', '));
+            } catch (e) {
+                console.warn('[Startup] Heavy widgets failed to load:', e.message);
+            }
 
-            // Load deferred widgets last (for bottom positioning)
-            const deferredLoaded = widgetLoader.loadDeferred();
-            console.log('[Startup] Deferred widgets loaded:', deferredLoaded.join(', '));
+            try {
+                // Load deferred widgets last (for bottom positioning)
+                const deferredLoaded = widgetLoader.loadDeferred();
+                console.log('[Startup] Deferred widgets loaded:', deferredLoaded.join(', '));
+            } catch (e) {
+                console.warn('[Startup] Deferred widgets failed to load:', e.message);
+            }
 
             // Update mods reference, preserving creditDisplay
             const _cdRef = window.mods && window.mods.creditDisplay;
@@ -1678,7 +1693,7 @@ try {
             }
 
             // window.fsDisp.followTab();
-        } else if (number > 0 && number <= 4 && window.term[number] !== null && typeof window.term[number] !== "object") {
+        } else if (number > 0 && number <= 9 && window.term[number] !== null && typeof window.term[number] !== "object") {
             window.term[number] = null;
 
             document.getElementById("shell_tab" + number).innerHTML = "<p>LOADING...</p>";
@@ -1713,9 +1728,12 @@ try {
 
                     window.term[number].onprocesschange = p => {
                         // Only show process name if user hasn't set a custom name
-                        const defaultName = "EMPTY";
-                        if (window.terminalNames[number] === defaultName || window.terminalNames[number].startsWith('#')) {
-                            document.getElementById("shell_tab" + number).querySelector('p').innerHTML = `#${number + 1} - ${p}`;
+                        const currentName = window.terminalNames[number];
+                        if (!currentName || currentName === "EMPTY" || currentName.startsWith('#')) {
+                            const tabEl = document.getElementById("shell_tab" + number);
+                            if (tabEl) {
+                                tabEl.querySelector('p').innerHTML = `#${number + 1} - ${p}`;
+                            }
                         }
                     };
 
@@ -1768,6 +1786,203 @@ try {
             }
         }
         console.log('[Mic] Toggled to:', newState ? 'ON' : 'OFF');
+    };
+
+    // Add new tab (+ button)
+    window.addShellTab = () => {
+        // Find the next available tab slot (tabs 0-9)
+        let nextTab = -1;
+        for (let i = 1; i < 10; i++) {
+            const tabEl = document.getElementById('shell_tab' + i);
+            if (!tabEl && nextTab === -1) {
+                nextTab = i;
+                break;
+            }
+        }
+
+        if (nextTab === -1) {
+            console.warn('[Tabs] Maximum of 10 tabs reached');
+            return;
+        }
+
+        // Create the tab element before the + button
+        const addBtn = document.getElementById('shell_add_tab');
+        if (!addBtn) {
+            console.error('[Tabs] Add button not found');
+            return;
+        }
+
+        const newTab = document.createElement('li');
+        newTab.id = 'shell_tab' + nextTab;
+        newTab.onclick = () => window.focusShellTab(nextTab);
+        newTab.innerHTML = `<p>${window._escapeHtml(window.terminalNames[nextTab] || 'EMPTY')}</p>`;
+        addBtn.parentNode.insertBefore(newTab, addBtn);
+
+        // Create terminal container
+        const container = document.getElementById('main_shell_innercontainer');
+        const newTerm = document.createElement('pre');
+        newTerm.id = 'terminal' + nextTab;
+        container.appendChild(newTerm);
+
+        // Enable rename for the new tab
+        window.enableTabRename(nextTab);
+
+        // Focus the new tab (this will spawn a terminal)
+        window.focusShellTab(nextTab);
+
+        // Hide + button if we've reached 10 tabs
+        if (nextTab >= 9) {
+            addBtn.style.display = 'none';
+        }
+    };
+
+    // Get the total number of terminal tabs (excludes dev buttons)
+    window.getTabCount = () => {
+        const tabs = document.querySelectorAll('ul#main_shell_tabs > li[id^="shell_tab"]');
+        return tabs.length;
+    };
+
+    // Initialize browser tab (for browse command)
+    window.browserTab = null;
+    window.browserTabInit = () => {
+        // Defensive: ensure container exists before creating BrowserTab
+        const container = document.getElementById('browser_container');
+        if (!container) {
+            console.warn('[BrowserTab] Container not ready yet, skipping init');
+            return;
+        }
+        if (!window.browserTab) {
+            window.browserTab = new BrowserTab({
+                id: 'browser-frame',
+                parentId: 'browser_container'
+            });
+            // Initially hide browser container
+            container.style.display = 'none';
+        }
+    };
+    window.browserTabInit();
+
+    // Terminal browser command handlers
+    window.handleBrowserCommand = (cmd, args) => {
+        if (!window.browserTab) {
+            window.browserTabInit();
+        }
+
+        switch (cmd) {
+            case 'browse':
+                // Show browser container and navigate
+                document.getElementById('browser_container').style.display = 'block';
+                if (args && args.length > 0) {
+                    window.browserTab.navigate(args.join(' '));
+                } else {
+                    window.browserTab.show();
+                }
+                return true;
+            case 'back':
+                window.browserTab.back();
+                return true;
+            case 'forward':
+                window.browserTab.forward();
+                return true;
+            case 'refresh':
+                window.browserTab.refresh();
+                return true;
+        }
+        return false;
+    };
+
+    // Add browser tab (separate from terminal tabs)
+    window.addBrowserTab = (url = 'about:blank') => {
+        // Find next available browser slot
+        let nextBrowser = 0;
+        while (document.getElementById('browser' + nextBrowser)) {
+            nextBrowser++;
+        }
+
+        const browserId = 'browser' + nextBrowser;
+
+        // Create browser container
+        const container = document.getElementById('main_shell_innercontainer');
+        const browserDiv = document.createElement('div');
+        browserDiv.id = browserId;
+        browserDiv.className = 'browser-container';
+        browserDiv.style.display = 'none';
+        container.appendChild(browserDiv);
+
+        // Create browser tab
+        const browserTab = new BrowserTab({
+            id: browserId,
+            parentId: browserId,
+            url: url
+        });
+
+        // Store browser reference
+        if (!window.browserTabs) {
+            window.browserTabs = {};
+        }
+        window.browserTabs[nextBrowser] = browserTab;
+
+        // Add tab to tab bar
+        const addBtn = document.getElementById('shell_add_tab');
+        if (addBtn) {
+            const newTab = document.createElement('li');
+            newTab.id = 'shell_tab_browser_' + nextBrowser;
+            newTab.className = 'browser-tab';
+            newTab.onclick = () => window.focusBrowserTab(nextBrowser);
+            newTab.innerHTML = `<p>🌐 Browser ${nextBrowser + 1}</p>`;
+            addBtn.parentNode.insertBefore(newTab, addBtn);
+        }
+
+        console.log(`[BrowserTab] Created browser tab ${nextBrowser}`);
+        return nextBrowser;
+    };
+
+    // Focus browser tab
+    window.focusBrowserTab = (browserIndex) => {
+        // Hide all terminals
+        document.querySelectorAll('#main_shell_innercontainer > pre').forEach(el => {
+            el.style.display = 'none';
+        });
+
+        // Hide all browsers first
+        document.querySelectorAll('#main_shell_innercontainer > .browser-container').forEach(el => {
+            el.style.display = 'none';
+        });
+
+        // Show selected browser
+        const browserEl = document.getElementById('browser' + browserIndex);
+        if (browserEl) {
+            browserEl.style.display = 'block';
+        }
+
+        // Update tab UI
+        document.querySelectorAll('#main_shell_tabs > li').forEach(el => {
+            el.classList.remove('active');
+        });
+        const browserTab = document.getElementById('shell_tab_browser_' + browserIndex);
+        if (browserTab) {
+            browserTab.classList.add('active');
+        }
+
+        // Store current view state
+        window.currentView = 'browser';
+        window.currentBrowser = browserIndex;
+    };
+
+    // Navigate browser from terminal command
+    window.navigateBrowser = (url) => {
+        if (!window.browserTabs || Object.keys(window.browserTabs).length === 0) {
+            // Create first browser tab if none exists
+            const idx = window.addBrowserTab(url);
+            window.focusBrowserTab(idx);
+        } else {
+            // Use current browser or first one
+            const idx = window.currentBrowser !== undefined ? window.currentBrowser : 0;
+            if (window.browserTabs[idx]) {
+                window.browserTabs[idx].navigate(url);
+                window.focusBrowserTab(idx);
+            }
+        }
     };
 
     // Settings editor
@@ -2137,30 +2352,24 @@ try {
                 window.term[window.currentTerm].clipboard.paste();
                 return true;
             case "NEXT_TAB":
-                if (window.term[window.currentTerm + 1]) {
-                    window.focusShellTab(window.currentTerm + 1);
-                } else if (window.term[window.currentTerm + 2]) {
-                    window.focusShellTab(window.currentTerm + 2);
-                } else if (window.term[window.currentTerm + 3]) {
-                    window.focusShellTab(window.currentTerm + 3);
-                } else if (window.term[window.currentTerm + 4]) {
-                    window.focusShellTab(window.currentTerm + 4);
-                } else {
-                    window.focusShellTab(0);
+                // Find next available tab (up to 10)
+                for (let i = 1; i <= 10; i++) {
+                    const next = (window.currentTerm + i) % 10;
+                    if (window.term[next]) {
+                        window.focusShellTab(next);
+                        return true;
+                    }
                 }
+                window.focusShellTab(0);
                 return true;
             case "PREVIOUS_TAB":
-                let i = window.currentTerm || 4;
-                if (window.term[i] && i !== window.currentTerm) {
-                    window.focusShellTab(i);
-                } else if (window.term[i - 1]) {
-                    window.focusShellTab(i - 1);
-                } else if (window.term[i - 2]) {
-                    window.focusShellTab(i - 2);
-                } else if (window.term[i - 3]) {
-                    window.focusShellTab(i - 3);
-                } else if (window.term[i - 4]) {
-                    window.focusShellTab(i - 4);
+                // Find previous available tab (up to 10)
+                for (let i = 1; i <= 10; i++) {
+                    const prev = (window.currentTerm - i + 10) % 10;
+                    if (window.term[prev]) {
+                        window.focusShellTab(prev);
+                        return true;
+                    }
                 }
                 return true;
             case "TAB_1":
@@ -2177,6 +2386,24 @@ try {
                 return true;
             case "TAB_5":
                 window.focusShellTab(4);
+                return true;
+            case "TAB_6":
+                window.focusShellTab(5);
+                return true;
+            case "TAB_7":
+                window.focusShellTab(6);
+                return true;
+            case "TAB_8":
+                window.focusShellTab(7);
+                return true;
+            case "TAB_9":
+                window.focusShellTab(8);
+                return true;
+            case "TAB_10":
+                window.focusShellTab(9);
+                return true;
+            case "NEW_TAB":
+                window.addShellTab();
                 return true;
             case "SETTINGS":
                 window.openSettings();
