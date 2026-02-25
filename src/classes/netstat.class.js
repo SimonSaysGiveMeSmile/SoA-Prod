@@ -29,6 +29,14 @@ class Netstat {
         this.iface = null;
         this.failedAttempts = {};
         this.runsBeforeGeoIPUpdate = 0;
+        this._consecutivePingFailures = 0;
+
+        this._externalIpServices = [
+            { host: "myexternalip.com", port: 443, path: "/json", parseIp: data => data.ip },
+            { host: "api.ipify.org", port: 443, path: "/?format=json", parseIp: data => data.ip },
+            { host: "httpbin.org", port: 443, path: "/ip", parseIp: data => data.origin }
+        ];
+        this._currentServiceIndex = 0;
 
         this._httpsAgent = new require("https").Agent({
             keepAlive: false,
@@ -174,7 +182,9 @@ class Netstat {
                 offline = true;
             } else {
                 if (this.runsBeforeGeoIPUpdate === 0 && this.lastconn.finished) {
-                    const externalIpService = window.settings.externalIpService || { host: "myexternalip.com", port: 443, path: "/json" };
+                    const svc = this._externalIpServices[this._currentServiceIndex];
+                    const externalIpService = window.settings.externalIpService || { host: svc.host, port: svc.port, path: svc.path };
+                    const parseIp = window.settings.externalIpService ? (data => data.ip) : svc.parseIp;
                     this.lastconn = require("https").get({ host: externalIpService.host, port: externalIpService.port, path: externalIpService.path, localAddress: net.ip4, agent: this._httpsAgent }, res => {
                         let rawData = "";
                         res.on("error", e => {
@@ -189,43 +199,55 @@ class Netstat {
                                 let data = JSON.parse(rawData);
                                 if (window.settings.debug) console.log("[Netstat] External IP response:", rawData);
 
+                                const ip = parseIp(data);
                                 // Safely get geo data - geoLookup.get() may return null
-                                const geoData = this.geoLookup.get(data.ip);
+                                const geoData = this.geoLookup.get(ip);
                                 const geo = geoData && geoData.location ? geoData.location : null;
 
-                                if (window.settings.debug) console.log("[Netstat] GeoLookup result for", data.ip, ":", geoData ? "found" : "null");
+                                if (window.settings.debug) console.log("[Netstat] GeoLookup result for", ip, ":", geoData ? "found" : "null");
 
                                 this.ipinfo = {
-                                    ip: data.ip,
+                                    ip: ip,
                                     geo: geo
                                 };
 
-                                let ip = this.ipinfo.ip;
                                 document.querySelector("#mod_netstat_innercontainer > div:nth-child(2) > h2").innerHTML = window._escapeHtml(ip);
 
                                 this.runsBeforeGeoIPUpdate = 10;
                             } catch (e) {
-                                this.failedAttempts[e] = (this.failedAttempts[e] || 0) + 1;
-                                if (this.failedAttempts[e] > 2) return false;
+                                const errKey = e.message || String(e);
+                                this.failedAttempts[errKey] = (this.failedAttempts[errKey] || 0) + 1;
+                                if (this.failedAttempts[errKey] > 2) return false;
                                 console.warn(e);
                                 console.info(rawData.toString());
                                 let electron = require("electron");
                                 electron.ipcRenderer.send("log", "note", "NetStat: Error parsing data from external IP service");
                                 electron.ipcRenderer.send("log", "debug", `Error: ${e}`);
+                                this._rotateIpService();
                             }
+                            this.lastconn.finished = true;
                         });
                     }).on("error", e => {
                         // HTTP request failed - log for debugging
                         if (window.settings.debug) console.log("[Netstat] HTTP error fetching external IP:", e.message);
+                        this.lastconn.finished = true;
+                        this._rotateIpService();
                     });
                 } else if (this.runsBeforeGeoIPUpdate !== 0) {
                     this.runsBeforeGeoIPUpdate = this.runsBeforeGeoIPUpdate - 1;
                 }
 
-                let p = await this.ping(window.settings.pingAddr || "1.1.1.1", 80, net.ip4).catch((e) => {
-                    if (window.settings.debug) console.log(`[Netstat] Ping failed: ${e.message}`);
-                    offline = true;
+                let p = await this.pingWithFallback(net.ip4).catch((e) => {
+                    if (window.settings.debug) console.log(`[Netstat] All ping targets failed: ${e.message}`);
+                    this._consecutivePingFailures++;
+                    if (this._consecutivePingFailures >= 2) {
+                        offline = true;
+                    }
                 });
+
+                if (p !== undefined) {
+                    this._consecutivePingFailures = 0;
+                }
 
                 this.offline = offline;
                 if (offline) {
@@ -271,6 +293,33 @@ class Netstat {
                 reject(new Error("Socket timeout"));
             });
         });
+    }
+    async pingWithFallback(localAddress) {
+        const targets = [
+            { host: "1.1.1.1", port: 80 },
+            { host: "8.8.8.8", port: 53 },
+            { host: "208.67.222.222", port: 53 }
+        ];
+        const customAddr = window.settings.pingAddr;
+        if (customAddr) {
+            targets.unshift({ host: customAddr, port: 80 });
+        }
+        let lastErr;
+        for (const t of targets) {
+            try {
+                return await this.ping(t.host, t.port, localAddress);
+            } catch (e) {
+                lastErr = e;
+                if (window.settings.debug) console.log(`[Netstat] Ping ${t.host}:${t.port} failed: ${e.message}`);
+            }
+        }
+        throw lastErr;
+    }
+    _rotateIpService() {
+        this._currentServiceIndex = (this._currentServiceIndex + 1) % this._externalIpServices.length;
+        if (window.settings.debug) {
+            console.log(`[Netstat] Rotating to IP service: ${this._externalIpServices[this._currentServiceIndex].host}`);
+        }
     }
 }
 

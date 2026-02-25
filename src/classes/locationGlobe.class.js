@@ -21,6 +21,8 @@ class LocationGlobe {
 
         this.lastgeo = {};
         this.conns = [];
+        this._lastKnownGoodGeo = null;
+        this._ipinfoRetries = 0;
 
 
         setTimeout(() => {
@@ -183,12 +185,28 @@ class LocationGlobe {
         }
 
         if (window.mods.netstat.offline) {
-            // Use mock data when offline to keep globe active
-            this.updateWithMockData();
+            // Transient offline: if we have cached geo and browser says online, use cache
+            if (this._lastKnownGoodGeo && navigator.onLine) {
+                this.updateWithCachedData();
+            } else {
+                this.updateWithMockData();
+            }
         } else if (!window.mods.netstat.ipinfo) {
-            // ipinfo not ready yet (async HTTP call still pending), retry in 1 second
-            if (window.settings.debug) console.log("[Globe] ipinfo not ready, retrying in 1s");
-            setTimeout(() => this.updateLoc(), 1000);
+            // ipinfo not ready yet (async HTTP call still pending)
+            this._ipinfoRetries++;
+            if (this._ipinfoRetries > 15) {
+                // Give up waiting — fall back to cached or mock
+                if (window.settings.debug) console.log("[Globe] ipinfo retries exhausted, falling back");
+                if (this._lastKnownGoodGeo) {
+                    this.updateWithCachedData();
+                } else {
+                    this.updateWithMockData();
+                }
+                this._ipinfoRetries = 0;
+            } else if (window.settings.debug) {
+                console.log(`[Globe] ipinfo not ready, retry ${this._ipinfoRetries}/15`);
+            }
+            // Don't add extra setTimeout — the existing 1s setInterval handles polling
         } else if (!window.mods.netstat.ipinfo.geo) {
             // ipinfo exists but geo is null (geoLookup couldn't locate the IP)
             // Show IP coordinates as unknown rather than mock
@@ -223,6 +241,21 @@ class LocationGlobe {
         }
         this.lastgeo = mockGeo;
     }
+    updateWithCachedData() {
+        const cached = this._lastKnownGoodGeo;
+        document.querySelector("div#mod_globe").setAttribute("class", "");
+        document.querySelector("i.mod_globe_headerInfo").innerText = `${cached.latitude}, ${cached.longitude} (CACHED)`;
+
+        if (cached.latitude !== this.lastgeo.latitude || cached.longitude !== this.lastgeo.longitude) {
+            this.removePins();
+            this.removeMarkers();
+            this.conns = [];
+
+            this._locPin = this.globe.addPin(cached.latitude, cached.longitude, "", 1.2);
+            this._locMarker = this.globe.addMarker(cached.latitude, cached.longitude, "", false, 1.2);
+        }
+        this.lastgeo = cached;
+    }
     updateWithUnknownGeo() {
         // Have IP but geoLookup couldn't locate it - show unknown coordinates
         // Use a default location (0, 0) but without "(MOCK)" to indicate we're online
@@ -249,6 +282,10 @@ class LocationGlobe {
         let newgeo = window.mods.netstat.ipinfo.geo;
         newgeo.latitude = Math.round(newgeo.latitude*10000)/10000;
         newgeo.longitude = Math.round(newgeo.longitude*10000)/10000;
+
+        // Cache this as last known good location
+        this._lastKnownGoodGeo = { latitude: newgeo.latitude, longitude: newgeo.longitude };
+        this._ipinfoRetries = 0;
 
         if (newgeo.latitude !== this.lastgeo.latitude || newgeo.longitude !== this.lastgeo.longitude) {
 

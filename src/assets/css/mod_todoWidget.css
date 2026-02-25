@@ -6,6 +6,7 @@ div#mod_todoWidget {
     letter-spacing: 0.092vh;
     padding: 0.645vh 0vh;
     display: flex;
+    margin-top: auto;
 }
 
 div#mod_todoWidget::before {
