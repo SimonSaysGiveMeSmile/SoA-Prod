@@ -1,7 +1,7 @@
 {
   "name": "edex-ui",
   "productName": "Son of Anton",
-  "version": "2.2.8",
+  "version": "2.2.12",
   "description": "Son of Anton sci-fi interface",
   "keywords": [
     "desktop",
@@ -12,6 +12,9 @@
     "terminal"
   ],
   "main": "_boot.js",
+  "scripts": {
+    "start": "electron ."
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/yifu001/son-of-anton.git"

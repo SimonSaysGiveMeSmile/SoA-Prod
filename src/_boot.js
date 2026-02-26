@@ -599,11 +599,15 @@ app.on('before-quit', () => {
     if (claudeStateManager) {
         claudeStateManager.stop();
     }
-    tty.close();
-    Object.keys(extraTtys).forEach(key => {
-        if (extraTtys[key] !== null) {
-            extraTtys[key].close();
-        }
-    });
+    if (tty) {
+        tty.close();
+    }
+    if (extraTtys) {
+        Object.keys(extraTtys).forEach(key => {
+            if (extraTtys[key] !== null) {
+                extraTtys[key].close();
+            }
+        });
+    }
     signale.complete("Shutting down...");
 });

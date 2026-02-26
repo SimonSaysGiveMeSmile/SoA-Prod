@@ -47,12 +47,19 @@
     "productName": "Son of Anton",
     "publish": "github",
     "asar": true,
+    "asarUnpack": [
+      "node_modules/node-pty/**",
+      "node_modules/@picovoice/**",
+      "node_modules/osx-temperature-sensor/**",
+      "main/voice/**"
+    ],
     "compression": "normal",
     "copyright": "Copyright © 2017-2021 Gabriel 'Squared' SAILLARD <gabriel@saillard.dev> (https://gaby.dev)",
     "directories": {
       "output": "dist",
       "app": "prebuild-src"
     },
+    "afterPack": "./scripts/afterPack.js",
     "forceCodeSigning": false,
     "npmRebuild": true,
     "artifactName": "Son of Anton-${os}-${arch}.${ext}",
@@ -76,6 +83,7 @@
           ]
         }
       ],
+      "identity": null,
       "category": "public.app-category.utilities",
       "icon": "media/icon.icns",
       "extendInfo": {
