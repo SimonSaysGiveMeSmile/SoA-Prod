@@ -508,6 +508,17 @@ try {
                         }
                     }
 
+                    // Update InputComposer voice button if present
+                    const inputComposerVoiceBtn = document.querySelector('.inputcomposer-voice-btn');
+                    if (inputComposerVoiceBtn) {
+                        inputComposerVoiceBtn.classList.remove('recording', 'processing');
+                        if (state === VoiceState.RECORDING) {
+                            inputComposerVoiceBtn.classList.add('recording');
+                        } else if (state === VoiceState.PROCESSING) {
+                            inputComposerVoiceBtn.classList.add('processing');
+                        }
+                    }
+
                     // Update toggle widget
                     if (window.voiceToggleWidget) {
                         if (state === VoiceState.RECORDING) {
@@ -602,6 +613,24 @@ try {
     }
 
     function insertTranscriptionIntoTerminal(text) {
+        // Check if InputComposer (text box) is active - insert there instead
+        const textarea = document.getElementById("inputcomposer_textarea");
+        if (textarea) {
+            // Insert at cursor position
+            const start = textarea.selectionStart;
+            const end = textarea.selectionEnd;
+            const before = textarea.value.substring(0, start);
+            const after = textarea.value.substring(end);
+            textarea.value = before + text + after;
+            // Move cursor after inserted text
+            const newPos = start + text.length;
+            textarea.selectionStart = newPos;
+            textarea.selectionEnd = newPos;
+            textarea.dispatchEvent(new Event('input', { bubbles: true }));
+            console.log('[Voice] Inserted transcription into InputComposer:', text);
+            return;
+        }
+
         const activeTerminal = window.currentTerm || 0;
 
         if (window.term && window.term[activeTerminal]) {

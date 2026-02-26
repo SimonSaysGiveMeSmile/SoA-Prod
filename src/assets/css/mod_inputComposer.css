@@ -239,3 +239,75 @@
     width: 1.8vh;
     height: 1.8vh;
 }
+
+/* Voice dictation button */
+.inputcomposer-voice-btn {
+    background: none;
+    border: none;
+    color: rgb(var(--color_r), var(--color_g), var(--color_b));
+    opacity: 0.5;
+    cursor: pointer;
+    padding: 0.2vh 0.4vh;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: opacity 0.15s;
+    align-self: center;
+}
+
+.inputcomposer-voice-btn:hover {
+    opacity: 1;
+}
+
+.inputcomposer-voice-btn.recording {
+    opacity: 1;
+    color: #ff4444;
+    animation: inputcomposer-voice-pulse 1s ease-in-out infinite;
+}
+
+@keyframes inputcomposer-voice-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+.inputcomposer-voice-btn svg {
+    width: 1.8vh;
+    height: 1.8vh;
+}
+
+/* Voice dictation button */
+.inputcomposer-voice-btn {
+    background: none;
+    border: none;
+    color: rgb(var(--color_r), var(--color_g), var(--color_b));
+    opacity: 0.5;
+    cursor: pointer;
+    padding: 0.2vh 0.4vh;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: opacity 0.15s;
+    align-self: center;
+}
+
+.inputcomposer-voice-btn:hover {
+    opacity: 1;
+}
+
+.inputcomposer-voice-btn.recording {
+    opacity: 1;
+    color: #ff4444;
+    animation: pulse 1s infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+.inputcomposer-voice-btn svg {
+    width: 1.8vh;
+    height: 1.8vh;
+}

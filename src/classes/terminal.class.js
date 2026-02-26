@@ -538,6 +538,15 @@ class Terminal {
                         }
                     }
                 });
+
+                // Handle async errors emitted by the WebSocketServer
+                this.wss.on('error', (err) => {
+                    console.error('[Terminal] WebSocketServer emitted error:', err);
+                    // For EADDRINUSE, kill the pty - the caller will handle retry
+                    if (err.code === 'EADDRINUSE') {
+                        this.tty.kill();
+                    }
+                });
             } catch (wsError) {
                 // Clean up the pty process before throwing
                 this.tty.kill();

@@ -128,6 +128,19 @@ class InputComposer {
         this.attachBtn.setAttribute("aria-label", "Attach image");
         this.attachBtn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>`;
 
+        // Voice dictation button
+        this.voiceBtn = document.createElement("button");
+        this.voiceBtn.className = "inputcomposer-voice-btn";
+        this.voiceBtn.title = "Voice dictation";
+        this.voiceBtn.setAttribute("aria-label", "Voice dictation");
+        this.voiceBtn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>`;
+        this.voiceBtn.addEventListener("click", (e) => {
+            e.stopPropagation();
+            if (window.voiceController) {
+                window.voiceController.toggle();
+            }
+        });
+
         // Image preview strip
         this.previewStrip = document.createElement("div");
         this.previewStrip.className = "inputcomposer-preview-strip";
@@ -135,6 +148,7 @@ class InputComposer {
         this.bar.appendChild(hints);
         this.bar.appendChild(prompt);
         this.bar.appendChild(this.textarea);
+        this.bar.appendChild(this.voiceBtn);
         this.bar.appendChild(this.attachBtn);
         this.bar.appendChild(this.fileInput);
         this.bar.appendChild(this.previewStrip);

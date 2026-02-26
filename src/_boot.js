@@ -464,6 +464,9 @@ app.on('ready', async () => {
         let usedPort = port;
 
         for (let retry = 0; retry < maxRetries; retry++) {
+            term = null;
+            let asyncError = null;
+
             try {
                 term = new Terminal({
                     role: "server",
@@ -473,12 +476,42 @@ app.on('ready', async () => {
                     env: cleanEnv,
                     port: usedPort
                 });
+
+                // Handle async errors from WebSocketServer (EADDRINUSE can be emitted after constructor returns)
+                if (term.wss) {
+                    const errorHandler = (err) => {
+                        asyncError = err;
+                    };
+                    term.wss.on('error', errorHandler);
+                }
+
+                // Wait briefly to catch async errors
+                await new Promise((resolve) => setTimeout(resolve, 50));
+
+                if (asyncError && asyncError.code === 'EADDRINUSE') {
+                    // Clean up
+                    try {
+                        if (term.wss) term.wss.close();
+                        if (term.tty) term.tty.kill();
+                    } catch (e) { /* ignore */ }
+                    // Wait for port to be released
+                    await new Promise((resolve) => setTimeout(resolve, 100));
+                    throw asyncError;
+                }
+
                 // If we got here, terminal was created successfully
                 break;
             } catch (err) {
                 if (err.code === 'EADDRINUSE') {
                     signale.warn(`Port ${usedPort} already in use, trying port ${usedPort + 1}...`);
                     usedPort++;
+                    // Clean up before retry
+                    try {
+                        if (term && term.wss) term.wss.close();
+                        if (term && term.tty) term.tty.kill();
+                    } catch (e) { /* ignore */ }
+                    // Wait for port to be released before trying next
+                    await new Promise((resolve) => setTimeout(resolve, 100));
                     continue;
                 }
                 // For other errors, fail immediately
