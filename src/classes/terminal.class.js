@@ -525,17 +525,30 @@ class Terminal {
                 this.onclosed(code, signal);
             });
 
-            this.wss = new this.Websocket({
-                port: this.port,
-                clientTracking: true,
-                verifyClient: info => {
-                    if (this.wss.clients.length >= 1) {
-                        return false;
-                    } else {
-                        return true;
+            // Create WebSocket server with error handling for port conflicts
+            try {
+                this.wss = new this.Websocket({
+                    port: this.port,
+                    clientTracking: true,
+                    verifyClient: info => {
+                        if (this.wss.clients.length >= 1) {
+                            return false;
+                        } else {
+                            return true;
+                        }
                     }
+                });
+            } catch (wsError) {
+                // Clean up the pty process before throwing
+                this.tty.kill();
+                // Re-throw with proper error code for retry logic in _boot.js
+                if (wsError.code === 'EADDRINUSE') {
+                    const portError = new Error(`Port ${this.port} is already in use`);
+                    portError.code = 'EADDRINUSE';
+                    throw portError;
                 }
-            });
+                throw wsError;
+            }
             this.Ipc.on("terminal_channel-" + this.port, (e, ...args) => {
                 switch (args[0]) {
                     case "Renderer startup":

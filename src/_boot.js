@@ -2,6 +2,34 @@ const signale = require("signale");
 const profiler = require("./performance/startupProfiler");
 profiler.mark('boot-start');
 const { app, BrowserWindow, dialog, shell } = require("electron");
+const net = require("net");
+
+// Helper function to check if a port is available
+function isPortAvailable(port) {
+    return new Promise((resolve) => {
+        const server = net.createServer();
+        server.once('error', () => {
+            resolve(false);
+        });
+        server.once('listening', () => {
+            server.close();
+            resolve(true);
+        });
+        server.listen(port, '127.0.0.1');
+    });
+}
+
+// Find an available port starting from the given port
+async function findAvailablePort(startPort, maxAttempts = 20) {
+    for (let i = 0; i < maxAttempts; i++) {
+        const port = startPort + i;
+        if (await isPortAvailable(port)) {
+            return port;
+        }
+        signale.warn(`Port ${port} already in use, trying next port...`);
+    }
+    return null;
+}
 
 process.on("uncaughtException", e => {
     signale.fatal(e);
@@ -322,15 +350,40 @@ app.on('ready', async () => {
     }, settings.env);
 
     signale.pending(`Creating new terminal process on port ${settings.port || '3000'}`);
-    tty = new Terminal({
-        role: "server",
-        shell: settings.shell,
-        params: settings.shellArgs || '',
-        cwd: settings.cwd,
-        env: cleanEnv,
-        port: settings.port || 3000
-    });
-    signale.success(`Terminal back-end initialized!`);
+
+    // Retry loop to handle EADDRINUSE errors (port taken between check and use)
+    const maxRetries = 20;
+    let usedPort = settings.port || 3000;
+
+    for (let retry = 0; retry < maxRetries; retry++) {
+        try {
+            tty = new Terminal({
+                role: "server",
+                shell: settings.shell,
+                params: settings.shellArgs || '',
+                cwd: settings.cwd,
+                env: cleanEnv,
+                port: usedPort
+            });
+            // If we got here, terminal was created successfully
+            break;
+        } catch (err) {
+            if (err.code === 'EADDRINUSE') {
+                signale.warn(`Port ${usedPort} already in use, trying port ${usedPort + 1}...`);
+                usedPort++;
+                continue;
+            }
+            // For other errors, fail immediately
+            signale.fatal(`Failed to create terminal: ${err.message}`);
+            throw err;
+        }
+    }
+
+    if (!tty) {
+        throw new Error("Failed to create terminal: no available ports after retries");
+    }
+
+    signale.success(`Terminal back-end initialized on port ${usedPort}!`);
     profiler.mark('terminal-created');
     profiler.measure('terminal-init', 'settings-loaded', 'terminal-created');
     tty.onclosed = (code, signal) => {
@@ -361,56 +414,107 @@ app.on('ready', async () => {
     profiler.mark('main-ready');
     profiler.measure('main-total', 'boot-start', 'main-ready');
 
-    // Support for more terminals, used for creating tabs (currently limited to 4 extra terms)
+    // Support for more terminals, used for creating tabs
+    // Increase slot count to handle port conflicts (we'll dynamically find available ports)
     extraTtys = {};
-    let basePort = settings.port || 3000;
-    basePort = Number(basePort) + 2;
+    const basePort = Number(settings.port || 3000) + 2;
+    const maxTerminals = 10; // Allow up to 10 terminal tabs
+    let nextPort = basePort;
 
-    for (let i = 0; i < 4; i++) {
+    // Pre-populate with slots
+    for (let i = 0; i < maxTerminals; i++) {
         extraTtys[basePort + i] = null;
     }
 
-    ipc.on("ttyspawn", (e, arg) => {
-        let port = null;
+    ipc.on("ttyspawn", async (e, arg) => {
+        // Find the first null slot
+        let slotKey = null;
         Object.keys(extraTtys).forEach(key => {
-            if (extraTtys[key] === null && port === null) {
-                extraTtys[key] = {};
-                port = key;
+            if (extraTtys[key] === null && slotKey === null) {
+                slotKey = key;
             }
         });
 
-        if (port === null) {
+        if (slotKey === null) {
             signale.error("TTY spawn denied (Reason: exceeded max TTYs number)");
             e.sender.send("ttyspawn-reply", "ERROR: max number of ttys reached");
-        } else {
-            signale.pending(`Creating new TTY process on port ${port}`);
-            let term = new Terminal({
-                role: "server",
-                shell: settings.shell,
-                params: settings.shellArgs || '',
-                cwd: tty.tty._cwd || settings.cwd,
-                env: cleanEnv,
-                port: port
-            });
-            signale.success(`New terminal back-end initialized at ${port}`);
-            term.onclosed = (code, signal) => {
-                term.ondisconnected = () => { };
-                term.wss.close();
-                signale.complete(`TTY exited at ${port}`, code, signal);
-                extraTtys[term.port] = null;
-                term = null;
-            };
-            term.onopened = pid => {
-                signale.success(`TTY ${port} connected to frontend (process PID ${pid})`);
-            };
-            term.onresized = () => { };
-            term.ondisconnected = () => {
-                signale.warn(`TTY ${port} disconnected from frontend, waiting for reconnection...`);
-            };
-
-            extraTtys[port] = term;
-            e.sender.send("ttyspawn-reply", "SUCCESS: " + port);
+            return;
         }
+
+        // Find an available port starting from nextPort
+        const port = await findAvailablePort(nextPort, 20);
+
+        if (port === null) {
+            signale.error("TTY spawn denied (Reason: no available ports)");
+            e.sender.send("ttyspawn-reply", "ERROR: no available ports");
+            return;
+        }
+
+        // Update nextPort to try the next one next time
+        nextPort = port + 1;
+
+        // Mark this slot as pending (will be set to the terminal object after creation)
+        extraTtys[slotKey] = {};
+
+        signale.pending(`Creating new TTY process on port ${port}`);
+
+        // Retry loop to handle EADDRINUSE errors (port taken between check and use)
+        const maxRetries = 10;
+        let term = null;
+        let usedPort = port;
+
+        for (let retry = 0; retry < maxRetries; retry++) {
+            try {
+                term = new Terminal({
+                    role: "server",
+                    shell: settings.shell,
+                    params: settings.shellArgs || '',
+                    cwd: tty.tty._cwd || settings.cwd,
+                    env: cleanEnv,
+                    port: usedPort
+                });
+                // If we got here, terminal was created successfully
+                break;
+            } catch (err) {
+                if (err.code === 'EADDRINUSE') {
+                    signale.warn(`Port ${usedPort} already in use, trying port ${usedPort + 1}...`);
+                    usedPort++;
+                    continue;
+                }
+                // For other errors, fail immediately
+                signale.error(`Failed to create terminal on port ${usedPort}: ${err.message}`);
+                extraTtys[slotKey] = null;
+                e.sender.send("ttyspawn-reply", "ERROR: failed to create terminal");
+                return;
+            }
+        }
+
+        if (!term) {
+            signale.error("TTY spawn denied (Reason: no available ports after retries)");
+            extraTtys[slotKey] = null;
+            e.sender.send("ttyspawn-reply", "ERROR: no available ports");
+            return;
+        }
+
+        const finalPort = usedPort;
+        signale.success(`New terminal back-end initialized at ${finalPort}`);
+        term.onclosed = (code, signal) => {
+            term.ondisconnected = () => { };
+            term.wss.close();
+            signale.complete(`TTY exited at ${finalPort}`, code, signal);
+            extraTtys[slotKey] = null;
+            term = null;
+        };
+        term.onopened = pid => {
+            signale.success(`TTY ${finalPort} connected to frontend (process PID ${pid})`);
+        };
+        term.onresized = () => { };
+        term.ondisconnected = () => {
+            signale.warn(`TTY ${finalPort} disconnected from frontend, waiting for reconnection...`);
+        };
+
+        extraTtys[slotKey] = term;
+        e.sender.send("ttyspawn-reply", "SUCCESS: " + finalPort);
     });
 
     ipc.on("ttylist", (e) => {

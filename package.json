@@ -1,7 +1,7 @@
 {
   "name": "edex-ui",
   "productName": "Son of Anton",
-  "version": "2.2.11",
+  "version": "2.2.12",
   "description": "A science fiction desktop running everywhere. Awesome.",
   "keywords": [
     "desktop",
@@ -80,7 +80,11 @@
       "icon": "media/icon.icns",
       "extendInfo": {
         "NSSpeechRecognitionUsageDescription": "This app uses speech recognition for voice dictation."
-      }
+      },
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "entitlements": "entitlements.mac.plist",
+      "entitlementsInherit": "entitlements.mac.inherit.plist"
     },
     "dmg": {
       "artifactName": "Son of Anton-macOS-${arch}.dmg"
