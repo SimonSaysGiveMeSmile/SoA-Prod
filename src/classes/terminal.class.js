@@ -369,7 +369,7 @@ class Terminal {
             this._closed = false;
             this.onclosed = () => { };
             this.onopened = () => { };
-            this.onresize = () => { };
+            this.onresized = () => { };
             this.ondisconnected = () => { };
 
             this._disableCWDtracking = false;
@@ -577,7 +577,9 @@ class Terminal {
                         } catch (error) {
                             //Keep going, it'll work anyways.
                         }
-                        this.onresized(cols, rows);
+                        if (typeof this.onresized === 'function') {
+                            this.onresized(cols, rows);
+                        }
                         break;
                     default:
                         return;

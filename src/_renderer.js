@@ -4,6 +4,7 @@ window.eval = global.eval = function () {
 };
 // Security helper :)
 window._escapeHtml = text => {
+    if (text == null) return "";
     let map = {
         '&': '&amp;',
         '<': '&lt;',
@@ -11,7 +12,7 @@ window._escapeHtml = text => {
         '"': '&quot;',
         "'": '&#039;'
     };
-    return text.replace(/[&<>"']/g, m => { return map[m]; });
+    return String(text).replace(/[&<>"']/g, m => { return map[m]; });
 };
 window._encodePathURI = uri => {
     return encodeURI(uri).replace(/#/g, "%23");
@@ -98,7 +99,8 @@ try {
     }
     try {
         if (fs.existsSync(terminalNamesFile)) {
-            window.terminalNames = JSON.parse(fs.readFileSync(terminalNamesFile, 'utf-8'));
+            const saved = JSON.parse(fs.readFileSync(terminalNamesFile, 'utf-8'));
+            window.terminalNames = Object.assign({}, defaultTerminalNames, saved);
         } else {
             window.terminalNames = defaultTerminalNames;
         }
@@ -149,6 +151,11 @@ try {
         console.log('%c[MAIN]', 'color: #ff9800; font-weight: bold', msg);
     });
 
+    // Helper: generates the close button HTML for a tab
+    window._tabCloseBtn = (index) => {
+        return `<span class="tab-close" onclick="event.stopPropagation();window.closeShellTab(${index});" title="Close Tab">×</span>`;
+    };
+
     window.enableTabRename = (tabIndex) => {
         const tabElement = document.getElementById(`shell_tab${tabIndex}`);
         if (!tabElement) return; // Tab doesn't exist yet (tabs 5-9)
@@ -157,21 +164,34 @@ try {
 
         textElement.addEventListener('dblclick', (e) => {
             e.stopPropagation(); // Prevent tab switch
+            // Hide close button during rename so it's not part of editable content
+            const closeBtn = textElement.querySelector('.tab-close');
+            if (closeBtn) closeBtn.style.display = 'none';
             textElement.setAttribute('contenteditable', 'true');
             textElement.focus();
-            // Select all text for easy replacement
+            // Select only the text for easy replacement
             const range = document.createRange();
-            range.selectNodeContents(textElement);
+            const textNode = textElement.firstChild;
+            if (textNode && textNode.nodeType === Node.TEXT_NODE) {
+                range.selectNode(textNode);
+            } else {
+                range.selectNodeContents(textElement);
+            }
             window.getSelection().removeAllRanges();
             window.getSelection().addRange(range);
         });
 
         textElement.addEventListener('blur', () => {
             textElement.removeAttribute('contenteditable');
-            let newName = textElement.innerText.trim().substring(0, 20); // Max 20 chars
+            // Extract only text content, ignoring the close button span
+            let newName = '';
+            textElement.childNodes.forEach(node => {
+                if (node.nodeType === Node.TEXT_NODE) newName += node.textContent;
+            });
+            newName = newName.trim().substring(0, 20);
             if (!newName) newName = tabIndex === 0 ? "MAIN SHELL" : "EMPTY";
             window.terminalNames[tabIndex] = newName;
-            textElement.innerHTML = window._escapeHtml(newName);
+            textElement.innerHTML = window._escapeHtml(newName) + window._tabCloseBtn(tabIndex);
             window.saveTerminalNames();
         });
 
@@ -891,7 +911,7 @@ try {
         // Generate initial 5 tabs dynamically
         let tabsHtml = '';
         for (let i = 0; i < 5; i++) {
-            tabsHtml += `<li id="shell_tab${i}" onclick="window.focusShellTab(${i});"${i === 0 ? ' class="active"' : ''}><p>${window._escapeHtml(window.terminalNames[i])}</p></li>`;
+            tabsHtml += `<li id="shell_tab${i}" onclick="window.focusShellTab(${i});"${i === 0 ? ' class="active"' : ''}><p>${window._escapeHtml(window.terminalNames[i])}<span class="tab-close" onclick="event.stopPropagation();window.closeShellTab(${i});" title="Close Tab">×</span></p></li>`;
         }
         // Add + button for creating new tabs (up to 10 total)
         tabsHtml += `<li id="shell_add_tab" class="shell-add-tab" onclick="window.addShellTab();" title="New Tab (Ctrl+Shift+T)"><p>+</p></li>`;
@@ -923,9 +943,10 @@ try {
         window.currentTerm = 0;
         window.autoCompose = true;
         window.term[0].onprocesschange = p => {
+            window.term[0]._lastProcess = p;
             // Only show process name if user hasn't set a custom name
             if (window.terminalNames[0] === "MAIN SHELL") {
-                document.getElementById("shell_tab0").querySelector('p').innerHTML = `MAIN - ${p}`;
+                document.getElementById("shell_tab0").querySelector('p').innerHTML = `MAIN - ${p}${window._tabCloseBtn(0)}`;
             }
         };
         profiler.mark('terminal-ready');
@@ -1009,7 +1030,7 @@ try {
                         }
                         window.terminalNames[idx] = "EMPTY";
                         window.saveTerminalNames();
-                        document.getElementById("shell_tab" + idx).innerHTML = "<p>EMPTY</p>";
+                        document.getElementById("shell_tab" + idx).innerHTML = `<p>EMPTY${window._tabCloseBtn(idx)}</p>`;
                         document.getElementById("terminal" + idx).innerHTML = "";
                         window.term[idx].term.dispose();
                         delete window.term[idx];
@@ -1017,13 +1038,14 @@ try {
                     };
 
                     window.term[idx].onprocesschange = p => {
+                        window.term[idx]._lastProcess = p;
                         const currentName = window.terminalNames[idx];
                         if (!currentName || currentName === "EMPTY" || currentName.startsWith('#')) {
-                            document.getElementById("shell_tab" + idx).querySelector('p').innerHTML = `#${idx + 1} - ${p}`;
+                            document.getElementById("shell_tab" + idx).querySelector('p').innerHTML = `#${idx + 1} - ${p}${window._tabCloseBtn(idx)}`;
                         }
                     };
 
-                    document.getElementById("shell_tab" + idx).innerHTML = `<p>::${port}</p>`;
+                    document.getElementById("shell_tab" + idx).innerHTML = `<p>::${port}${window._tabCloseBtn(idx)}</p>`;
                     window.enableTabRename(idx);
 
                     if (window.thinkingDetector && window.term[idx].socket) {
@@ -1585,10 +1607,43 @@ try {
         });
 
         // Caps Lock: Toggle voice dictation
-        document.addEventListener("keydown", e => {
+        // If voice is currently recording or processing, trigger transcription first, then disable
+        document.addEventListener("keydown", async e => {
             if (e.code === "CapsLock") {
                 e.preventDefault();
-                window.toggleMic();
+                // Check if voice controller is currently recording or processing
+                if (window.voiceController &&
+                    (window.voiceController.state === 'RECORDING' ||
+                     window.voiceController.state === 'PROCESSING')) {
+                    // Skip if already processing - just disable
+                    if (window.voiceController.state === 'PROCESSING') {
+                        await window.voiceController.disable();
+                        console.log('[Mic] Dictation stopped');
+                        return;
+                    }
+                    // Set isEnabled to false FIRST so _returnToListening doesn't restart
+                    window.voiceController.isEnabled = false;
+                    // Trigger transcription to process current audio
+                    await window.voiceController._onSilenceTimeout();
+                    // Ensure disabled state (in case _returnToListening did something)
+                    if (window.voiceController.isEnabled) {
+                        await window.voiceController.disable();
+                    }
+                    // Update UI
+                    const btn = document.getElementById('shell_mic_btn');
+                    if (btn) {
+                        btn.title = 'Toggle Microphone';
+                    }
+                    if (window.voiceToggleWidget) {
+                        window.voiceToggleWidget.setEnabled(false);
+                    }
+                    if (window.micMonitor) {
+                        window.micMonitor.stop();
+                    }
+                    console.log('[Mic] Dictation stopped and recognized');
+                } else {
+                    window.toggleMic();
+                }
             }
         });
 
@@ -1725,11 +1780,11 @@ try {
         } else if (number > 0 && number <= 9 && window.term[number] !== null && typeof window.term[number] !== "object") {
             window.term[number] = null;
 
-            document.getElementById("shell_tab" + number).innerHTML = "<p>LOADING...</p>";
+            document.getElementById("shell_tab" + number).innerHTML = `<p>LOADING...${window._tabCloseBtn(number)}</p>`;
             ipc.send("ttyspawn", "true");
             ipc.once("ttyspawn-reply", (e, r) => {
                 if (r.startsWith("ERROR")) {
-                    document.getElementById("shell_tab" + number).innerHTML = "<p>ERROR</p>";
+                    document.getElementById("shell_tab" + number).innerHTML = `<p>ERROR${window._tabCloseBtn(number)}</p>`;
                 } else if (r.startsWith("SUCCESS")) {
                     let port = Number(r.substr(9));
 
@@ -1748,7 +1803,7 @@ try {
                         // Reset to default name on close
                         window.terminalNames[number] = "EMPTY";
                         window.saveTerminalNames();
-                        document.getElementById("shell_tab" + number).innerHTML = "<p>EMPTY</p>";
+                        document.getElementById("shell_tab" + number).innerHTML = `<p>EMPTY${window._tabCloseBtn(number)}</p>`;
                         document.getElementById("terminal" + number).innerHTML = "";
                         window.term[number].term.dispose();
                         delete window.term[number];
@@ -1756,17 +1811,18 @@ try {
                     };
 
                     window.term[number].onprocesschange = p => {
+                        window.term[number]._lastProcess = p;
                         // Only show process name if user hasn't set a custom name
                         const currentName = window.terminalNames[number];
                         if (!currentName || currentName === "EMPTY" || currentName.startsWith('#')) {
                             const tabEl = document.getElementById("shell_tab" + number);
                             if (tabEl) {
-                                tabEl.querySelector('p').innerHTML = `#${number + 1} - ${p}`;
+                                tabEl.querySelector('p').innerHTML = `#${number + 1} - ${p}${window._tabCloseBtn(number)}`;
                             }
                         }
                     };
 
-                    document.getElementById("shell_tab" + number).innerHTML = `<p>::${port}</p>`;
+                    document.getElementById("shell_tab" + number).innerHTML = `<p>::${port}${window._tabCloseBtn(number)}</p>`;
                     window.enableTabRename(number);
 
                     // Attach thinking detector to new terminal (DET-06)
@@ -1844,7 +1900,7 @@ try {
         const newTab = document.createElement('li');
         newTab.id = 'shell_tab' + nextTab;
         newTab.onclick = () => window.focusShellTab(nextTab);
-        newTab.innerHTML = `<p>${window._escapeHtml(window.terminalNames[nextTab] || 'EMPTY')}</p>`;
+        newTab.innerHTML = `<p>${window._escapeHtml(window.terminalNames[nextTab] || 'EMPTY')}${window._tabCloseBtn(nextTab)}</p>`;
         addBtn.parentNode.insertBefore(newTab, addBtn);
 
         // Create terminal container
@@ -1869,6 +1925,62 @@ try {
     window.getTabCount = () => {
         const tabs = document.querySelectorAll('ul#main_shell_tabs > li[id^="shell_tab"]');
         return tabs.length;
+    };
+
+    // Close a terminal tab
+    window.closeShellTab = (index) => {
+        const tabEl = document.getElementById('shell_tab' + index);
+        const termEl = document.getElementById('terminal' + index);
+        if (!tabEl) return;
+
+        // Don't close the last remaining tab
+        const remainingTabs = document.querySelectorAll('ul#main_shell_tabs > li[id^="shell_tab"]:not(.shell-add-tab)');
+        if (remainingTabs.length <= 1) {
+            console.warn('[Tabs] Cannot close the last tab');
+            return;
+        }
+
+        // If there's an active terminal, clean it up
+        if (window.term[index] && typeof window.term[index] === 'object') {
+            // Remove the onclose handler so it doesn't try to update removed DOM
+            delete window.term[index].onclose;
+            delete window.term[index].onprocesschange;
+
+            if (window.thinkingDetector) {
+                window.thinkingDetector.detach(index);
+            }
+
+            // Close the WebSocket and dispose xterm
+            if (window.term[index].socket) {
+                window.term[index].socket.close();
+            }
+            if (window.term[index].term) {
+                window.term[index].term.dispose();
+            }
+            delete window.term[index];
+        }
+
+        // Clean up terminal name
+        delete window.terminalNames[index];
+        window.saveTerminalNames();
+
+        // Remove DOM elements
+        tabEl.remove();
+        if (termEl) termEl.remove();
+
+        // Show the + button in case it was hidden
+        const addBtn = document.getElementById('shell_add_tab');
+        if (addBtn) addBtn.style.display = '';
+
+        // Switch to another tab if we just closed the active one
+        if (window.currentTerm === index) {
+            // Find the first available tab
+            const nextTab = document.querySelector('ul#main_shell_tabs > li[id^="shell_tab"]:not(.shell-add-tab)');
+            if (nextTab) {
+                const nextIndex = parseInt(nextTab.id.replace('shell_tab', ''), 10);
+                window.focusShellTab(nextIndex);
+            }
+        }
     };
 
     // Initialize browser tab (for browse command)

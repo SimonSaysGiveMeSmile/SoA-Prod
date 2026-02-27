@@ -50,23 +50,25 @@ section.mod_column > div {
 }
 
 section#mod_column_left {
-    left: -0.555vh;
+    left: 0;
     align-items: flex-end;
     overflow-x: hidden;
+    max-width: 17vw;
 }
 
 section#mod_column_left > h3.title {
-    left: 0.555vh;
+    left: 0;
 }
 
 section#mod_column_right {
-    right: -0.555vh;
+    right: 0;
     align-items: flex-start;
     overflow-x: hidden;
+    max-width: 17vw;
 }
 
 section#mod_column_right > h3.title {
-    right: 0.555vh;
+    right: 0;
 }
 
 /* --- Drag-and-drop tile reordering --- */

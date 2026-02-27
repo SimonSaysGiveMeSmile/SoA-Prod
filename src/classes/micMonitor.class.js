@@ -44,7 +44,21 @@ class MicMonitor {
                 <div class="mic-monitor-source-overlay__title">INPUT SOURCE</div>
                 <div class="mic-monitor-source-overlay__list"></div>
             </div>`;
-        this.parent.appendChild(wrapper);
+        // Insert right after credit display (which is at the top)
+        const creditDisplay = this.parent.querySelector('#mod_creditDisplay');
+        if (creditDisplay && creditDisplay.nextSibling) {
+            this.parent.insertBefore(wrapper, creditDisplay.nextSibling);
+        } else if (creditDisplay) {
+            this.parent.appendChild(wrapper);
+        } else {
+            // Fallback: insert at top if credit display hasn't loaded yet
+            const firstWidget = this.parent.querySelector(':scope > div');
+            if (firstWidget) {
+                this.parent.insertBefore(wrapper, firstWidget);
+            } else {
+                this.parent.appendChild(wrapper);
+            }
+        }
 
         this._canvas = document.getElementById('mod_micMonitor_canvas');
         this._ctx = this._canvas.getContext('2d');

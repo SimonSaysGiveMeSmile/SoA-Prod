@@ -90,6 +90,7 @@
       "category": "public.app-category.utilities",
       "icon": "media/icon.icns",
       "extendInfo": {
+        "NSMicrophoneUsageDescription": "This app uses the microphone for voice input and voice commands.",
         "NSSpeechRecognitionUsageDescription": "This app uses speech recognition for voice dictation."
       }
     },

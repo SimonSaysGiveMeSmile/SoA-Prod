@@ -1,0 +1,44 @@
+{
+    "colors": {
+        "r": 255,
+        "g": 255,
+        "b": 255,
+        "black": "#0a0a0a",
+        "light_black": "#121212",
+        "grey": "#2a2a2a",
+        "red": "#e0e0e0",
+        "green": "#ffffff",
+        "yellow": "#d4d4d4",
+        "blue": "#b0b0b0",
+        "magenta": "#cccccc",
+        "cyan": "#f0f0f0",
+        "white": "#ffffff",
+        "brightRed": "#ffffff",
+        "brightGreen": "#ffffff",
+        "brightYellow": "#ffffff",
+        "brightBlue": "#e5e5e5",
+        "brightMagenta": "#ffffff",
+        "brightCyan": "#ffffff",
+        "brightWhite": "#ffffff"
+    },
+    "cssvars": {
+        "font_main": "United Sans Medium",
+        "font_main_light": "United Sans Light"
+    },
+    "terminal": {
+        "fontFamily": "Fira Mono",
+        "cursorStyle": "block",
+        "foreground": "#e8e8e8",
+        "background": "#0a0a0a",
+        "cursor": "#e8e8e8",
+        "cursorAccent": "#0a0a0a",
+        "selection": "rgba(255,255,255,0.15)"
+    },
+    "globe": {
+        "base": "#0a0a0a",
+        "marker": "#ffffff",
+        "pin": "#ffffff",
+        "satellite": "#ffffff"
+    },
+    "injectCSS": "/* Elegant Glass Theme - Material Design Inspired */\n\n/* === Base Rounded Corners === */\n* {\n    border-radius: 12px !important;\n}\n\n/* === Liquid Glass Panels === */\n.termContainer,\n.workspace,\n.widget,\n.sideWidget,\n.topWidget,\n.bottomWidget,\n#terminal,\n#dock,\n#cluster,\n#systemMonitor,\n#networkMonitor,\n#cpuHistory,\n#diskSpace,\n#processes,\n#fileSystem,\n#input,\n#settingsContainer,\n.settings-window,\n.window,\n.window-title,\n.window-content,\n.window-controls,\n#cpu,\n#mem,\n#disk,\n#network,\n#processList,\n#serverList,\n#fileExplorer,\n.list-item,\n.list-item:hover,\n.widget-header,\n.widget-content,\n.dock-item,\n.dock-item:hover,\n.tab,\n.tab:hover,\n.tab.active,\n.btn,\n.btn:hover,\n.btn:active,\n.input,\n.input:hover,\n.input:focus,\n.select,\n.select:hover,\n.option,\n.option:hover,\n.slider,\n.slider:hover,\n.slider:active,\n.tooltip,\n.tooltip:hover,\n.popup,\n.popup:hover,\n.menu,\n.menu-item,\n.menu-item:hover,\n.context-menu,\n.context-menu-item,\n.context-menu-item:hover,\n.notification,\n.notification:hover,\n.alert,\n.alert:hover,\n.card,\n.card:hover,\n.panel,\n.panel:hover,\n.badge,\n.tag,\n.avatar,\n.avatar:hover,\n.icon-btn,\n.icon-btn:hover {\n    border-radius: 16px !important;\n    background: rgba(255, 255, 255, 0.03) !important;\n    backdrop-filter: blur(20px) !important;\n    -webkit-backdrop-filter: blur(20px) !important;\n    border: 1px solid rgba(255, 255, 255, 0.08) !important;\n    box-shadow:\n        0 8px 32px rgba(0, 0, 0, 0.4),\n        inset 0 1px 0 rgba(255, 255, 255, 0.1),\n        inset 0 -1px 0 rgba(0, 0, 0, 0.2) !important;\n}\n\n/* === Frosted Glass Effect === */\nbody,\n#root,\n#container,\n#desktop,\n#main,\n#workspace,\n.terminal-wrapper,\n.terminal-screen,\n.terminal-header,\n.terminal-body,\n.terminal-footer {\n    background:\n        linear-gradient(135deg, rgba(255,255,255,0.02) 0%, transparent 50%),\n        linear-gradient(225deg, rgba(255,255,255,0.01) 0%, transparent 50%),\n        #0a0a0a !important;\n}\n\n/* === Sandblasted Metal Surfaces === */\n#statusBar,\n#titleBar,\n#taskBar,\n#menuBar,\n#dock,\n.dock-container,\n.status-bar,\n.title-bar,\n.task-bar,\n.menu-bar {\n    background:\n        linear-gradient(180deg,\n            rgba(60, 60, 60, 0.4) 0%,\n            rgba(40, 40, 40, 0.5) 50%,\n            rgba(30, 30, 30, 0.6) 100%\n        ) !important;\n    backdrop-filter: blur(30px) saturate(180%) !important;\n    -webkit-backdrop-filter: blur(30px) saturate(180%) !important;\n    border: 1px solid rgba(255, 255, 255, 0.06) !important;\n    box-shadow:\n        0 4px 24px rgba(0, 0, 0, 0.5),\n        inset 0 1px 0 rgba(255, 255, 255, 0.08),\n        inset 0 -1px 0 rgba(0, 0, 0, 0.3) !important;\n    border-radius: 20px !important;\n}\n\n/* === Liquid Glass Hover States === */\n.widget:hover,\n.dock-item:hover,\n.list-item:hover,\n.btn:hover,\n.tab:hover,\n.menu-item:hover {\n    background: rgba(255, 255, 255, 0.06) !important;\n    box-shadow:\n        0 12px 48px rgba(0, 0, 0, 0.5),\n        inset 0 1px 0 rgba(255, 255, 255, 0.15),\n        inset 0 -1px 0 rgba(0, 0, 0, 0.2) !important;\n    transform: translateY(-2px);\n    transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94) !important;\n}\n\n/* === Subtle Glow on Active Elements === */\n.widget.active,\n.window.active,\n.tab.active,\n.btn:active,\n.dock-item:active {\n    background: rgba(255, 255, 255, 0.08) !important;\n    box-shadow:\n        0 8px 32px rgba(0, 0, 0, 0.4),\n        0 0 20px rgba(255, 255, 255, 0.05),\n        inset 0 1px 0 rgba(255, 255, 255, 0.2) !important;\n}\n\n/* === Glass Text Input Fields === */\n.input,\n.text-input,\n.search-input,\ntextarea {\n    background: rgba(0, 0, 0, 0.4) !important;\n    border: 1px solid rgba(255, 255, 255, 0.1) !important;\n    border-radius: 12px !important;\n    color: #ffffff !important;\n    box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.3) !important;\n}\n\n.input:focus,\n.text-input:focus,\n.search-input:focus,\ntextarea:focus {\n    background: rgba(0, 0, 0, 0.5) !important;\n    border: 1px solid rgba(255, 255, 255, 0.2) !important;\n    box-shadow:\n        inset 0 2px 4px rgba(0, 0, 0, 0.3),\n        0 0 0 2px rgba(255, 255, 255, 0.1) !important;\n    outline: none !important;\n}\n\n/* === Terminal Specific Glass === */\n#terminal,\n.terminal,\n.xterm,\n.xterm-screen {\n    background: rgba(10, 10, 10, 0.95) !important;\n    border-radius: 16px !important;\n    box-shadow:\n        0 8px 32px rgba(0, 0, 0, 0.6),\n        inset 0 0 80px rgba(255, 255, 255, 0.02) !important;\n}\n\n/* === Scrollbar Styling === */\n::-webkit-scrollbar {\n    width: 8px;\n    height: 8px;\n}\n\n::-webkit-scrollbar-track {\n    background: rgba(0, 0, 0, 0.2) !important;\n    border-radius: 4px !important;\n}\n\n::-webkit-scrollbar-thumb {\n    background: rgba(255, 255, 255, 0.15) !important;\n    border-radius: 4px !important;\n}\n\n::-webkit-scrollbar-thumb:hover {\n    background: rgba(255, 255, 255, 0.25) !important;\n}\n\n/* === Subtle Animations === */\n@keyframes glassPulse {\n    0%, 100% {\n        box-shadow:\n            0 8px 32px rgba(0, 0, 0, 0.4),\n            inset 0 1px 0 rgba(255, 255, 255, 0.1);\n    }\n    50% {\n        box-shadow:\n            0 8px 32px rgba(0, 0, 0, 0.5),\n            inset 0 1px 0 rgba(255, 255, 255, 0.15);\n    }\n}\n\n@keyframes shimmer {\n    0% {\n        background-position: -200% 0;\n    }\n    100% {\n        background-position: 200% 0;\n    }\n}\n\n/* === Override bright colors to stay monochrome === */\n.color_red,\n.color_green,\n.color_yellow,\n.color_blue,\n.color_magenta,\n.color_cyan {\n    filter: grayscale(100%) brightness(0.9) !important;\n}\n\n/* === Reduce neon glow from base theme === */\n* {\n    text-shadow: none !important;\n    box-shadow: none !important;\n}\n\n/* === Keep subtle borders === */\n.widget,\n.window,\n.panel {\n    outline: 1px solid rgba(255, 255, 255, 0.05) !important;\n}\n"
+}

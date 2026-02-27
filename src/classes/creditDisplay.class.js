@@ -32,7 +32,13 @@ class CreditDisplay {
                     <div class="credit-watch-btn" id="credit_watchAdBtn">▶ WATCH AD</div>
                 </div>
             </div>`;
-        this.parent.appendChild(wrapper);
+        // Insert at top of panel (after h3 title, before other widgets)
+        const firstWidget = this.parent.querySelector(':scope > div');
+        if (firstWidget) {
+            this.parent.insertBefore(wrapper, firstWidget);
+        } else {
+            this.parent.appendChild(wrapper);
+        }
 
         // Store DOM references
         this.containerEl = document.getElementById('mod_creditDisplay');

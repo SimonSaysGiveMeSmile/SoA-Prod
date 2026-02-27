@@ -1,8 +1,8 @@
 /**
- * TodoWidget - Displays Claude Code's internal task list for the active session
+ * PortUsageWidget - Displays port/folder/status for each terminal tab
  *
- * Shows running/pending/completed tasks with status indicators.
- * Subscribes to claude-state-changed event for updates.
+ * Replaces the old TodoWidget. Polls window.term every 2s and
+ * listens for tab-switch / cwd-change events for immediate updates.
  */
 class TodoWidget {
     constructor(parentId) {
@@ -12,177 +12,133 @@ class TodoWidget {
         let wrapper = document.createElement("div");
         wrapper.setAttribute("id", "mod_todoWidget");
         wrapper.innerHTML = `<div id="mod_todoWidget_innercontainer">
-                <h1>TASKS<span class="mod_todoWidget_count"></span></h1>
+                <h1>PORT USAGE<span class="mod_todoWidget_count"></span></h1>
                 <div id="mod_todoWidget_content">
-                    <div class="todo-empty">NO SESSION</div>
+                    <div class="todo-empty">SCANNING...</div>
                 </div>
             </div>`;
         this.parent.appendChild(wrapper);
 
-        // Store DOM references
         this.containerEl = document.getElementById("mod_todoWidget");
         this.contentEl = document.getElementById("mod_todoWidget_content");
         this.countEl = this.containerEl.querySelector(".mod_todoWidget_count");
 
-        // Bind methods
-        this._onStateChange = this._onStateChange.bind(this);
+        // Shell process names → considered "idle"
+        this._shells = new Set([
+            "bash", "zsh", "fish", "sh", "dash", "ksh", "csh", "tcsh",
+            "powershell", "pwsh", "cmd", "cmd.exe",
+            "login", "-bash", "-zsh", "-fish", "-sh"
+        ]);
 
-        // Subscribe to Claude state changes
-        window.addEventListener('claude-state-changed', this._onStateChange);
+        this._refresh = this._refresh.bind(this);
 
-        // Initialize from existing state if available
-        if (window.claudeState) {
-            this._onStateChange({ detail: window.claudeState });
-        }
+        // Immediate first render
+        setTimeout(this._refresh, 500);
+
+        // Poll every 2 seconds
+        this._interval = setInterval(this._refresh, 2000);
+
+        // Also refresh on tab switch and cwd change
+        window.addEventListener('terminal-cwd-changed', this._refresh);
     }
 
-    /**
-     * Handle Claude state change event
-     */
-    _onStateChange(event) {
-        const state = event.detail;
-
-        if (!state) {
-            this._renderNoSession();
+    _refresh() {
+        if (!window.term) {
+            this.contentEl.innerHTML = '<div class="todo-empty">NO TERMINALS</div>';
+            this.countEl.textContent = '';
             return;
         }
 
-        // Get sessionId for current terminal
-        const activeTerminal = window.currentTerm;
-        const sessionId = window.terminalSessions ? window.terminalSessions[activeTerminal] : null;
+        const indices = Object.keys(window.term)
+            .map(Number)
+            .filter(i => window.term[i] && typeof window.term[i] === 'object')
+            .sort((a, b) => a - b);
 
-        if (!sessionId) {
-            this._renderNoSession();
+        if (indices.length === 0) {
+            this.contentEl.innerHTML = '<div class="todo-empty">NO TERMINALS</div>';
+            this.countEl.textContent = '';
             return;
         }
 
-        // Get tasks from state.tasks[sessionId] (main session tasks)
-        // or fall back to state.todos[sessionId] (subagent todos)
-        let todos = state.tasks ? state.tasks[sessionId] : null;
-        if (!todos || !Array.isArray(todos) || todos.length === 0) {
-            todos = state.todos ? state.todos[sessionId] : null;
-        }
+        this.countEl.textContent = ` (${indices.length})`;
 
-        if (!todos || !Array.isArray(todos) || todos.length === 0) {
-            this._renderEmpty();
-            return;
-        }
-
-        // Separate into active (pending/in_progress) and completed
-        const activeTodos = todos.filter(t => t.status === 'pending' || t.status === 'in_progress');
-        const completedTodos = todos.filter(t => t.status === 'completed');
-
-        // Update count
-        this.countEl.textContent = ` (${todos.length})`;
-
-        // Render
-        this._render(activeTodos, completedTodos);
-    }
-
-    /**
-     * Render active and completed tasks
-     * @param {Array} activeTodos - Active tasks (pending/in_progress)
-     * @param {Array} completedTodos - Completed tasks
-     */
-    _render(activeTodos, completedTodos) {
+        const activeTerm = window.currentTerm;
         let html = '';
 
-        // Render active tasks
-        if (activeTodos.length > 0) {
-            html += '<div class="todo-active-section">';
-            activeTodos.forEach((todo, index) => {
-                const statusClass = this._mapStatus(todo.status);
-                const content = this._escapeHtml(todo.subject || todo.content || todo.description || todo.title || 'Task');
-                html += `
-                    <div class="todo-item">
-                        <span class="todo-index">${index + 1}.</span>
-                        <span class="todo-status-icon ${statusClass}"></span>
-                        <span class="todo-content">${content}</span>
-                    </div>
-                `;
-            });
-            html += '</div>';
-        }
+        indices.forEach(idx => {
+            const t = window.term[idx];
+            const port = t.port || '?';
+            const rawCwd = t.cwd || '';
+            const cwd = this._shortenPath(rawCwd.replace(/^FALLBACK \|-- /, ''));
+            const proc = t._lastProcess || '';
+            const isActive = activeTerm === idx;
+            const status = this._getStatus(proc);
+            const tabName = this._getTabName(idx);
 
-        // Render completed section (collapsible)
-        if (completedTodos.length > 0) {
-            html += `
-                <details class="todo-completed-section">
-                    <summary>COMPLETED (${completedTodos.length})</summary>
-                    <div class="completed-items">
-            `;
-            completedTodos.forEach((todo, index) => {
-                const content = this._escapeHtml(todo.subject || todo.content || todo.description || todo.title || 'Task');
-                html += `
-                    <div class="todo-item completed">
-                        <span class="todo-index">${activeTodos.length + index + 1}.</span>
-                        <span class="todo-status-icon completed"></span>
-                        <span class="todo-content">${content}</span>
-                    </div>
-                `;
-            });
-            html += '</div></details>';
-        }
-
-        // If no active and no completed (shouldn't happen but safety)
-        if (activeTodos.length === 0 && completedTodos.length === 0) {
-            html = '<div class="todo-empty">No tasks</div>';
-        }
+            html += `<div class="pu-row${isActive ? ' pu-active' : ''}" data-tab="${idx}">`;
+            html += `<div class="pu-header">`;
+            html += `<span class="pu-tab">${this._esc(tabName)}</span>`;
+            html += `<span class="pu-port">:${port}</span>`;
+            html += `<span class="pu-status-dot ${status.cls}" title="${status.label}"></span>`;
+            html += `</div>`;
+            html += `<div class="pu-folder" title="${this._esc(rawCwd)}">${this._esc(cwd || '—')}</div>`;
+            html += `<div class="pu-proc">${this._esc(proc || 'shell')} · ${status.label}</div>`;
+            html += `</div>`;
+        });
 
         this.contentEl.innerHTML = html;
+
+        // Click to switch tab
+        this.contentEl.querySelectorAll('.pu-row').forEach(row => {
+            row.addEventListener('click', () => {
+                const tab = parseInt(row.dataset.tab, 10);
+                if (window.focusShellTab) window.focusShellTab(tab);
+            });
+        });
     }
 
-    /**
-     * Map Claude status to CSS class
-     * @param {string} status - Claude status (in_progress, pending, completed)
-     * @returns {string} CSS class name
-     */
-    _mapStatus(status) {
-        switch (status) {
-            case 'in_progress':
-                return 'running';
-            case 'pending':
-                return 'pending';
-            case 'completed':
-                return 'completed';
-            default:
-                return 'pending';
+    _getTabName(idx) {
+        if (window.terminalNames && window.terminalNames[idx]) {
+            const name = window.terminalNames[idx];
+            if (name !== "EMPTY") return name;
         }
+        return idx === 0 ? 'MAIN' : `TAB ${idx}`;
     }
 
-    /**
-     * Render empty state (session exists but no todos)
-     */
-    _renderEmpty() {
-        this.countEl.textContent = '';
-        this.contentEl.innerHTML = '<div class="todo-empty">No tasks</div>';
+    _getStatus(proc) {
+        if (!proc) return { cls: 'pu-idle', label: 'IDLE' };
+        const lower = proc.toLowerCase().replace(/\.exe$/, '');
+        if (this._shells.has(lower)) return { cls: 'pu-idle', label: 'IDLE' };
+        if (/claude|anthropic/i.test(proc)) return { cls: 'pu-busy', label: 'AI AGENT' };
+        if (/node|npm|npx|yarn|pnpm|bun|deno/i.test(proc)) return { cls: 'pu-busy', label: 'RUNNING' };
+        if (/python|pip|python3/i.test(proc)) return { cls: 'pu-busy', label: 'RUNNING' };
+        if (/git|gh|ssh|scp/i.test(proc)) return { cls: 'pu-busy', label: 'RUNNING' };
+        if (/vim|nvim|nano|emacs|less|more|man/i.test(proc)) return { cls: 'pu-editor', label: 'EDITOR' };
+        return { cls: 'pu-busy', label: 'ACTIVE' };
     }
 
-    /**
-     * Render no session state
-     */
-    _renderNoSession() {
-        this.countEl.textContent = '';
-        this.contentEl.innerHTML = '<div class="todo-empty">NO SESSION</div>';
+    _shortenPath(p) {
+        if (!p) return '';
+        const home = require('os').homedir();
+        if (p.startsWith(home)) p = '~' + p.slice(home.length);
+        // Show last 2 segments if long
+        const parts = p.split('/').filter(Boolean);
+        if (parts.length > 3) {
+            return '…/' + parts.slice(-2).join('/');
+        }
+        return p;
     }
 
-    /**
-     * Escape HTML entities for XSS safety
-     * @param {string} text - Raw text
-     * @returns {string} Escaped text
-     */
-    _escapeHtml(text) {
+    _esc(text) {
         if (!text) return '';
         return text
             .replace(/&/g, '&amp;')
             .replace(/</g, '&lt;')
             .replace(/>/g, '&gt;')
-            .replace(/"/g, '&quot;')
-            .replace(/'/g, '&#039;');
+            .replace(/"/g, '&quot;');
     }
 }
 
-// Export for module.exports compatibility
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = { TodoWidget };
 }

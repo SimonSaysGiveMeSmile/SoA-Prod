@@ -1,7 +1,7 @@
 const signale = require("signale");
 const profiler = require("./performance/startupProfiler");
 profiler.mark('boot-start');
-const { app, BrowserWindow, dialog, shell } = require("electron");
+const { app, BrowserWindow, dialog, shell, session, systemPreferences } = require("electron");
 const net = require("net");
 
 // Helper function to check if a port is available
@@ -223,6 +223,28 @@ fs.writeFileSync(versionHistoryPath, JSON.stringify(versionHistory, 0, 2), { enc
 
 function createWindow(settings) {
     signale.info("Creating window...");
+
+    // Grant microphone permission to the renderer process (required for packaged app)
+    session.defaultSession.setPermissionRequestHandler((webContents, permission, callback) => {
+        if (permission === 'media') {
+            callback(true);
+            return;
+        }
+        callback(true);
+    });
+    session.defaultSession.setPermissionCheckHandler((webContents, permission, requestingOrigin) => {
+        if (permission === 'media') return true;
+        return true;
+    });
+
+    // Request macOS microphone access at app level (triggers system prompt on first launch)
+    if (process.platform === 'darwin' && systemPreferences.askForMediaAccess) {
+        systemPreferences.askForMediaAccess('microphone').then(granted => {
+            signale.info(`Microphone access ${granted ? 'granted' : 'denied'}`);
+        }).catch(err => {
+            signale.warn(`Microphone permission request failed: ${err.message}`);
+        });
+    }
 
     let display;
     if (!isNaN(settings.monitor)) {

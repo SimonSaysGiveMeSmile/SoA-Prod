@@ -78,6 +78,27 @@ ul#main_shell_tabs>li {
 ul#main_shell_tabs>li>p {
     margin: 0;
     transform: skewX(-35deg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.3em;
+}
+
+ul#main_shell_tabs>li .tab-close {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.1em;
+    height: 1.1em;
+    border-radius: 50%;
+    font-size: 0.75em;
+    opacity: 0.5;
+    transition: opacity 0.15s, background 0.15s;
+}
+
+ul#main_shell_tabs>li .tab-close:hover {
+    opacity: 1;
+    background: rgba(255, 255, 255, 0.2);
 }
 
 ul#main_shell_tabs>li:not(:first-child) {

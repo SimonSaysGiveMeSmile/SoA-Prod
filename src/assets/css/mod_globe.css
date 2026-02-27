@@ -64,13 +64,15 @@ div#mod_globe i.mod_globe_headerInfo {
 }
 
 div#mod_globe canvas {
-    width: 109%;
+    width: 100%;
+    max-width: 100%;
     margin: 0px;
     margin-top: -1.5vh;
 }
 
 div#mod_globe_canvas_placeholder {
-    width: 109%;
+    width: 100%;
+    max-width: 100%;
     height: 0px;
     padding-bottom: 100%;
     margin: 0px;
