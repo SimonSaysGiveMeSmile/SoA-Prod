@@ -1,11 +1,11 @@
 version: 2.2.13
 files:
   - url: Son-of-Anton-macOS-x64.dmg
-    sha512: oB9R7ZsR09tockFX/uZqVrwitIloUNa5IpLXCNp9QqCZeJXX5T70g+IUBiElmRtW5qmtC5he2rxSm8sxSxkPXQ==
-    size: 126762300
+    sha512: 6Z8ItUh0+ia/d/cAy1UfmRd3k1hOdGYW/Vz92QMZZdTCTmWIyqvyTODA6mhbzNryTxwwhyXbb28TNGp/mB3SOg==
+    size: 128810515
   - url: Son-of-Anton-macOS-arm64.dmg
-    sha512: E2wkzBRNcCYkJSkiY2Jmcdlps84RsGxfqWHI6ZHOXpnl07zeDDiVY3WgeXljVATUE+A5hQ4iyf9qJBV1SpbDmw==
-    size: 121647786
+    sha512: BvPsY6EvBMKONcZ9yAh1BA9h4nY58P3kLbggEK56BCtrt9Hv7qSWhgwlexuqSNWO2snZ1ZEgmX5m2M/GvdxNdg==
+    size: 121295756
 path: Son-of-Anton-macOS-x64.dmg
-sha512: oB9R7ZsR09tockFX/uZqVrwitIloUNa5IpLXCNp9QqCZeJXX5T70g+IUBiElmRtW5qmtC5he2rxSm8sxSxkPXQ==
-releaseDate: '2026-02-26T22:17:42.988Z'
+sha512: 6Z8ItUh0+ia/d/cAy1UfmRd3k1hOdGYW/Vz92QMZZdTCTmWIyqvyTODA6mhbzNryTxwwhyXbb28TNGp/mB3SOg==
+releaseDate: '2026-02-27T00:10:59.989Z'

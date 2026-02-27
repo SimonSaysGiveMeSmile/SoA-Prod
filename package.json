@@ -83,7 +83,10 @@
           ]
         }
       ],
-      "identity": null,
+      "identity": "8834A62403DDA6CE1425CACD5A03199888EF5CD5",
+      "hardenedRuntime": true,
+      "entitlements": "entitlements.mac.plist",
+      "entitlementsInherit": "entitlements.mac.inherit.plist",
       "category": "public.app-category.utilities",
       "icon": "media/icon.icns",
       "extendInfo": {
