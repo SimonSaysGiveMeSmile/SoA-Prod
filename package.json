@@ -1,7 +1,7 @@
 {
   "name": "edex-ui",
   "productName": "Son of Anton",
-  "version": "2.2.13",
+  "version": "2.2.14",
   "description": "A science fiction desktop running everywhere. Awesome.",
   "keywords": [
     "desktop",
@@ -118,8 +118,8 @@
   "dependencies": {
     "clean-css": "5.2.1",
     "electron": "^28.0.0",
-    "electron-builder": "^24.0.0",
-    "@electron/rebuild": "^3.6.0",
+    "electron-builder": "^26.0.0",
+    "@electron/rebuild": "^4.0.0",
     "mime-types": "^2.1.33",
     "node-abi": "^3.0.0",
     "node-json-minify": "1.0.0",

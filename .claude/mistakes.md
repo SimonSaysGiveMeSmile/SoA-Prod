@@ -12,3 +12,7 @@
 - **What**: `gh release create` without `--repo` flag targeted `yifu001/son-of-anton` (private) instead of `SimonSaysGiveMeSmile/son-of-anton-public` (public)
 - **Why**: `gh` CLI resolves the default repo from git remotes and may pick the wrong one when multiple remotes exist
 - **Rule**: Always use `--repo SimonSaysGiveMeSmile/son-of-anton-public` explicitly when creating releases for the public repo
+
+- **What**: `gh release create` uploaded Git LFS pointer files (~130 bytes) instead of actual DMG binaries (~120MB) — downloads returned 404/"Not Found"
+- **Why**: DMGs are tracked by Git LFS in `.gitattributes`. When `gh release create` reads files from inside the repo, Git's LFS smudge/clean filters can interfere with the upload
+- **Rule**: Before uploading release assets, ALWAYS copy DMGs to `/tmp/` (outside the git repo) and upload from there to bypass LFS interference
