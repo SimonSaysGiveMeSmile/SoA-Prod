@@ -8,12 +8,20 @@ class LocationGlobe {
         require(path.join(__dirname, "assets/vendor/encom-globe.js"));
         this.ENCOM = window.ENCOM;
 
+        // Globe color mode: "default" | "mono" | "earth"
+        this._colorMode = localStorage.getItem("globe_colorMode") || "default";
+
         // Create DOM and include lib
         this.parent = document.getElementById(parentId);
         this.parent.innerHTML += `<div id="mod_globe">
             <div id="mod_globe_innercontainer">
                 <h1>WORLD VIEW<i>GLOBAL NETWORK MAP</i></h1>
                 <h2>ENDPOINT LAT/LON<i class="mod_globe_headerInfo">0.0000, 0.0000</i></h2>
+                <div id="mod_globe_color_toggle">
+                    <button class="globe-mode-btn${this._colorMode === 'default' ? ' active' : ''}" data-mode="default">SYS</button>
+                    <button class="globe-mode-btn${this._colorMode === 'mono' ? ' active' : ''}" data-mode="mono">MONO</button>
+                    <button class="globe-mode-btn${this._colorMode === 'earth' ? ' active' : ''}" data-mode="earth">TERRA</button>
+                </div>
                 <div id="mod_globe_canvas_placeholder"></div>
                 <h3>OFFLINE</h3>
             </div>
@@ -23,6 +31,17 @@ class LocationGlobe {
         this.conns = [];
         this._lastKnownGoodGeo = null;
         this._ipinfoRetries = 0;
+
+        // Toggle button listeners
+        document.querySelectorAll(".globe-mode-btn").forEach(btn => {
+            btn.addEventListener("click", () => {
+                this._colorMode = btn.dataset.mode;
+                localStorage.setItem("globe_colorMode", this._colorMode);
+                document.querySelectorAll(".globe-mode-btn").forEach(b => b.classList.remove("active"));
+                btn.classList.add("active");
+                this._applyColorMode();
+            });
+        });
 
 
         setTimeout(() => {
@@ -119,6 +138,11 @@ class LocationGlobe {
             }
 
             this.globe.addConstellation(constellation);
+
+            // Apply saved color mode
+            if (this._colorMode !== "default") {
+                this._applyColorMode();
+            }
         }, 2000);
 
         // Init updaters when intro animation is done
@@ -133,6 +157,88 @@ class LocationGlobe {
                 this.updateConns();
             }, 3000);
         }, 4000);
+    }
+
+    _isLand(lat, lon) {
+        // Rough continental boundaries for land detection
+        // North America
+        if (lat >= 25 && lat <= 84 && lon >= -168 && lon <= -52) return true;
+        if (lat >= 7 && lat < 25 && lon >= -118 && lon <= -77) return true;
+        // Greenland
+        if (lat >= 60 && lat <= 84 && lon >= -73 && lon <= -12) return true;
+        // South America
+        if (lat >= -56 && lat <= 13 && lon >= -82 && lon <= -34) return true;
+        // Europe
+        if (lat >= 36 && lat <= 71 && lon >= -10 && lon <= 40) return true;
+        if (lat >= 50 && lat <= 60 && lon >= -11 && lon <= 2) return true;
+        // Africa
+        if (lat >= -35 && lat <= 37 && lon >= -18 && lon <= 52) return true;
+        // Middle East
+        if (lat >= 12 && lat <= 42 && lon >= 26 && lon <= 63) return true;
+        // Asia (main)
+        if (lat >= 10 && lat <= 77 && lon >= 60 && lon <= 180) return true;
+        // India
+        if (lat >= 6 && lat < 10 && lon >= 75 && lon <= 82) return true;
+        // Southeast Asia / Indonesia
+        if (lat >= -8 && lat <= 20 && lon >= 95 && lon <= 141) return true;
+        // Japan
+        if (lat >= 30 && lat <= 46 && lon >= 129 && lon <= 146) return true;
+        // Australia
+        if (lat >= -40 && lat <= -10 && lon >= 112 && lon <= 155) return true;
+        // New Zealand
+        if (lat >= -47 && lat <= -34 && lon >= 166 && lon <= 179) return true;
+        // Antarctica
+        if (lat <= -65) return true;
+        return false;
+    }
+
+    _getTileColorFn(mode) {
+        const jitter = () => (Math.random() - 0.5) * 0.06;
+
+        if (mode === "mono") {
+            return (lat, lon) => {
+                const land = this._isLand(lat, lon);
+                if (land) {
+                    const v = 0.65 + jitter();
+                    return { r: v, g: v, b: v };
+                }
+                const v = 0.12 + jitter();
+                return { r: v, g: v, b: v };
+            };
+        }
+
+        if (mode === "earth") {
+            return (lat, lon) => {
+                const land = this._isLand(lat, lon);
+                if (land) {
+                    // Antarctica / ice caps
+                    if (lat <= -65 || lat >= 75) {
+                        const v = 0.6 + jitter();
+                        return { r: v, g: v, b: v * 0.95 };
+                    }
+                    // Tropical / equatorial (green)
+                    if (lat >= -20 && lat <= 20) {
+                        return { r: 0.12 + jitter(), g: 0.38 + jitter(), b: 0.10 + jitter() };
+                    }
+                    // Temperate (green-brown mix)
+                    if (lat >= -40 && lat <= 40) {
+                        return { r: 0.25 + jitter(), g: 0.35 + jitter(), b: 0.12 + jitter() };
+                    }
+                    // Northern / arid (brown-tan)
+                    return { r: 0.35 + jitter(), g: 0.28 + jitter(), b: 0.15 + jitter() };
+                }
+                // Ocean — deep blue with slight variation
+                return { r: 0.04 + jitter(), g: 0.10 + jitter(), b: 0.30 + jitter() };
+            };
+        }
+
+        return null; // default: use theme baseColor hue set
+    }
+
+    _applyColorMode() {
+        if (!this.globe) return;
+        const fn = this._getTileColorFn(this._colorMode);
+        this.globe.setTileColorFn(fn);
     }
 
     addRandomConnectedMarkers() {

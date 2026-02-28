@@ -93,3 +93,36 @@ div#mod_globe.offline canvas {
 div#mod_globe.offline h3 {
     opacity: 1;
 }
+
+div#mod_globe_color_toggle {
+    display: flex;
+    gap: 0.4vh;
+    width: 98%;
+    justify-content: flex-end;
+    margin-top: 0.3vh;
+    margin-bottom: -0.3vh;
+    z-index: 10;
+}
+
+.globe-mode-btn {
+    background: transparent;
+    border: 0.092vh solid rgba(var(--color_r), var(--color_g), var(--color_b), 0.3);
+    color: rgba(var(--color_r), var(--color_g), var(--color_b), 0.5);
+    font-family: var(--font_main_light);
+    font-size: 0.95vh;
+    letter-spacing: 0.08vh;
+    padding: 0.15vh 0.5vh;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.globe-mode-btn:hover {
+    border-color: rgba(var(--color_r), var(--color_g), var(--color_b), 0.6);
+    color: rgba(var(--color_r), var(--color_g), var(--color_b), 0.8);
+}
+
+.globe-mode-btn.active {
+    background: rgba(var(--color_r), var(--color_g), var(--color_b), 0.15);
+    border-color: rgba(var(--color_r), var(--color_g), var(--color_b), 0.6);
+    color: rgb(var(--color_r), var(--color_g), var(--color_b));
+}
