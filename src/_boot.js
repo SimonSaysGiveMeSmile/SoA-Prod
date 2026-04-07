@@ -2,6 +2,7 @@ const signale = require("signale");
 const profiler = require("./performance/startupProfiler");
 profiler.mark('boot-start');
 const { app, BrowserWindow, dialog, shell, session, systemPreferences } = require("electron");
+const http = require("http");
 const net = require("net");
 
 // Helper function to check if a port is available
@@ -276,7 +277,8 @@ function createWindow(settings) {
             nodeIntegration: true,
             nodeIntegrationInSubFrames: false,
             allowRunningInsecureContent: false,
-            experimentalFeatures: settings.experimentalFeatures || false
+            experimentalFeatures: settings.experimentalFeatures || false,
+            webviewTag: true
         }
     });
 
@@ -436,11 +438,137 @@ app.on('ready', async () => {
     profiler.mark('main-ready');
     profiler.measure('main-total', 'boot-start', 'main-ready');
 
+    // System sleep/wake handling — notify renderer so terminals can reconnect
+    const { powerMonitor } = electron;
+
+    powerMonitor.on('suspend', () => {
+        signale.info('System suspending — notifying renderer');
+        if (win && win.webContents) {
+            win.webContents.send('system-suspend');
+        }
+    });
+
+    powerMonitor.on('resume', () => {
+        signale.info('System resuming — notifying renderer');
+        if (win && win.webContents) {
+            win.webContents.send('system-resume');
+        }
+    });
+
+    // ── Local Control API (localhost only) ──
+    // Allows external tools (e.g. Claude) to interact with the app
+    const CONTROL_PORT = 7868;
+    const controlServer = http.createServer(async (req, res) => {
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        res.setHeader('Content-Type', 'application/json');
+
+        // Parse body for POST requests
+        let body = '';
+        if (req.method === 'POST') {
+            await new Promise(r => { req.on('data', c => body += c); req.on('end', r); });
+        }
+
+        try {
+            // GET /status — health check
+            if (req.url === '/status' && req.method === 'GET') {
+                res.end(JSON.stringify({ ok: true, version: app.getVersion() }));
+                return;
+            }
+
+            // POST /browse — open URL in internal browser tab
+            if (req.url === '/browse' && req.method === 'POST') {
+                const { url: targetUrl } = JSON.parse(body);
+                if (!targetUrl) { res.statusCode = 400; res.end(JSON.stringify({ error: 'url required' })); return; }
+                const result = await win.webContents.executeJavaScript(
+                    `(function() {
+                        if (typeof window.addBrowserShellTab === 'function') {
+                            window.addBrowserShellTab('${targetUrl.replace(/'/g, "\\'")}');
+                            return { ok: true, url: '${targetUrl.replace(/'/g, "\\'")}' };
+                        }
+                        return { ok: false, error: 'addBrowserShellTab not available yet' };
+                    })()`
+                );
+                res.end(JSON.stringify(result));
+                return;
+            }
+
+            // GET /screenshot — capture the window and return as base64 PNG
+            if (req.url === '/screenshot' && req.method === 'GET') {
+                const image = await win.webContents.capturePage();
+                const png = image.toPNG();
+                const screenshotPath = path.join(require('os').tmpdir(), 'soa-screenshot.png');
+                fs.writeFileSync(screenshotPath, png);
+                res.end(JSON.stringify({ ok: true, path: screenshotPath, size: png.length }));
+                return;
+            }
+
+            // POST /execute — run arbitrary JS in the renderer
+            if (req.url === '/execute' && req.method === 'POST') {
+                const { code } = JSON.parse(body);
+                if (!code) { res.statusCode = 400; res.end(JSON.stringify({ error: 'code required' })); return; }
+                const result = await win.webContents.executeJavaScript(code);
+                res.end(JSON.stringify({ ok: true, result }));
+                return;
+            }
+
+            // POST /navigate — navigate existing browser tab to URL
+            if (req.url === '/navigate' && req.method === 'POST') {
+                const { url: navUrl, tab } = JSON.parse(body);
+                const result = await win.webContents.executeJavaScript(
+                    `(function() {
+                        var idx = ${tab || 'null'};
+                        if (idx === null) {
+                            var keys = Object.keys(window.browserInstances || {});
+                            if (keys.length > 0) idx = keys[keys.length - 1];
+                        }
+                        if (idx !== null && window.browserInstances && window.browserInstances[idx]) {
+                            window.browserInstances[idx].navigate('${navUrl.replace(/'/g, "\\'")}');
+                            return { ok: true, tab: idx, url: '${navUrl.replace(/'/g, "\\'")}' };
+                        }
+                        return { ok: false, error: 'no browser tab found' };
+                    })()`
+                );
+                res.end(JSON.stringify(result));
+                return;
+            }
+
+            // GET /tabs — list open tabs
+            if (req.url === '/tabs' && req.method === 'GET') {
+                const result = await win.webContents.executeJavaScript(
+                    `(function() {
+                        var tabs = [];
+                        if (window.tabType) {
+                            Object.keys(window.tabType).forEach(function(k) {
+                                tabs.push({ index: k, type: window.tabType[k] });
+                            });
+                        }
+                        return { ok: true, tabs: tabs, browserCount: Object.keys(window.browserInstances || {}).length };
+                    })()`
+                );
+                res.end(JSON.stringify(result));
+                return;
+            }
+
+            res.statusCode = 404;
+            res.end(JSON.stringify({ error: 'not found', endpoints: ['GET /status', 'POST /browse', 'GET /screenshot', 'POST /execute', 'POST /navigate', 'GET /tabs'] }));
+        } catch (err) {
+            res.statusCode = 500;
+            res.end(JSON.stringify({ error: err.message }));
+        }
+    });
+
+    controlServer.listen(CONTROL_PORT, '127.0.0.1', () => {
+        signale.success(`Control API listening on http://127.0.0.1:${CONTROL_PORT}`);
+    });
+    controlServer.on('error', (err) => {
+        signale.warn(`Control API failed to start: ${err.message}`);
+    });
+
     // Support for more terminals, used for creating tabs
     // Increase slot count to handle port conflicts (we'll dynamically find available ports)
     extraTtys = {};
     const basePort = Number(settings.port || 3000) + 2;
-    const maxTerminals = 10; // Allow up to 10 terminal tabs
+    const maxTerminals = 20; // Allow up to 20 terminal tabs
     let nextPort = basePort;
 
     // Pre-populate with slots
@@ -600,6 +728,9 @@ app.on('ready', async () => {
 });
 
 app.on('web-contents-created', (e, contents) => {
+    // Allow webview guests to navigate freely
+    if (contents.getType() === 'webview') return;
+
     // Prevent creating more than one window
     contents.on('new-window', (e, url) => {
         e.preventDefault();

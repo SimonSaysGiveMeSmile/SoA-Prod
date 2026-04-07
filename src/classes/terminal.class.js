@@ -224,52 +224,143 @@ class Terminal {
 
             let sockHost = opts.host || "127.0.0.1";
             let sockPort = this.port;
+            this._intentionallyClosed = false;
+            this._reconnecting = false;
+            this._reconnectTimer = null;
+            this._attachAddon = null;
 
-            this.socket = new WebSocket("ws://" + sockHost + ":" + sockPort);
-            this.socket.onopen = () => {
-                let attachAddon = new AttachAddon(this.socket);
-                this.term.loadAddon(attachAddon);
-                this.fit();
-            };
-            this.socket.onerror = e => {
-                console.error("[Terminal] WebSocket error on port " + sockPort + ":", e);
-                if (window.edexErrorsModals) {
-                    new Modal({
-                        type: "warning",
-                        title: "Terminal Connection Error",
-                        message: `WebSocket connection to port ${sockPort} failed. The terminal backend may not be ready yet.`
-                    });
-                }
-            };
-            this.socket.onclose = e => {
-                if (this.onclose) {
-                    this.onclose(e);
-                }
-            };
-
-            this.lastSoundFX = Date.now();
-            this.socket.addEventListener("message", e => {
-                let d = Date.now();
-
-                if (d - this.lastSoundFX > 30) {
-                    if (window.passwordMode == "false")
-                        window.audioManager.stdout.play();
-                    this.lastSoundFX = d;
-                }
-                if (d - this.lastRefit > 10000) {
+            this._connectWebSocket = () => {
+                this.socket = new WebSocket("ws://" + sockHost + ":" + sockPort);
+                this.socket.onopen = () => {
+                    // Dispose old AttachAddon if reconnecting
+                    if (this._attachAddon) {
+                        try { this._attachAddon.dispose(); } catch (e) { /* ignore */ }
+                    }
+                    this._attachAddon = new AttachAddon(this.socket);
+                    this.term.loadAddon(this._attachAddon);
                     this.fit();
-                }
+                    this.Ipc.send("terminal_channel-" + this.port, "Renderer startup");
+                };
+                this.socket.onerror = e => {
+                    console.warn("[Terminal] WebSocket error on port " + sockPort + ":", e);
+                };
+                this.socket.onclose = e => {
+                    if (this._intentionallyClosed) {
+                        if (this.onclose) {
+                            this.onclose(e);
+                        }
+                        return;
+                    }
+                    // Start reconnection attempts
+                    this._reconnect();
+                };
 
-                // See #397
-                if (!window.settings.experimentalGlobeFeatures) return;
-                let ips = e.data.match(/((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)/g);
-                if (ips !== null && ips.length >= 1) {
-                    ips = ips.filter((val, index, self) => { return self.indexOf(val) === index; });
-                    ips.forEach(ip => {
-                        window.mods.globe.addTemporaryConnectedMarker(ip);
-                    });
-                }
-            });
+                this.lastSoundFX = Date.now();
+                this._attachSocketMessageHandler();
+            };
+
+            this._attachSocketMessageHandler = () => {
+                this.socket.addEventListener("message", e => {
+                    let d = Date.now();
+
+                    if (d - this.lastSoundFX > 30) {
+                        if (window.passwordMode == "false")
+                            window.audioManager.stdout.play();
+                        this.lastSoundFX = d;
+                    }
+                    if (d - this.lastRefit > 10000) {
+                        this.fit();
+                    }
+
+                    // See #397
+                    if (!window.settings.experimentalGlobeFeatures) return;
+                    let ips = e.data.match(/((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)/g);
+                    if (ips !== null && ips.length >= 1) {
+                        ips = ips.filter((val, index, self) => { return self.indexOf(val) === index; });
+                        ips.forEach(ip => {
+                            window.mods.globe.addTemporaryConnectedMarker(ip);
+                        });
+                    }
+                });
+            };
+
+            this._reconnect = () => {
+                if (this._reconnecting || this._intentionallyClosed) return;
+                this._reconnecting = true;
+
+                this.term.write('\r\n\x1b[33m\u26A0 Connection lost, reconnecting...\x1b[0m\r\n');
+
+                let attempt = 0;
+                const maxAttempts = 60;
+                const maxDelay = 30000;
+
+                const tryReconnect = () => {
+                    if (this._intentionallyClosed) {
+                        this._reconnecting = false;
+                        return;
+                    }
+                    if (attempt >= maxAttempts) {
+                        this._reconnecting = false;
+                        this.term.write('\r\n\x1b[31m\u2717 Reconnection failed after ' + maxAttempts + ' attempts.\x1b[0m\r\n');
+                        if (this.onclose) {
+                            this.onclose({ code: 1006, reason: 'Reconnection exhausted' });
+                        }
+                        return;
+                    }
+
+                    attempt++;
+                    let delay = Math.min(500 * Math.pow(2, attempt - 1), maxDelay);
+
+                    this._reconnectTimer = setTimeout(() => {
+                        if (this._intentionallyClosed) {
+                            this._reconnecting = false;
+                            return;
+                        }
+
+                        let ws = new WebSocket("ws://" + sockHost + ":" + sockPort);
+                        ws.onopen = () => {
+                            this._reconnecting = false;
+                            this.socket = ws;
+                            // Dispose old AttachAddon
+                            if (this._attachAddon) {
+                                try { this._attachAddon.dispose(); } catch (e) { /* ignore */ }
+                            }
+                            this._attachAddon = new AttachAddon(this.socket);
+                            this.term.loadAddon(this._attachAddon);
+                            this.fit();
+                            this.Ipc.send("terminal_channel-" + this.port, "Renderer startup");
+                            this._attachSocketMessageHandler();
+                            this.term.write('\r\n\x1b[32m\u2713 Reconnected.\x1b[0m\r\n');
+
+                            // Set up onclose for the new socket
+                            this.socket.onclose = e => {
+                                if (this._intentionallyClosed) {
+                                    if (this.onclose) {
+                                        this.onclose(e);
+                                    }
+                                    return;
+                                }
+                                this._reconnect();
+                            };
+                            this.socket.onerror = e => {
+                                console.warn("[Terminal] WebSocket error on port " + sockPort + ":", e);
+                            };
+                        };
+                        ws.onerror = () => {
+                            // Will trigger onclose
+                        };
+                        ws.onclose = () => {
+                            if (!this._reconnecting) return;
+                            tryReconnect();
+                        };
+                    }, delay);
+                };
+
+                tryReconnect();
+            };
+
+            // Initial connection
+            this._connectWebSocket();
 
             let parent = document.getElementById(opts.parentId);
             parent.addEventListener("wheel", e => {
@@ -355,6 +446,18 @@ class Terminal {
                     this.clipboard.didCopy = false;
                 },
                 didCopy: false
+            };
+
+            this.close = () => {
+                this._intentionallyClosed = true;
+                if (this._reconnectTimer) {
+                    clearTimeout(this._reconnectTimer);
+                    this._reconnectTimer = null;
+                }
+                this._reconnecting = false;
+                if (this.socket) {
+                    this.socket.close();
+                }
             };
 
         } else if (opts.role === "server") {
@@ -531,11 +634,18 @@ class Terminal {
                     port: this.port,
                     clientTracking: true,
                     verifyClient: info => {
-                        if (this.wss.clients.length >= 1) {
-                            return false;
-                        } else {
-                            return true;
+                        // Clean stale connections first
+                        for (const client of this.wss.clients) {
+                            if (client.readyState !== 1 /* OPEN */) {
+                                client.terminate();
+                            }
                         }
+                        // Allow if no active clients (reconnection case)
+                        let activeClients = 0;
+                        for (const client of this.wss.clients) {
+                            if (client.readyState === 1) activeClients++;
+                        }
+                        return activeClients < 1;
                     }
                 });
 

@@ -48,6 +48,7 @@ ul#main_shell_tabs {
     margin-left: -0.74vh;
     padding: 0;
     width: calc(100% + 1.48vh);
+    overflow: hidden;
     display: flex;
     box-sizing: border-box;
     border-bottom: 0.18vh solid rgba(var(--color_r), var(--color_g), var(--color_b), 0.5);
@@ -57,7 +58,6 @@ ul#main_shell_tabs {
     align-items: center;
     justify-content: space-evenly;
     flex-wrap: nowrap;
-    overflow: hidden;
 }
 
 ul#main_shell_tabs>li {
@@ -250,7 +250,7 @@ ul#main_shell_tabs>li.shell-add-tab>p {
     line-height: 1;
 }
 
-/* Browser container */
+/* Browser container (legacy) */
 #browser_container {
     display: none;
     width: 100%;
@@ -262,16 +262,111 @@ ul#main_shell_tabs>li.shell-add-tab>p {
     z-index: 100;
 }
 
-.browser-container {
+/* Browser tab — webview-based */
+.browser-tab-wrapper {
+    display: flex;
+    flex-direction: column;
     width: 100%;
     height: 100%;
 }
 
-.browser-container iframe {
+.browser-url-bar {
+    display: flex;
+    align-items: center;
+    gap: 0.4vh;
+    padding: 0.3vh 0.5vh;
+    background: rgba(0, 0, 0, 0.85);
+    border-bottom: 1px solid rgba(var(--color_r), var(--color_g), var(--color_b), 0.35);
+    flex-shrink: 0;
+}
+
+.browser-nav-btn {
+    background: transparent;
+    border: 1px solid rgba(var(--color_r), var(--color_g), var(--color_b), 0.3);
+    color: rgb(var(--color_r), var(--color_g), var(--color_b));
+    font-size: 1.3vh;
+    width: 2.4vh;
+    height: 2.4vh;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 2px;
+    transition: background 0.15s, opacity 0.15s;
+    padding: 0;
+    font-family: var(--font_main);
+}
+
+.browser-nav-btn:hover:not(:disabled) {
+    background: rgba(var(--color_r), var(--color_g), var(--color_b), 0.15);
+}
+
+.browser-nav-btn:disabled {
+    opacity: 0.3;
+    cursor: default;
+}
+
+.browser-url-input {
+    flex: 1;
+    background: rgba(var(--color_r), var(--color_g), var(--color_b), 0.08);
+    border: 1px solid rgba(var(--color_r), var(--color_g), var(--color_b), 0.25);
+    color: rgb(var(--color_r), var(--color_g), var(--color_b));
+    font-family: var(--font_main);
+    font-size: 1.2vh;
+    padding: 0.3vh 0.6vh;
+    border-radius: 2px;
+    outline: none;
+    transition: border-color 0.15s;
+}
+
+.browser-url-input:focus {
+    border-color: rgba(var(--color_r), var(--color_g), var(--color_b), 0.6);
+}
+
+.browser-webview {
+    flex: 1;
+    width: 100%;
+    border: none;
+}
+
+/* Browser tab container inside main_shell_innercontainer */
+div#main_shell_innercontainer .browser-tab-container {
+    position: absolute;
+    top: 0;
+    left: 0;
     width: 100%;
     height: 100%;
-    border: none;
-    background: #fff;
+    z-index: -999;
+    opacity: 0;
+}
+
+div#main_shell_innercontainer .browser-tab-container.active {
+    z-index: inherit;
+    opacity: 1;
+}
+
+/* Globe button to add browser tab */
+ul#main_shell_tabs > li.shell-browser-btn {
+    max-width: 2.5vh;
+    min-width: 2.5vh;
+    flex-shrink: 0;
+    flex-grow: 0;
+    background: transparent;
+    border-left: 0.18vh solid rgba(var(--color_r), var(--color_g), var(--color_b), 0.3);
+    transform: none;
+    opacity: 0.4;
+    transition: opacity 0.2s, background 0.2s;
+}
+
+ul#main_shell_tabs > li.shell-browser-btn:hover {
+    opacity: 1;
+    background: rgba(var(--color_r), var(--color_g), var(--color_b), 0.15);
+}
+
+ul#main_shell_tabs > li.shell-browser-btn > p {
+    transform: none;
+    font-size: 1.5vh;
+    line-height: 1;
 }
 
 /* Mic toggle button in tab bar */
@@ -561,4 +656,40 @@ div#main_shell_innercontainer.drag-over::after {
     z-index: 999;
     pointer-events: none;
     letter-spacing: 0.5vh;
+}
+
+/* Power menu dropdown */
+li.shell-power-btn {
+    position: relative;
+}
+
+ul.power-menu {
+    position: fixed;
+    list-style: none;
+    margin: 0;
+    padding: 0.4vh 0;
+    background: rgba(0, 0, 0, 0.9);
+    border: 0.15vh solid rgba(var(--color_r), var(--color_g), var(--color_b), 0.5);
+    min-width: 14vh;
+    z-index: 2000;
+    font-family: var(--font_main);
+}
+
+ul.power-menu.hidden {
+    display: none;
+}
+
+ul.power-menu > li {
+    padding: 0.6vh 1.2vh;
+    font-size: 1.2vh;
+    color: rgb(var(--color_r), var(--color_g), var(--color_b));
+    cursor: pointer;
+    white-space: nowrap;
+    opacity: 0.7;
+    transition: opacity 0.15s, background 0.15s;
+}
+
+ul.power-menu > li:hover {
+    opacity: 1;
+    background: rgba(var(--color_r), var(--color_g), var(--color_b), 0.15);
 }

@@ -30,7 +30,7 @@ class TextEditor {
         const header = document.createElement("div");
         header.id = "texteditor_header";
         header.innerHTML = `<span class="texteditor_title">TEXT EDITOR</span>
-            <span class="texteditor_hint">Enter to send | Ctrl+Enter for line break | Escape to cancel</span>`;
+            <span class="texteditor_hint">Enter to send | Escape to cancel</span>`;
 
         // Textarea
         this.textarea = document.createElement("textarea");
@@ -73,17 +73,7 @@ class TextEditor {
 
     _bindEvents() {
         this._keyHandler = (e) => {
-            // Ctrl+Enter = insert line break
-            if (e.key === "Enter" && e.ctrlKey) {
-                e.preventDefault();
-                const ta = this.textarea;
-                const start = ta.selectionStart;
-                const end = ta.selectionEnd;
-                ta.value = ta.value.substring(0, start) + "\n" + ta.value.substring(end);
-                ta.selectionStart = ta.selectionEnd = start + 1;
-                return;
-            }
-            // Enter = send
+            // Shift+Enter = send with newline
             if (e.key === "Enter") {
                 e.preventDefault();
                 this._send(true);

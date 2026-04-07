@@ -41751,6 +41751,8 @@ var createParticles = function(){
 
     if(this.hexGrid){
         this.scene.remove(this.hexGrid);
+        if(this.hexGrid.geometry) this.hexGrid.geometry.dispose();
+        if(this.hexGrid.material) this.hexGrid.material.dispose();
     }
 
     var pointVertexShader = [
@@ -41892,11 +41894,16 @@ var createParticles = function(){
         var t = this.tiles[i];
         var k = i * 4;
 
-        var colorIndex = Math.floor(Math.random()*myColors.length);
-        var colorRGB = myColors[colorIndex].rgb();
         var color = new THREE.Color();
 
-        color.setRGB(colorRGB[0]/255.0, colorRGB[1]/255.0, colorRGB[2]/255.0);
+        if(typeof this.tileColorFn === 'function'){
+            var rgb = this.tileColorFn(t.lat, t.lon);
+            color.setRGB(rgb.r, rgb.g, rgb.b);
+        } else {
+            var colorIndex = Math.floor(Math.random()*myColors.length);
+            var colorRGB = myColors[colorIndex].rgb();
+            color.setRGB(colorRGB[0]/255.0, colorRGB[1]/255.0, colorRGB[2]/255.0);
+        }
 
         addTriangle(k, t.b[0].x, t.b[0].y, t.b[0].z, t.b[1].x, t.b[1].y, t.b[1].z, t.b[2].x, t.b[2].y, t.b[2].z, t.lat, t.lon, color);
         addTriangle(k+1, t.b[0].x, t.b[0].y, t.b[0].z, t.b[2].x, t.b[2].y, t.b[2].z, t.b[3].x, t.b[3].y, t.b[3].z, t.lat, t.lon, color);
@@ -42256,6 +42263,14 @@ Globe.prototype.setMaxMarkers = function(_maxMarkers){
 Globe.prototype.setBaseColor = function(_color){
     this.baseColor = _color;
     createParticles.call(this);
+};
+
+Globe.prototype.setTileColorFn = function(_fn){
+    this.tileColorFn = _fn;
+    createParticles.call(this);
+    if(this.pointUniforms && this.totalRunTime){
+        this.pointUniforms.currentTime.value = this.totalRunTime;
+    }
 };
 
 Globe.prototype.setMarkerColor = function(_color){

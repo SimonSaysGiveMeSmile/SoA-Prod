@@ -16,3 +16,7 @@
 - **What**: `gh release create` uploaded Git LFS pointer files (~130 bytes) instead of actual DMG binaries (~120MB) — downloads returned 404/"Not Found"
 - **Why**: DMGs are tracked by Git LFS in `.gitattributes`. When `gh release create` reads files from inside the repo, Git's LFS smudge/clean filters can interfere with the upload
 - **Rule**: Before uploading release assets, ALWAYS copy DMGs to `/tmp/` (outside the git repo) and upload from there to bypass LFS interference
+
+- **What**: Edit to `addShellTab` in `_renderer.js` replaced the `if (nextTab === -1)` block but dropped the closing `}` and `return;`, leaving an unmatched brace that broke syntax
+- **Why**: The edit's old_string matched only the first few lines of the block and the replacement omitted the closing brace
+- **Rule**: When editing conditional blocks (if/for/while), always include the full block including the closing brace in both old_string and new_string
