@@ -394,7 +394,9 @@ class Terminal {
 
             this.fit = () => {
                 this.lastRefit = Date.now();
-                let { cols, rows } = fitAddon.proposeDimensions();
+                const dims = fitAddon.proposeDimensions();
+                if (!dims) return;
+                let { cols, rows } = dims;
 
                 // Apply custom fixes based on screen ratio, see #302
                 let w = screen.width;
