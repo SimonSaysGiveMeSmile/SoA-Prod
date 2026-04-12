@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vibe4.codes - Browser Test</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="scanline-overlay"></div>
+    <nav class="top-bar">
+        <div class="logo">
+            <span class="logo-icon">⚡</span>
+            <span class="logo-text">vibe4<span class="accent">.codes</span></span>
+        </div>
+        <div class="nav-links">
+            <a href="#features">Features</a>
+            <a href="#permissions">Permissions</a>
+            <a href="#debug">Debug</a>
+        </div>
+        <div class="nav-status">
+            <span id="connection-status" class="status-dot offline"></span>
+            <span id="connection-text">Checking...</span>
+        </div>
+    </nav>
+
+    <header class="hero">
+        <div class="hero-grid"></div>
+        <div class="hero-content">
+            <h1 class="glitch" data-text="VIBE4.CODES">VIBE4.CODES</h1>
+            <p class="subtitle">Son of Anton Browser Test Suite</p>
+            <p class="tagline">Testing webview capabilities, permissions &amp; rendering</p>
+            <div class="hero-stats">
+                <div class="stat">
+                    <span class="stat-value" id="stat-tests">0</span>
+                    <span class="stat-label">Tests</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-value" id="stat-passed">0</span>
+                    <span class="stat-label">Passed</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-value" id="stat-failed">0</span>
+                    <span class="stat-label">Failed</span>
+                </div>
+            </div>
+            <button class="cta-btn" onclick="runAllTests()">
+                <span class="btn-icon">▶</span> Run All Tests
+            </button>
+        </div>
+    </header>
+
+    <main>
+        <section id="features" class="section">
+            <h2 class="section-title">
+                <span class="section-icon">◆</span> Rendering Tests
+            </h2>
+            <div class="card-grid">
+                <div class="card">
+                    <div class="card-header">CSS Grid & Flexbox</div>
+                    <div class="card-body">
+                        <div class="flex-test">
+                            <div class="flex-item" style="background:var(--cyan)">1</div>
+                            <div class="flex-item" style="background:var(--magenta)">2</div>
+                            <div class="flex-item" style="background:var(--yellow)">3</div>
+                        </div>
+                        <span class="test-result" id="test-css">⏳</span>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="card-header">CSS Animations</div>
+                    <div class="card-body">
+                        <div class="spinner"></div>
+                        <span class="test-result" id="test-anim">⏳</span>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="card-header">Canvas 2D</div>
+                    <div class="card-body">
+                        <canvas id="canvas-test" width="200" height="80"></canvas>
+                        <span class="test-result" id="test-canvas">⏳</span>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="card-header">SVG Rendering</div>
+                    <div class="card-body">
+                        <svg width="200" height="60" viewBox="0 0 200 60">
+                            <defs>
+                                <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="0%">
+                                    <stop offset="0%" style="stop-color:#00ffc8"/>
+                                    <stop offset="100%" style="stop-color:#ff00ff"/>
+                                </linearGradient>
+                            </defs>
+                            <rect x="10" y="10" width="180" height="40" rx="8"
+                                  fill="none" stroke="url(#grad)" stroke-width="2"/>
+                            <text x="100" y="36" text-anchor="middle"
+                                  fill="url(#grad)" font-size="14" font-family="monospace">
+                                SVG OK
+                            </text>
+                        </svg>
+                        <span class="test-result" id="test-svg">⏳</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="permissions" class="section">
+            <h2 class="section-title">
+                <span class="section-icon">◆</span> Permission Tests
+            </h2>
+            <div class="card-grid">
+                <div class="card">
+                    <div class="card-header">Geolocation</div>
+                    <div class="card-body">
+                        <button class="test-btn" onclick="testGeolocation()">Test</button>
+                        <div class="test-output" id="geo-output">Click to test</div>
+                        <span class="test-result" id="test-geo">⏳</span>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="card-header">Notifications</div>
+                    <div class="card-body">
+                        <button class="test-btn" onclick="testNotifications()">Test</button>
+                        <div class="test-output" id="notif-output">Click to test</div>
+                        <span class="test-result" id="test-notif">⏳</span>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="card-header">Clipboard</div>
+                    <div class="card-body">
+                        <button class="test-btn" onclick="testClipboard()">Test</button>
+                        <div class="test-output" id="clip-output">Click to test</div>
+                        <span class="test-result" id="test-clip">⏳</span>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="card-header">Camera / Mic</div>
+                    <div class="card-body">
+                        <button class="test-btn" onclick="testMedia()">Test</button>
+                        <div class="test-output" id="media-output">Click to test</div>
+                        <span class="test-result" id="test-media">⏳</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="debug" class="section">
+            <h2 class="section-title">
+                <span class="section-icon">◆</span> Debug Console
+            </h2>
+            <div class="console-panel">
+                <div class="console-header">
+                    <span>output://browser-test</span>
+                    <button class="console-clear" onclick="clearConsole()">Clear</button>
+                </div>
+                <div id="console-output" class="console-body"></div>
+            </div>
+        </section>
+
+        <section class="section">
+            <h2 class="section-title">
+                <span class="section-icon">◆</span> Network & API Tests
+            </h2>
+            <div class="card-grid">
+                <div class="card">
+                    <div class="card-header">Fetch API</div>
+                    <div class="card-body">
+                        <button class="test-btn" onclick="testFetch()">Test</button>
+                        <div class="test-output" id="fetch-output">Click to test</div>
+                        <span class="test-result" id="test-fetch">⏳</span>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="card-header">WebSocket</div>
+                    <div class="card-body">
+                        <button class="test-btn" onclick="testWebSocket()">Test</button>
+                        <div class="test-output" id="ws-output">Click to test</div>
+                        <span class="test-result" id="test-ws">⏳</span>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="card-header">LocalStorage</div>
+                    <div class="card-body">
+                        <button class="test-btn" onclick="testStorage()">Test</button>
+                        <div class="test-output" id="storage-output">Click to test</div>
+                        <span class="test-result" id="test-storage">⏳</span>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="card-header">Web Workers</div>
+                    <div class="card-body">
+                        <button class="test-btn" onclick="testWorker()">Test</button>
+                        <div class="test-output" id="worker-output">Click to test</div>
+                        <span class="test-result" id="test-worker">⏳</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <footer>
+        <p>Son of Anton Browser Test · Electron Webview · All permissions auto-granted</p>
+    </footer>
+
+    <script src="tests.js"></script>
+</body>
+</html>

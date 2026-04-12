@@ -387,6 +387,9 @@ class InputComposer {
         }
         term.write(text);
         term.write("\r");
+
+        term._pendingBannerText = text;
+
         if (window.audioManager) window.audioManager.granted.play();
         this.close();
     }

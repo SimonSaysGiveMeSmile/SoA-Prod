@@ -1,7 +1,7 @@
 const signale = require("signale");
 const profiler = require("./performance/startupProfiler");
 profiler.mark('boot-start');
-const { app, BrowserWindow, dialog, shell, session, systemPreferences } = require("electron");
+const { app, BrowserWindow, dialog, shell, session, systemPreferences, powerSaveBlocker } = require("electron");
 const http = require("http");
 const net = require("net");
 
@@ -101,6 +101,14 @@ if (process.env.https_proxy) delete process.env.https_proxy;
 app.commandLine.appendSwitch("ignore-gpu-blocklist");
 app.commandLine.appendSwitch("enable-gpu-rasterization");
 app.commandLine.appendSwitch("enable-video-decode");
+
+// Prevent background throttling at the Chromium level — backgroundThrottling: false
+// in webPreferences only partially disables it; these switches cover the scheduler
+// and renderer-level throttling that can pause WebSockets and timers when the window
+// loses focus or is occluded by another app.
+app.commandLine.appendSwitch("disable-renderer-backgrounding");
+app.commandLine.appendSwitch("disable-background-timer-throttling");
+app.commandLine.appendSwitch("disable-features", "CalculateNativeWinOcclusion");
 
 // Fix userData folder not setup on Windows
 try {
@@ -295,6 +303,12 @@ function createWindow(settings) {
     profiler.mark('window-created');
     profiler.measure('window-init', 'terminal-created', 'window-created');
     win.show();
+
+    // Prevent macOS App Nap from throttling/suspending the process when the
+    // window is not frontmost. Uses 'prevent-app-suspension' which keeps the
+    // event loop, timers, and WebSocket connections alive in the background.
+    const powerSaveId = powerSaveBlocker.start('prevent-app-suspension');
+    signale.info(`Power save blocker started (id: ${powerSaveId})`);
     if (!settings.allowWindowed) {
         win.setResizable(false);
     } else if (!require(lastWindowStateFile)["useFullscreen"]) {

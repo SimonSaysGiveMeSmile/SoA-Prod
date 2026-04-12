@@ -138,7 +138,16 @@ class Terminal {
             let fitAddon = new FitAddon();
             this.term.loadAddon(fitAddon);
             this.term.open(document.getElementById(opts.parentId));
-            this.term.loadAddon(new WebglAddon());
+            try {
+                let webglAddon = new WebglAddon();
+                webglAddon.onContextLoss(() => {
+                    console.warn('[Terminal] WebGL context lost on port ' + this.port + ', falling back to DOM renderer');
+                    try { webglAddon.dispose(); } catch (e) { /* already disposed */ }
+                });
+                this.term.loadAddon(webglAddon);
+            } catch (e) {
+                console.warn('[Terminal] WebGL addon failed on port ' + this.port + ', using DOM renderer:', e.message);
+            }
             let ligaturesAddon = new LigaturesAddon();
             this.term.loadAddon(ligaturesAddon);
             this.term.attachCustomKeyEventHandler(e => {
@@ -178,6 +187,13 @@ class Terminal {
                         // Match common prompt endings: $ > # %
                         const promptMatch = lineText.match(/[$>#%]\s*(.*)$/);
                         const cmd = promptMatch ? promptMatch[1].trim() : lineText;
+
+                        if (buffer.type !== "alternate") {
+                            const bMatch = lineText.match(/[$>#%❯›]\s*(.*)$/);
+                            const bText = (bMatch ? bMatch[1] : lineText).trim();
+                            if (bText) this._pendingBannerText = bText;
+                        }
+
                         // Check for browser commands
                         if (cmd.startsWith('browse ') || cmd === 'browse' || cmd === 'back' || cmd === 'forward' || cmd === 'refresh') {
                             const parts = cmd.split(' ');
@@ -197,6 +213,28 @@ class Terminal {
             // Prevent soft-keyboard on touch devices #733
             document.querySelectorAll('.xterm-helper-textarea').forEach(textarea => textarea.setAttribute('readonly', 'readonly'))
             this.term.focus();
+
+            // Context banner: floating element showing last user input
+            // Must be inside .xterm to sit above the WebGL canvas layer
+            let contextBanner = document.createElement('div');
+            contextBanner.className = 'terminal-context-banner';
+            let xtermEl = document.getElementById(opts.parentId).querySelector('.xterm');
+            if (xtermEl) {
+                xtermEl.appendChild(contextBanner);
+            } else {
+                document.getElementById(opts.parentId).appendChild(contextBanner);
+            }
+            this._contextBanner = contextBanner;
+
+            this.updateContextBanner = (text) => {
+                if (!this._contextBanner || !text) return;
+                const lines = text.split('\n');
+                let display = lines[0].trim();
+                if (lines.length > 1) display += ' [...]';
+                if (display.length > 150) display = display.substring(0, 147) + '...';
+                this._contextBanner.textContent = '› ' + display;
+                this._contextBanner.classList.add('visible');
+            };
 
             this.Ipc.send("terminal_channel-" + this.port, "Renderer startup");
             this.Ipc.on("terminal_channel-" + this.port, (e, ...args) => {

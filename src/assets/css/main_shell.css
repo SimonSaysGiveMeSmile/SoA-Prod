@@ -451,7 +451,9 @@ div#main_shell_innercontainer {
 div#main_shell_innercontainer pre {
     z-index: -999;
     opacity: 0;
-    position: relative;
+    position: absolute;
+    top: 0;
+    left: 0;
 }
 
 div#main_shell_innercontainer pre.active {
@@ -459,20 +461,38 @@ div#main_shell_innercontainer pre.active {
     opacity: 1;
 }
 
-div#main_shell_innercontainer pre#terminal1 {
-    top: -100%;
+/* Context banner — floating last-input indicator per terminal */
+.terminal-context-banner {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 100;
+    padding: 0.25vh 0.8vh;
+    font-family: var(--font_main);
+    font-size: 1.05vh;
+    letter-spacing: 0.04em;
+    color: rgb(var(--color_r), var(--color_g), var(--color_b));
+    background: linear-gradient(
+        180deg,
+        rgba(0, 0, 0, 0.82) 0%,
+        rgba(0, 0, 0, 0.65) 100%
+    );
+    border-bottom: 1px solid rgba(var(--color_r), var(--color_g), var(--color_b), 0.25);
+    box-shadow: 0 1px 6px rgba(0, 0, 0, 0.4);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    pointer-events: none;
+    will-change: transform;
+    opacity: 0;
+    transform: translateY(-100%) translateZ(0);
+    transition: opacity 0.25s ease, transform 0.25s ease;
 }
 
-div#main_shell_innercontainer pre#terminal2 {
-    top: -200%;
-}
-
-div#main_shell_innercontainer pre#terminal3 {
-    top: -300%;
-}
-
-div#main_shell_innercontainer pre#terminal4 {
-    top: -400%;
+.terminal-context-banner.visible {
+    opacity: 0.9;
+    transform: translateY(0) translateZ(0);
 }
 
 .terminal .xterm-viewport {

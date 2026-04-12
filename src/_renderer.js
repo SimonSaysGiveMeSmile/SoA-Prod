@@ -1046,11 +1046,16 @@ try {
                     let port = Number(ports[key]);
                     if (!alivePorts[port]) return;
 
-                    window.term[idx] = new Terminal({
-                        role: "client",
-                        parentId: "terminal" + idx,
-                        port: port
-                    });
+                    try {
+                        window.term[idx] = new Terminal({
+                            role: "client",
+                            parentId: "terminal" + idx,
+                            port: port
+                        });
+                    } catch (termErr) {
+                        console.error('[Tabs] Failed to restore terminal for tab ' + idx + ':', termErr);
+                        return;
+                    }
 
                     if (buffers[key]) {
                         window.term[idx].term.write(buffers[key]);
@@ -1412,6 +1417,14 @@ try {
 
         // Update on thinking state changes
         window.addEventListener('thinking-state-changed', () => window.updateTabStatuses());
+
+        // Context banner: show last user input when Claude starts thinking
+        window.addEventListener('thinking-state-changed', (e) => {
+            const { terminalIndex, isThinking } = e.detail;
+            if (isThinking && window.term[terminalIndex] && window.term[terminalIndex]._pendingBannerText) {
+                window.term[terminalIndex].updateContextBanner(window.term[terminalIndex]._pendingBannerText);
+            }
+        });
         // Update on attention state changes (permission prompts detected)
         window.addEventListener('claude-attention-changed', () => window.updateTabStatuses());
 
@@ -1967,11 +1980,18 @@ try {
                 } else if (r.startsWith("SUCCESS")) {
                     let port = Number(r.substr(9));
 
-                    window.term[number] = new Terminal({
-                        role: "client",
-                        parentId: "terminal" + number,
-                        port
-                    });
+                    try {
+                        window.term[number] = new Terminal({
+                            role: "client",
+                            parentId: "terminal" + number,
+                            port
+                        });
+                    } catch (termErr) {
+                        console.error('[Tabs] Failed to create terminal client for tab ' + number + ':', termErr);
+                        document.getElementById("shell_tab" + number).innerHTML = `<p>ERROR${window._tabCloseBtn(number)}</p>`;
+                        window.term[number] = undefined;
+                        return;
+                    }
 
                     window.term[number].onclose = e => {
                         delete window.term[number].onprocesschange;

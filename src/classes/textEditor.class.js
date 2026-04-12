@@ -118,6 +118,10 @@ class TextEditor {
             term.write("\r");
         }
 
+        if (withEnter) {
+            term._pendingBannerText = text;
+        }
+
         if (window.audioManager) {
             window.audioManager.granted.play();
         }

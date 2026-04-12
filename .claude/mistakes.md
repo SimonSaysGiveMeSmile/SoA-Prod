@@ -20,3 +20,11 @@
 - **What**: Edit to `addShellTab` in `_renderer.js` replaced the `if (nextTab === -1)` block but dropped the closing `}` and `return;`, leaving an unmatched brace that broke syntax
 - **Why**: The edit's old_string matched only the first few lines of the block and the replacement omitted the closing brace
 - **Rule**: When editing conditional blocks (if/for/while), always include the full block including the closing brace in both old_string and new_string
+
+- **What**: Diagnosed blank 6th terminal as WebGL context limit, but the actual cause was CSS positioning in `main_shell.css`
+- **Why**: Terminal `<pre>` elements used `position: relative` with hardcoded `top` offsets only for terminals 1-4. Terminals 5+ had no offset, pushing them off-screen. Jumped to a plausible-sounding theory (WebGL) without checking the CSS first.
+- **Rule**: When a UI element is "blank" or invisible, always check CSS positioning/visibility first before investigating runtime errors. Look for hardcoded selectors that may not cover dynamically created elements.
+
+- **What**: Context banner appended to `<pre>` parent was invisible — hidden behind xterm's WebGL canvas
+- **Why**: xterm's WebGL addon renders on a hardware-accelerated canvas that paints over sibling DOM elements regardless of CSS z-index
+- **Rule**: Overlay elements for xterm must be placed inside the `.xterm` element (not the parent `<pre>`) with high z-index and `will-change: transform` / `translateZ(0)` to force GPU compositing above the WebGL canvas
