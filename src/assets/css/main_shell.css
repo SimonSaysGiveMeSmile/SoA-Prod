@@ -468,31 +468,93 @@ div#main_shell_innercontainer pre.active {
     left: 0;
     right: 0;
     z-index: 100;
-    padding: 0.25vh 0.8vh;
+    padding: 0.3vh 0.8vh;
     font-family: var(--font_main);
     font-size: 1.05vh;
     letter-spacing: 0.04em;
     color: rgb(var(--color_r), var(--color_g), var(--color_b));
     background: linear-gradient(
         180deg,
-        rgba(0, 0, 0, 0.82) 0%,
-        rgba(0, 0, 0, 0.65) 100%
+        rgba(0, 0, 0, 0.88) 0%,
+        rgba(0, 0, 0, 0.78) 100%
     );
     border-bottom: 1px solid rgba(var(--color_r), var(--color_g), var(--color_b), 0.25);
     box-shadow: 0 1px 6px rgba(0, 0, 0, 0.4);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    pointer-events: none;
+    display: flex;
+    align-items: baseline;
+    gap: 0.6vh;
+    cursor: pointer;
     will-change: transform;
     opacity: 0;
     transform: translateY(-100%) translateZ(0);
-    transition: opacity 0.25s ease, transform 0.25s ease;
+    transition: opacity 0.25s ease, transform 0.25s ease, max-height 0.3s ease;
+    max-height: 2.4vh;
+    overflow: hidden;
 }
 
 .terminal-context-banner.visible {
     opacity: 0.9;
     transform: translateY(0) translateZ(0);
+}
+
+.terminal-context-banner.expanded {
+    max-height: 40vh;
+    overflow-y: auto;
+    padding: 0.5vh 0.8vh;
+    align-items: flex-start;
+}
+
+/* Label — editable session name */
+.terminal-context-banner .banner-label {
+    flex-shrink: 0;
+    padding: 0 0.4vh;
+    border: 1px solid rgba(var(--color_r), var(--color_g), var(--color_b), 0.3);
+    border-radius: 2px;
+    font-size: 0.95vh;
+    cursor: pointer;
+    opacity: 0.9;
+    transition: opacity 0.15s, background 0.15s;
+    white-space: nowrap;
+}
+
+.terminal-context-banner .banner-label:hover {
+    opacity: 1;
+    background: rgba(var(--color_r), var(--color_g), var(--color_b), 0.15);
+}
+
+.terminal-context-banner .banner-label.empty {
+    opacity: 0.4;
+    border-style: dashed;
+}
+
+/* Inline edit input for label */
+.terminal-context-banner .banner-label-input {
+    flex-shrink: 0;
+    width: 14vh;
+    padding: 0 0.4vh;
+    border: 1px solid rgba(var(--color_r), var(--color_g), var(--color_b), 0.6);
+    border-radius: 2px;
+    background: rgba(0, 0, 0, 0.6);
+    color: rgb(var(--color_r), var(--color_g), var(--color_b));
+    font-family: var(--font_main);
+    font-size: 0.95vh;
+    outline: none;
+}
+
+/* Body — Claude input text */
+.terminal-context-banner .banner-body {
+    flex: 1;
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.terminal-context-banner.expanded .banner-body {
+    white-space: pre-wrap;
+    word-break: break-word;
+    overflow: visible;
+    text-overflow: clip;
 }
 
 .terminal .xterm-viewport {

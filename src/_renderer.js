@@ -66,6 +66,7 @@ try {
     const shortcutsFile = path.join(settingsDir, "shortcuts.json");
     const lastWindowStateFile = path.join(settingsDir, "lastWindowState.json");
     const terminalNamesFile = path.join(settingsDir, "terminalNames.json");
+    const bannerLabelsFile = path.join(settingsDir, "bannerLabels.json");
 
     // Load config
     try {
@@ -114,6 +115,24 @@ try {
             fs.writeFileSync(terminalNamesFile, JSON.stringify(window.terminalNames, null, 4));
         } catch (e) {
             console.error("Failed to save terminal names:", e);
+        }
+    };
+
+    // Banner labels — per-terminal session context, persisted
+    try {
+        if (fs.existsSync(bannerLabelsFile)) {
+            window.bannerLabels = JSON.parse(fs.readFileSync(bannerLabelsFile, 'utf-8'));
+        } else {
+            window.bannerLabels = {};
+        }
+    } catch (e) {
+        window.bannerLabels = {};
+    }
+    window.saveBannerLabels = () => {
+        try {
+            fs.writeFileSync(bannerLabelsFile, JSON.stringify(window.bannerLabels, null, 4));
+        } catch (e) {
+            console.error("Failed to save banner labels:", e);
         }
     };
 

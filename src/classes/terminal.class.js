@@ -214,10 +214,67 @@ class Terminal {
             document.querySelectorAll('.xterm-helper-textarea').forEach(textarea => textarea.setAttribute('readonly', 'readonly'))
             this.term.focus();
 
-            // Context banner: floating element showing last user input
-            // Must be inside .xterm to sit above the WebGL canvas layer
+            // Context banner: floating element showing label + last Claude input
             let contextBanner = document.createElement('div');
             contextBanner.className = 'terminal-context-banner';
+
+            // Derive tab index from parentId (e.g. "terminal0" → "0")
+            let bannerKey = opts.parentId.replace(/\D/g, '');
+
+            // Label button — click to edit session name
+            let labelEl = document.createElement('span');
+            labelEl.className = 'banner-label';
+            let savedLabel = (window.bannerLabels && window.bannerLabels[bannerKey]) || '';
+            labelEl.textContent = savedLabel || '✎';
+            if (!savedLabel) labelEl.classList.add('empty');
+
+            labelEl.addEventListener('click', (e) => {
+                e.stopPropagation();
+                let input = document.createElement('input');
+                input.className = 'banner-label-input';
+                input.type = 'text';
+                input.maxLength = 40;
+                input.value = (window.bannerLabels && window.bannerLabels[bannerKey]) || '';
+                input.placeholder = 'Session name...';
+
+                let commit = () => {
+                    let val = input.value.trim().substring(0, 40);
+                    if (!window.bannerLabels) window.bannerLabels = {};
+                    window.bannerLabels[bannerKey] = val;
+                    if (window.saveBannerLabels) window.saveBannerLabels();
+                    labelEl.textContent = val || '✎';
+                    labelEl.classList.toggle('empty', !val);
+                    if (input.parentNode) input.parentNode.replaceChild(labelEl, input);
+                };
+
+                input.addEventListener('blur', commit);
+                input.addEventListener('keydown', (ke) => {
+                    ke.stopPropagation();
+                    if (ke.key === 'Enter') { ke.preventDefault(); input.blur(); }
+                    if (ke.key === 'Escape') {
+                        ke.preventDefault();
+                        if (input.parentNode) input.parentNode.replaceChild(labelEl, input);
+                    }
+                });
+
+                labelEl.parentNode.replaceChild(input, labelEl);
+                input.focus();
+                input.select();
+            });
+
+            // Body — shows last Claude input, click to expand/collapse
+            let bodyEl = document.createElement('span');
+            bodyEl.className = 'banner-body';
+
+            contextBanner.appendChild(labelEl);
+            contextBanner.appendChild(bodyEl);
+
+            // Expand/collapse on banner click (not on label)
+            contextBanner.addEventListener('click', (e) => {
+                e.stopPropagation();
+                contextBanner.classList.toggle('expanded');
+            });
+
             let xtermEl = document.getElementById(opts.parentId).querySelector('.xterm');
             if (xtermEl) {
                 xtermEl.appendChild(contextBanner);
@@ -225,14 +282,15 @@ class Terminal {
                 document.getElementById(opts.parentId).appendChild(contextBanner);
             }
             this._contextBanner = contextBanner;
+            this._bannerBody = bodyEl;
+
+            // Show banner immediately if a label was saved
+            if (savedLabel) contextBanner.classList.add('visible');
 
             this.updateContextBanner = (text) => {
                 if (!this._contextBanner || !text) return;
-                const lines = text.split('\n');
-                let display = lines[0].trim();
-                if (lines.length > 1) display += ' [...]';
-                if (display.length > 150) display = display.substring(0, 147) + '...';
-                this._contextBanner.textContent = '› ' + display;
+                this._bannerBody.textContent = '› ' + text;
+                this._contextBanner.classList.remove('expanded');
                 this._contextBanner.classList.add('visible');
             };
 
