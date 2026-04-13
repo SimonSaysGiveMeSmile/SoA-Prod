@@ -1,0 +1,210 @@
+/* GitCommits widget */
+
+div#mod_gitCommits {
+    border-top: 0.092vh solid rgba(var(--color_r), var(--color_g), var(--color_b), 0.3);
+    font-family: var(--font_main_light);
+    letter-spacing: 0.092vh;
+    font-size: 1.111vh;
+    padding: 0vh;
+    padding-top: 0.645vh;
+    display: flex;
+}
+
+div#mod_gitCommits::before {
+    content: "";
+    border-left: 0.092vh solid rgba(var(--color_r), var(--color_g), var(--color_b), 0.3);
+    align-self: flex-start;
+    position: relative;
+    left: -0.092vh;
+    top: -1.111vh;
+    height: 0.833vh;
+}
+
+div#mod_gitCommits::after {
+    content: "";
+    border-right: 0.092vh solid rgba(var(--color_r), var(--color_g), var(--color_b), 0.3);
+    position: relative;
+    right: -0.092vh;
+    top: -1.111vh;
+    height: 0.833vh;
+}
+
+div#mod_gitCommits_inner {
+    width: 100%;
+}
+
+div#mod_gitCommits_inner > h1:first-child {
+    font-size: 1.48vh;
+    margin: 0vh;
+    width: 98%;
+    padding-left: 2%;
+    margin-bottom: 0.3vh;
+}
+
+div#mod_gitCommits_inner > h1:first-child > i {
+    font-style: normal;
+    font-size: 1.20vh;
+    opacity: 0.5;
+    text-align: right;
+    display: inline-block;
+    position: relative;
+    bottom: 1.6vh;
+    width: 100%;
+}
+
+/* Heatmap grid */
+div#mod_gitCommits_heatmap {
+    display: grid;
+    grid-gap: 0.2vh;
+    padding: 0.3vh 0.5vh;
+    margin-bottom: 0.3vh;
+}
+
+.gc-cell {
+    width: 100%;
+    aspect-ratio: 1;
+    background: rgb(var(--color_r), var(--color_g), var(--color_b));
+    transition: opacity 0.3s ease;
+}
+
+/* Interval controls */
+div#mod_gitCommits_controls {
+    display: flex;
+    gap: 0.6vh;
+    padding: 0.2vh 0.5vh 0.4vh;
+}
+
+.gc-interval {
+    font-size: 1.1vh;
+    padding: 0.15vh 0.5vh;
+    cursor: pointer;
+    opacity: 0.4;
+    border: 0.092vh solid rgba(var(--color_r), var(--color_g), var(--color_b), 0.2);
+    transition: opacity 0.2s ease, border-color 0.2s ease;
+    letter-spacing: 0.05vh;
+}
+
+.gc-interval:hover {
+    opacity: 0.7;
+}
+
+.gc-interval.gc-active {
+    opacity: 1;
+    border-color: rgba(var(--color_r), var(--color_g), var(--color_b), 0.7);
+}
+
+/* Commit list */
+div#mod_gitCommits_list {
+    width: 100%;
+    max-height: 20vh;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(var(--color_r), var(--color_g), var(--color_b), 0.3) transparent;
+}
+
+div#mod_gitCommits_list::-webkit-scrollbar {
+    width: 3px;
+    opacity: 0;
+}
+div#mod_gitCommits_list:hover::-webkit-scrollbar {
+    opacity: 1;
+}
+div#mod_gitCommits_list::-webkit-scrollbar-track {
+    background: transparent;
+}
+div#mod_gitCommits_list::-webkit-scrollbar-thumb {
+    background: rgba(var(--color_r), var(--color_g), var(--color_b), 0.3);
+    border-radius: 2px;
+}
+
+.gc-row {
+    padding: 0.35vh 0.5vh;
+    border-bottom: 1px dotted rgba(var(--color_r), var(--color_g), var(--color_b), 0.12);
+}
+.gc-row:last-child {
+    border-bottom: none;
+}
+
+.gc-msg {
+    font-size: 1.2vh;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    opacity: 0.85;
+    line-height: 1.6;
+}
+
+.gc-meta {
+    font-size: 1.05vh;
+    opacity: 0.45;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.gc-empty {
+    text-align: center;
+    opacity: 0.5;
+    padding: 1vh 0;
+    font-size: 1.3vh;
+}
+
+/* Config form */
+div#mod_gitCommits_config {
+    flex-direction: column;
+    gap: 0.5vh;
+    padding: 0.5vh;
+}
+
+.gc-cfg-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5vh;
+}
+
+.gc-cfg-row label {
+    font-size: 1.2vh;
+    opacity: 0.6;
+    width: 4vh;
+    flex-shrink: 0;
+    letter-spacing: 0.08vh;
+}
+
+.gc-cfg-row input {
+    flex: 1;
+    background: rgba(var(--color_r), var(--color_g), var(--color_b), 0.08);
+    border: 0.092vh solid rgba(var(--color_r), var(--color_g), var(--color_b), 0.25);
+    color: rgb(var(--color_r), var(--color_g), var(--color_b));
+    font-family: var(--font_main_light);
+    font-size: 1.2vh;
+    padding: 0.3vh 0.4vh;
+    outline: none;
+    letter-spacing: 0.05vh;
+    transition: border-color 0.2s ease;
+}
+
+.gc-cfg-row input:focus {
+    border-color: rgba(var(--color_r), var(--color_g), var(--color_b), 0.6);
+}
+
+.gc-cfg-row input::placeholder {
+    color: rgba(var(--color_r), var(--color_g), var(--color_b), 0.3);
+}
+
+button#gc_cfg_save {
+    background: rgba(var(--color_r), var(--color_g), var(--color_b), 0.15);
+    border: 0.092vh solid rgba(var(--color_r), var(--color_g), var(--color_b), 0.4);
+    color: rgb(var(--color_r), var(--color_g), var(--color_b));
+    font-family: var(--font_main_light);
+    font-size: 1.2vh;
+    letter-spacing: 0.15vh;
+    padding: 0.4vh 0;
+    cursor: pointer;
+    margin-top: 0.3vh;
+    transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+button#gc_cfg_save:hover {
+    background: rgba(var(--color_r), var(--color_g), var(--color_b), 0.25);
+    border-color: rgba(var(--color_r), var(--color_g), var(--color_b), 0.7);
+}

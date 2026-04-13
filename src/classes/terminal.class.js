@@ -726,6 +726,49 @@ class Terminal {
                 this.onclosed(code, signal);
             });
 
+            // Persistent output buffer — captures tty data while no WS client is connected
+            this._activeWs = null;
+            this._pendingBuffer = [];
+            this._pendingBufferSize = 0;
+            const MAX_BUFFER_SIZE = 1024 * 1024; // 1 MB cap
+
+            this._bufferData = (data) => {
+                const len = typeof data === 'string' ? data.length : data.byteLength;
+                this._pendingBuffer.push(data);
+                this._pendingBufferSize += len;
+                while (this._pendingBufferSize > MAX_BUFFER_SIZE && this._pendingBuffer.length > 0) {
+                    const evicted = this._pendingBuffer.shift();
+                    this._pendingBufferSize -= (typeof evicted === 'string' ? evicted.length : evicted.byteLength);
+                }
+            };
+
+            this._persistentDataListener = this.tty.onData(data => {
+                this._nextTickUpdateTtyCWD = true;
+                this._nextTickUpdateProcess = true;
+
+                if (require("os").type() === "Windows_NT") {
+                    const parsed = this._parseWindowsCwdFromOutput(data);
+                    this._debugLogCwdParse(data, parsed);
+                    if (parsed && parsed !== this._windowsCwdFromPrompt) {
+                        this._windowsCwdFromPrompt = parsed;
+                        this.tty._cwd = parsed;
+                        if (this.renderer) {
+                            this.renderer.send("terminal_channel-" + this.port, "New cwd", parsed);
+                        }
+                    }
+                }
+
+                if (this._activeWs && this._activeWs.readyState === 1) {
+                    try {
+                        this._activeWs.send(data);
+                    } catch (e) {
+                        this._bufferData(data);
+                    }
+                } else {
+                    this._bufferData(data);
+                }
+            });
+
             // Create WebSocket server with error handling for port conflicts
             try {
                 this.wss = new this.Websocket({
@@ -795,50 +838,36 @@ class Terminal {
             });
             this.wss.on("connection", ws => {
                 this.onopened(this.tty._pid);
+                this._activeWs = ws;
 
-                // Dispose previous onData listener if reconnecting
-                if (this._dataDisposable) {
-                    this._dataDisposable.dispose();
-                    this._dataDisposable = null;
+                // Flush any output buffered while disconnected
+                if (this._pendingBuffer.length > 0) {
+                    for (const chunk of this._pendingBuffer) {
+                        try { ws.send(chunk); } catch (e) { break; }
+                    }
+                    this._pendingBuffer = [];
+                    this._pendingBufferSize = 0;
                 }
 
                 ws.on("close", (code, reason) => {
-                    if (this._dataDisposable) {
-                        this._dataDisposable.dispose();
-                        this._dataDisposable = null;
+                    if (this._activeWs === ws) {
+                        this._activeWs = null;
                     }
                     this.ondisconnected(code, reason);
                 });
                 ws.on("message", msg => {
                     this.tty.write(msg);
                 });
-                this._dataDisposable = this.tty.onData(data => {
-                    this._nextTickUpdateTtyCWD = true;
-                    this._nextTickUpdateProcess = true;
-
-                    // Windows: Parse CWD from prompt output
-                    if (require("os").type() === "Windows_NT") {
-                        const parsed = this._parseWindowsCwdFromOutput(data);
-                        // Log parsing attempts for debugging
-                        this._debugLogCwdParse(data, parsed);
-                        if (parsed && parsed !== this._windowsCwdFromPrompt) {
-                            this._windowsCwdFromPrompt = parsed;
-                            this.tty._cwd = parsed;
-                            if (this.renderer) {
-                                this.renderer.send("terminal_channel-" + this.port, "New cwd", parsed);
-                            }
-                        }
-                    }
-
-                    try {
-                        ws.send(data);
-                    } catch (e) {
-                        // Websocket closed
-                    }
-                });
             });
 
             this.close = () => {
+                if (this._persistentDataListener) {
+                    this._persistentDataListener.dispose();
+                    this._persistentDataListener = null;
+                }
+                this._activeWs = null;
+                this._pendingBuffer = [];
+                this._pendingBufferSize = 0;
                 this.tty.kill();
                 this._closed = true;
             };

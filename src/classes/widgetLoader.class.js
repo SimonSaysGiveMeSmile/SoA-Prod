@@ -40,6 +40,7 @@ class WidgetLoader {
             netstat: { column: 'right', weight: 'heavy', class: null },
             globe: { column: 'right', weight: 'heavy', class: null },
             conninfo: { column: 'right', weight: 'heavy', class: null },
+            gitCommits: { column: 'right', weight: 'heavy', class: null },
             todoWidget: { column: 'right', weight: 'deferred', class: null },
             agentList: { column: 'left', weight: 'deferred', class: null }
         };
@@ -102,7 +103,7 @@ class WidgetLoader {
             // Load order: visual positioning takes priority for right column
             // Right column order: netstat first (top), globe, conninfo, then todoWidget (deferred)
             // Left column: sysinfo first (fast), then cpu/ram/toplist, hardwareInspector last (slowest)
-            const loadOrder = ['sysinfo', 'netstat', 'globe', 'conninfo', 'cpuinfo', 'ramwatcher', 'toplist', 'hardwareInspector'];
+            const loadOrder = ['sysinfo', 'netstat', 'globe', 'conninfo', 'gitCommits', 'cpuinfo', 'ramwatcher', 'toplist', 'hardwareInspector'];
 
             const heavyWidgets = loadOrder
                 .map(name => [name, this.widgetRegistry[name]])

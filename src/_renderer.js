@@ -1649,6 +1649,7 @@ try {
             netstat: Netstat,
             globe: LocationGlobe,
             conninfo: Conninfo,
+            gitCommits: GitCommits,
             todoWidget: TodoWidget,
             agentList: AgentList
         });
