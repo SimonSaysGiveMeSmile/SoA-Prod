@@ -141,7 +141,8 @@ if (!fs.existsSync(settingsFile)) {
         fsListView: false,
         experimentalGlobeFeatures: false,
         experimentalFeatures: false,
-        disableUITests: true
+        disableUITests: true,
+        restoreSession: true
     }, "", 4));
     signale.info(`Default settings written to ${settingsFile}`);
 }
@@ -591,6 +592,12 @@ app.on('ready', async () => {
     }
 
     ipc.on("ttyspawn", async (e, arg) => {
+        // Parse optional spawn options (CWD override for session restore)
+        let spawnOpts = {};
+        if (arg && typeof arg === 'string' && arg.startsWith('{')) {
+            try { spawnOpts = JSON.parse(arg); } catch (_) { /* ignore */ }
+        }
+
         // Find the first null slot
         let slotKey = null;
         Object.keys(extraTtys).forEach(key => {
@@ -626,6 +633,7 @@ app.on('ready', async () => {
         const maxRetries = 10;
         let term = null;
         let usedPort = port;
+        const spawnCwd = spawnOpts.cwd || tty.tty._cwd || settings.cwd;
 
         for (let retry = 0; retry < maxRetries; retry++) {
             term = null;
@@ -636,7 +644,7 @@ app.on('ready', async () => {
                     role: "server",
                     shell: settings.shell,
                     params: settings.shellArgs || '',
-                    cwd: tty.tty._cwd || settings.cwd,
+                    cwd: spawnCwd,
                     env: cleanEnv,
                     port: usedPort
                 });

@@ -67,6 +67,7 @@ try {
     const lastWindowStateFile = path.join(settingsDir, "lastWindowState.json");
     const terminalNamesFile = path.join(settingsDir, "terminalNames.json");
     const bannerLabelsFile = path.join(settingsDir, "bannerLabels.json");
+    const sessionStateFile = path.join(settingsDir, "sessionState.json");
 
     // Load config
     try {
@@ -1043,6 +1044,37 @@ try {
             sessionStorage.setItem("terminalPorts", JSON.stringify(ports));
             sessionStorage.setItem("terminalBuffers", JSON.stringify(buffers));
             sessionStorage.setItem("currentTerm", String(window.currentTerm));
+
+            // Persist session state to disk for cross-launch restore
+            if (window.settings.restoreSession !== false) {
+                try {
+                    const tabs = [];
+                    const allTabEls = document.querySelectorAll('ul#main_shell_tabs > li[id^="shell_tab"]:not(.shell-add-tab):not(.shell-browser-btn)');
+                    allTabEls.forEach(el => {
+                        const idx = parseInt(el.id.replace('shell_tab', ''), 10);
+                        const type = window.tabType[idx] || 'terminal';
+                        const entry = { index: idx, type };
+                        if (type === 'terminal' && window.term[idx] && window.term[idx].cwd) {
+                            entry.cwd = window.term[idx].cwd;
+                        }
+                        if (type === 'browser' && window.browserInstances[idx]) {
+                            const wv = document.querySelector('#browser_tab_' + idx + ' webview');
+                            if (wv && wv.getURL) {
+                                try { entry.url = wv.getURL(); } catch (_) { /* ignore */ }
+                            }
+                        }
+                        entry.name = window.terminalNames[idx] || '';
+                        tabs.push(entry);
+                    });
+                    const state = {
+                        activeTerm: window.currentTerm,
+                        tabs
+                    };
+                    fs.writeFileSync(sessionStateFile, JSON.stringify(state, null, 4));
+                } catch (e) {
+                    console.error('[Session] Failed to save session state:', e);
+                }
+            }
         });
 
         // Restore extra terminals on hot-reload
@@ -1125,6 +1157,98 @@ try {
                     }, 500);
                 }
             });
+        })();
+
+        // Restore session from disk on fresh launch (not hot-reload)
+        (function restoreSession() {
+            if (sessionStorage.getItem("terminalPorts")) return; // hot-reload uses sessionStorage path
+            if (window.settings.restoreSession === false) return;
+            if (!fs.existsSync(sessionStateFile)) return;
+
+            let state;
+            try {
+                state = JSON.parse(fs.readFileSync(sessionStateFile, 'utf-8'));
+            } catch (e) {
+                console.error('[Session] Failed to read session state:', e);
+                return;
+            }
+
+            // Remove the file so a crash during restore doesn't loop
+            try { fs.unlinkSync(sessionStateFile); } catch (_) { /* ignore */ }
+
+            if (!state || !Array.isArray(state.tabs) || state.tabs.length <= 1) return;
+
+            const extraTabs = state.tabs.filter(t => t.index !== 0);
+            if (extraTabs.length === 0) return;
+
+            // Store pending CWDs so ttyspawn picks them up
+            window._pendingTabCwd = {};
+            extraTabs.forEach(t => {
+                if (t.type === 'terminal' && t.cwd) {
+                    window._pendingTabCwd[t.index] = t.cwd;
+                }
+            });
+
+            // Restore tab names before creating tabs
+            extraTabs.forEach(t => {
+                if (t.name) window.terminalNames[t.index] = t.name;
+            });
+            window.saveTerminalNames();
+
+            // Stagger tab creation to allow ttyspawn round-trips
+            let i = 0;
+            const createNext = () => {
+                if (i >= extraTabs.length) {
+                    // All tabs created — focus the previously active one
+                    if (typeof state.activeTerm === 'number' && state.activeTerm !== 0) {
+                        setTimeout(() => {
+                            if (document.getElementById('shell_tab' + state.activeTerm)) {
+                                window.focusShellTab(state.activeTerm);
+                            }
+                        }, 600);
+                    }
+                    delete window._pendingTabCwd;
+                    return;
+                }
+                const tab = extraTabs[i++];
+                if (tab.type === 'browser') {
+                    window.addBrowserShellTab(tab.url || 'https://www.google.com');
+                    setTimeout(createNext, 200);
+                } else {
+                    // Create DOM elements (like addShellTab) at the specific index
+                    const addBtn = document.getElementById('shell_add_tab');
+                    if (!addBtn) { setTimeout(createNext, 100); return; }
+
+                    const newTabEl = document.createElement('li');
+                    newTabEl.id = 'shell_tab' + tab.index;
+                    newTabEl.onclick = () => window.focusShellTab(tab.index);
+                    newTabEl.innerHTML = `<p>${window._escapeHtml(window.terminalNames[tab.index] || 'EMPTY')}${window._tabCloseBtn(tab.index)}</p>`;
+                    addBtn.parentNode.insertBefore(newTabEl, addBtn);
+
+                    const container = document.getElementById('main_shell_innercontainer');
+                    const newPre = document.createElement('pre');
+                    newPre.id = 'terminal' + tab.index;
+                    container.appendChild(newPre);
+
+                    window.tabType[tab.index] = 'terminal';
+                    window.enableTabRename(tab.index);
+
+                    // focusShellTab will trigger ttyspawn for this index
+                    window.focusShellTab(tab.index);
+
+                    // Wait for spawn reply before creating next tab
+                    const waitForSpawn = () => {
+                        if (window.term[tab.index] && typeof window.term[tab.index] === 'object') {
+                            setTimeout(createNext, 200);
+                        } else {
+                            setTimeout(waitForSpawn, 300);
+                        }
+                    };
+                    setTimeout(waitForSpawn, 500);
+                }
+            };
+            // Start after a short delay to let the primary terminal settle
+            setTimeout(createNext, 1500);
         })();
 
         // Terminal image preview — drag-and-drop & clipboard paste
@@ -1993,7 +2117,10 @@ try {
             window.tabType[number] = 'terminal';
 
             document.getElementById("shell_tab" + number).innerHTML = `<p>LOADING...${window._tabCloseBtn(number)}</p>`;
-            ipc.send("ttyspawn", "true");
+            const spawnArg = (window._pendingTabCwd && window._pendingTabCwd[number])
+                ? JSON.stringify({ cwd: window._pendingTabCwd[number] })
+                : "true";
+            ipc.send("ttyspawn", spawnArg);
             ipc.once("ttyspawn-reply", (e, r) => {
                 if (r.startsWith("ERROR")) {
                     document.getElementById("shell_tab" + number).innerHTML = `<p>ERROR${window._tabCloseBtn(number)}</p>`;
@@ -2472,6 +2599,7 @@ try {
                         <tr><td>experimentalFeatures</td><td>Toggle Chrome's experimental web features (DANGEROUS)</td><td><select id="settingsEditor-experimentalFeatures"><option>${window.settings.experimentalFeatures}</option><option>${!window.settings.experimentalFeatures}</option></select></td></tr>
                         <tr><td>contextWarningThreshold</td><td>Context usage percentage to trigger warning (0-100)</td><td><input type="number" id="settingsEditor-contextWarningThreshold" value="${window.settings.contextWarningThreshold || 80}" min="0" max="100"></td></tr>
                         <tr><td>permissionMode</td><td>Agent permission level: Ask Everything, Default, or YOLO (auto-grant all)</td><td><select id="settingsEditor-permissionMode"><option value="ask" ${(window.settings.permissionMode || 'default') === 'ask' ? 'selected' : ''}>Ask Everything</option><option value="default" ${(window.settings.permissionMode || 'default') === 'default' ? 'selected' : ''}>Default</option><option value="yolo" ${window.settings.permissionMode === 'yolo' ? 'selected' : ''}>YOLO</option></select></td></tr>
+                        <tr><td>restoreSession</td><td>Restore tabs and working directories from previous session on launch</td><td><select id="settingsEditor-restoreSession"><option>${window.settings.restoreSession !== false}</option><option>${window.settings.restoreSession === false}</option></select></td></tr>
                         </table>
                     </div>
                     <div class="settings-pane" data-pane="ads">
@@ -2563,7 +2691,8 @@ try {
             adOverlayEnabled: (document.getElementById("settingsEditor-adOverlayEnabled")?.value === "true"),
             adOverlayMode: document.getElementById("settingsEditor-adOverlayMode")?.value || 'corner',
             adDebounceMs: Number(document.getElementById("settingsEditor-adDebounceMs")?.value) || 300,
-            adTimeoutMs: Number(document.getElementById("settingsEditor-adTimeoutMs")?.value) || 30000
+            adTimeoutMs: Number(document.getElementById("settingsEditor-adTimeoutMs")?.value) || 30000,
+            restoreSession: (document.getElementById("settingsEditor-restoreSession")?.value !== "false")
         };
 
         Object.keys(window.settings).forEach(key => {

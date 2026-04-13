@@ -208,3 +208,31 @@ button#gc_cfg_save:hover {
     background: rgba(var(--color_r), var(--color_g), var(--color_b), 0.25);
     border-color: rgba(var(--color_r), var(--color_g), var(--color_b), 0.7);
 }
+
+button#gc_cfg_save:disabled {
+    opacity: 0.4;
+    cursor: default;
+}
+
+/* Validation error flash */
+.gc-input-error {
+    border-color: rgba(255, 80, 80, 0.8) !important;
+    background: rgba(255, 80, 80, 0.12) !important;
+    animation: gcShake 0.3s ease;
+}
+
+@keyframes gcShake {
+    0%, 100% { transform: translateX(0); }
+    25% { transform: translateX(-3px); }
+    75% { transform: translateX(3px); }
+}
+
+/* Error message below form */
+.gc-cfg-error {
+    font-size: 1.1vh;
+    color: rgba(255, 100, 100, 0.9);
+    padding: 0.3vh 0;
+    text-align: center;
+    word-break: break-word;
+    display: none;
+}

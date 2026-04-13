@@ -22,12 +22,45 @@ class GitCommits {
         this._cacheEls();
 
         if (!this.owner || !this.repo) {
-            this._showConfig();
+            this._autoDetectRepo().then(() => {
+                if (this.owner && this.repo) {
+                    this._prefillConfig();
+                    this._safeFetchAndRender();
+                } else {
+                    this._showConfig();
+                }
+            });
         } else {
-            this._fetchAndRender();
+            this._safeFetchAndRender();
         }
 
-        this._interval = setInterval(() => this._fetchAndRender(), 5 * 60 * 1000);
+        this._interval = setInterval(() => this._safeFetchAndRender(), 5 * 60 * 1000);
+    }
+
+    async _autoDetectRepo() {
+        try {
+            const { execSync } = require("child_process");
+            const cwd = (window.term && window.term[0] && window.term[0].cwd)
+                ? window.term[0].cwd.replace(/^FALLBACK \|-- /, "")
+                : require("os").homedir();
+
+            const remoteUrl = execSync("git config --get remote.origin.url", {
+                cwd, encoding: "utf8", timeout: 3000
+            }).trim();
+
+            const match = remoteUrl.match(/github\.com[:/]([^/]+)\/([^/.]+)/);
+            if (match) {
+                this.owner = match[1];
+                this.repo = match[2];
+            }
+        } catch (_) {
+            // not a git repo or no remote — user must configure manually
+        }
+    }
+
+    _prefillConfig() {
+        document.getElementById("gc_cfg_owner").value = this.owner;
+        document.getElementById("gc_cfg_repo").value = this.repo;
     }
 
     _buildDOM() {
@@ -74,7 +107,7 @@ class GitCommits {
                 this.days = parseInt(btn.dataset.days, 10);
                 this.controlsEl.querySelectorAll(".gc-interval").forEach(b => b.classList.remove("gc-active"));
                 btn.classList.add("gc-active");
-                this._fetchAndRender();
+                this._safeFetchAndRender();
             });
         });
 
@@ -95,35 +128,72 @@ class GitCommits {
         if (this.pat) document.getElementById("gc_cfg_pat").value = this.pat;
     }
 
-    _saveConfig() {
-        const owner = document.getElementById("gc_cfg_owner").value.trim();
-        const repo = document.getElementById("gc_cfg_repo").value.trim();
+    async _saveConfig() {
+        const ownerInput = document.getElementById("gc_cfg_owner");
+        const repoInput = document.getElementById("gc_cfg_repo");
+        const owner = ownerInput.value.trim();
+        const repo = repoInput.value.trim();
         const pat = document.getElementById("gc_cfg_pat").value.trim();
 
-        if (!owner || !repo) return;
+        if (!owner) {
+            ownerInput.classList.add("gc-input-error");
+            this.infoEl.innerText = "ENTER OWNER";
+            setTimeout(() => ownerInput.classList.remove("gc-input-error"), 1500);
+            return;
+        }
+        if (!repo) {
+            repoInput.classList.add("gc-input-error");
+            this.infoEl.innerText = "ENTER REPO NAME";
+            setTimeout(() => repoInput.classList.remove("gc-input-error"), 1500);
+            return;
+        }
 
         this.owner = owner;
         this.repo = repo;
         this.pat = pat;
 
-        if (!window.settings.gitCommits) window.settings.gitCommits = {};
-        window.settings.gitCommits.owner = owner;
-        window.settings.gitCommits.repo = repo;
-        window.settings.gitCommits.pat = pat;
-        window.settings.gitCommits.days = this.days;
+        const saveBtn = document.getElementById("gc_cfg_save");
+        saveBtn.textContent = "CONNECTING...";
+        saveBtn.disabled = true;
 
-        const fs = require("fs");
-        const path = require("path");
-        const remote = require("@electron/remote");
-        const settingsFile = path.join(remote.app.getPath("userData"), "settings.json");
-        fs.writeFileSync(settingsFile, JSON.stringify(window.settings, "", 4));
+        try {
+            await this._fetchAndRender();
 
-        this.configEl.style.display = "none";
-        this.heatmapEl.style.display = "";
-        this.listEl.style.display = "";
-        this.controlsEl.style.display = "";
+            if (!window.settings.gitCommits) window.settings.gitCommits = {};
+            window.settings.gitCommits.owner = owner;
+            window.settings.gitCommits.repo = repo;
+            window.settings.gitCommits.pat = pat;
+            window.settings.gitCommits.days = this.days;
 
-        this._fetchAndRender();
+            const fs = require("fs");
+            const path = require("path");
+            const remote = require("@electron/remote");
+            const settingsFile = path.join(remote.app.getPath("userData"), "settings.json");
+            fs.writeFileSync(settingsFile, JSON.stringify(window.settings, "", 4));
+
+            this.configEl.style.display = "none";
+            this.heatmapEl.style.display = "";
+            this.listEl.style.display = "";
+            this.controlsEl.style.display = "";
+        } catch (e) {
+            this.infoEl.innerText = "CONNECTION FAILED";
+            this._showConfigError(e.message);
+        } finally {
+            saveBtn.textContent = "CONNECT";
+            saveBtn.disabled = false;
+        }
+    }
+
+    _showConfigError(msg) {
+        let errEl = this.configEl.querySelector(".gc-cfg-error");
+        if (!errEl) {
+            errEl = document.createElement("div");
+            errEl.className = "gc-cfg-error";
+            this.configEl.appendChild(errEl);
+        }
+        errEl.textContent = msg;
+        errEl.style.display = "block";
+        setTimeout(() => { errEl.style.display = "none"; }, 8000);
     }
 
     async _fetchAndRender() {
@@ -131,11 +201,15 @@ class GitCommits {
 
         this.infoEl.innerText = "FETCHING...";
 
+        const commits = await this._fetchCommits();
+        this._renderHeatmap(commits);
+        this._renderList(commits);
+        this.infoEl.innerText = `${commits.length} COMMITS · ${this.days}D`;
+    }
+
+    async _safeFetchAndRender() {
         try {
-            const commits = await this._fetchCommits();
-            this._renderHeatmap(commits);
-            this._renderList(commits);
-            this.infoEl.innerText = `${commits.length} COMMITS · ${this.days}D`;
+            await this._fetchAndRender();
         } catch (e) {
             console.error("[GitCommits]", e);
             this.infoEl.innerText = "ERROR";
