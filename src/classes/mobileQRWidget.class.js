@@ -87,6 +87,12 @@ class MobileQRWidget {
 
         this._unsubscribe = this.bridge.onStatus(s => this._render(s));
         this.bridge.refreshStatus();
+
+        this._refreshInterval = setInterval(() => {
+            if (this.bridge.status && this.bridge.status.running) {
+                this.bridge.refreshStatus();
+            }
+        }, 5000);
     }
 
     async _toggle() {
@@ -212,6 +218,7 @@ class MobileQRWidget {
     }
 
     destroy() {
+        if (this._refreshInterval) clearInterval(this._refreshInterval);
         if (this._unsubscribe) this._unsubscribe();
         if (this.root && this.root.parentNode) this.root.parentNode.removeChild(this.root);
     }

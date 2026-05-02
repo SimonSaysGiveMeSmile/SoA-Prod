@@ -135,6 +135,7 @@ class MobileBridgeServer {
     isRunning() { return !!this.httpServer; }
 
     status() {
+        if (this.isRunning()) this.lanIp = getLanIp();
         return {
             running: this.isRunning(),
             port: this.port,
