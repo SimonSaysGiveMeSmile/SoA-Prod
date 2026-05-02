@@ -222,10 +222,33 @@ class MobileBridgeServer {
         const parsed = new URL(req.url, 'http://localhost');
         const pathname = parsed.pathname || '/';
 
-        // Liveness / pairing endpoint used by the mobile app's preflight.
         if (pathname === '/api/ping') {
             res.writeHead(200, { 'content-type': 'application/json', 'access-control-allow-origin': '*' });
             res.end(JSON.stringify({ ok: true, name: 'son-of-anton', protocol: 1 }));
+            return;
+        }
+        if (pathname === '/api/diag') {
+            const status = this.status();
+            res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'access-control-allow-origin': '*' });
+            res.end(`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>SOA Diag</title>
+<style>body{background:#000;color:#aaffaa;font-family:monospace;padding:16px}h1{font-size:14px;letter-spacing:.2em}
+.ok{color:#5fff5f}.err{color:#ff5d6f}pre{font-size:12px;white-space:pre-wrap}</style></head><body>
+<h1>SON OF ANTON — DIAGNOSTICS</h1>
+<p class="ok">HTTP: OK — this page loaded successfully</p>
+<p id="ws">WebSocket: testing…</p>
+<pre id="info">Server: ${status.running ? 'running' : 'stopped'}
+Port: ${status.port}
+LAN: ${status.lanUrl ? status.lanUrl.split('?')[0] : 'n/a'}
+Clients: ${status.clients}
+Token present: ${status.token ? 'yes' : 'no'}</pre>
+<script>
+try{var ws=new WebSocket(location.origin.replace(/^http/,'ws')+'/ws?t=${status.token||'none'}');
+ws.onopen=function(){document.getElementById('ws').className='ok';document.getElementById('ws').textContent='WebSocket: OK — connected';ws.close()};
+ws.onerror=function(){document.getElementById('ws').className='err';document.getElementById('ws').textContent='WebSocket: FAILED'};
+ws.onclose=function(e){if(!document.getElementById('ws').className)document.getElementById('ws').className='err';
+if(!document.getElementById('ws').className.includes('ok'))document.getElementById('ws').textContent='WebSocket: closed ('+e.code+')'}}
+catch(e){document.getElementById('ws').className='err';document.getElementById('ws').textContent='WebSocket: error — '+e.message}
+</script></body></html>`);
             return;
         }
         if (pathname === '/api/session') {
