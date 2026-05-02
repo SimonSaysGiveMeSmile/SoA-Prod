@@ -324,6 +324,7 @@ class Terminal {
             this._reconnecting = false;
             this._reconnectTimer = null;
             this._attachAddon = null;
+            this._systemSuspended = false;
 
             this._connectWebSocket = () => {
                 this.socket = new WebSocket("ws://" + sockHost + ":" + sockPort);
@@ -382,6 +383,10 @@ class Terminal {
 
             this._reconnect = () => {
                 if (this._reconnecting || this._intentionallyClosed) return;
+                if (this._systemSuspended) {
+                    this._reconnecting = true;
+                    return;
+                }
                 this._reconnecting = true;
 
                 this.term.write('\r\n\x1b[33m\u26A0 Connection lost, reconnecting...\x1b[0m\r\n');
@@ -391,8 +396,7 @@ class Terminal {
                 const maxDelay = 30000;
 
                 const tryReconnect = () => {
-                    if (this._intentionallyClosed) {
-                        this._reconnecting = false;
+                    if (this._intentionallyClosed || this._systemSuspended) {
                         return;
                     }
                     if (attempt >= maxAttempts) {
@@ -408,8 +412,7 @@ class Terminal {
                     let delay = Math.min(500 * Math.pow(2, attempt - 1), maxDelay);
 
                     this._reconnectTimer = setTimeout(() => {
-                        if (this._intentionallyClosed) {
-                            this._reconnecting = false;
+                        if (this._intentionallyClosed || this._systemSuspended) {
                             return;
                         }
 
@@ -417,7 +420,6 @@ class Terminal {
                         ws.onopen = () => {
                             this._reconnecting = false;
                             this.socket = ws;
-                            // Dispose old AttachAddon
                             if (this._attachAddon) {
                                 try { this._attachAddon.dispose(); } catch (e) { /* ignore */ }
                             }
@@ -428,7 +430,6 @@ class Terminal {
                             this._attachSocketMessageHandler();
                             this.term.write('\r\n\x1b[32m\u2713 Reconnected.\x1b[0m\r\n');
 
-                            // Set up onclose for the new socket
                             this.socket.onclose = e => {
                                 if (this._intentionallyClosed) {
                                     if (this.onclose) {
@@ -453,6 +454,28 @@ class Terminal {
                 };
 
                 tryReconnect();
+            };
+
+            this._pauseForSleep = () => {
+                this._systemSuspended = true;
+                if (this._reconnectTimer) {
+                    clearTimeout(this._reconnectTimer);
+                    this._reconnectTimer = null;
+                }
+            };
+
+            this._resumeFromSleep = () => {
+                this._systemSuspended = false;
+                if (!this._intentionallyClosed && this.socket &&
+                    this.socket.readyState === WebSocket.OPEN) {
+                    return;
+                }
+                if (this._reconnectTimer) {
+                    clearTimeout(this._reconnectTimer);
+                    this._reconnectTimer = null;
+                }
+                this._reconnecting = false;
+                this._connectWebSocket();
             };
 
             // Initial connection

@@ -60,6 +60,17 @@ function setupVoiceIPC(window) {
 
   mainWindow = window;
 
+  function safeSendRenderer(channel, ...args) {
+    if (!mainWindow || mainWindow.isDestroyed()) return;
+    const wc = mainWindow.webContents;
+    if (!wc || wc.isDestroyed() || wc.isCrashed()) return;
+    try {
+      wc.send(channel, ...args);
+    } catch (_) {
+      /* frame disposed during renderer crash/reload */
+    }
+  }
+
   // Remove then register each handler atomically to prevent race conditions
   ipcMain.removeHandler('voice:check-availability');
   ipcMain.handle('voice:check-availability', () => {
@@ -178,9 +189,7 @@ function setupVoiceIPC(window) {
   // Helper to log to both main process console and renderer DevTools
   function voiceLog(...args) {
     console.log(...args);
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send('voice:debug-log', args.map(String).join(' '));
-    }
+    safeSendRenderer('voice:debug-log', args.map(String).join(' '));
   }
 
   ipcMain.removeHandler('voice:on-device-start');

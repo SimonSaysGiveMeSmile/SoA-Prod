@@ -150,12 +150,12 @@ class LocationGlobe {
             this.updateLoc();
             this.locUpdater = setInterval(() => {
                 this.updateLoc();
-            }, 1000);
+            }, 5000);
 
             this.updateConns();
             this.connsUpdater = setInterval(() => {
                 this.updateConns();
-            }, 3000);
+            }, 10000);
         }, 4000);
     }
 

@@ -460,6 +460,13 @@ try {
     function initSystemInformationProxy() {
         const { nanoid } = require("nanoid/non-secure");
 
+        // Stateful calls return deltas since their last invocation; caching them would corrupt the series.
+        const STATEFUL_OR_UNCACHEABLE = new Set(["networkStats", "fsStats", "disksIO"]);
+        // Short TTL lets multiple widgets that poll the same SI function share one IPC roundtrip
+        // without serving meaningfully stale data.
+        const SI_CACHE_TTL_MS = 800;
+        const siCache = new Map();
+
         window.si = new Proxy({}, {
             apply: () => { throw new Error("Cannot use sysinfo proxy directly as a function") },
             set: () => { throw new Error("Cannot set a property on the sysinfo proxy") },
@@ -467,7 +474,15 @@ try {
                 return function (...args) {
                     let callback = (typeof args[args.length - 1] === "function") ? true : false;
 
-                    return new Promise((resolve, reject) => {
+                    const cacheable = !STATEFUL_OR_UNCACHEABLE.has(prop) && !callback && args.length === 0;
+                    if (cacheable) {
+                        const hit = siCache.get(prop);
+                        if (hit && hit.expiresAt > Date.now()) {
+                            return hit.promise;
+                        }
+                    }
+
+                    const p = new Promise((resolve, reject) => {
                         let id = nanoid();
                         let timeoutId = null;
 
@@ -490,10 +505,16 @@ try {
                             reject(error);
                         }, 30000);
                     });
+
+                    if (cacheable) {
+                        siCache.set(prop, { promise: p, expiresAt: Date.now() + SI_CACHE_TTL_MS });
+                    }
+
+                    return p;
                 };
             }
         });
-        console.log("[SI Proxy] systeminformation proxy initialized");
+        console.log(`[SI Proxy] systeminformation proxy initialized (${SI_CACHE_TTL_MS}ms dedup cache)`);
     }
 
     // Initialize voice system
@@ -630,11 +651,11 @@ try {
 
             const initialized = await window.voiceController.initialize();
 
-            // Create toggle widget in right column
-            const rightColumn = document.querySelector('#mod_column_right');
-            if (rightColumn) {
+            // Create toggle widget in the (only remaining) left column
+            const sidePanelColumn = document.querySelector('#mod_column_left');
+            if (sidePanelColumn) {
                 window.voiceToggleWidget = new VoiceToggleWidget(window.voiceController);
-                window.voiceToggleWidget.create(rightColumn);
+                window.voiceToggleWidget.create(sidePanelColumn);
 
                 if (!initialized) {
                     window.voiceToggleWidget.showUnavailable();
@@ -642,7 +663,7 @@ try {
 
                 // Mic monitor — live waveform for diagnostics
                 const { MicMonitor } = require('./classes/micMonitor.class');
-                window.micMonitor = new MicMonitor('mod_column_right');
+                window.micMonitor = new MicMonitor('mod_column_left');
 
                 // Register with DragManager (created after initial scan)
                 if (window.dragManager && window.micMonitor._wrapperEl) {
@@ -997,22 +1018,21 @@ try {
         ipc.on('system-suspend', () => {
             window._systemSuspended = true;
             Object.keys(window.term).forEach(idx => {
-                if (window.term[idx] && window.term[idx].term) {
-                    window.term[idx].term.write('\r\n\x1b[33m\u26A0 System sleeping...\x1b[0m\r\n');
+                if (window.term[idx] && window.term[idx]._pauseForSleep) {
+                    window.term[idx]._pauseForSleep();
                 }
             });
         });
 
         ipc.on('system-resume', () => {
             window._systemSuspended = false;
-            // Give the network stack a moment to come back
             setTimeout(() => {
                 Object.keys(window.term).forEach(idx => {
-                    if (window.term[idx] && window.term[idx]._reconnect) {
-                        window.term[idx]._reconnect();
+                    if (window.term[idx] && window.term[idx]._resumeFromSleep) {
+                        window.term[idx]._resumeFromSleep();
                     }
                 });
-            }, 1000);
+            }, 500);
         });
 
         // Save terminal state before unload for hot-reload preservation
@@ -1392,9 +1412,9 @@ try {
         const adDebounceMs = window.settings.adDebounceMs || 300;
         const adTimeoutMs = window.settings.adTimeoutMs || 30000;
 
-        // Credit display widget in right column
+        // Credit display widget in the (only remaining) left column
         if (!window.mods) window.mods = {};
-        window.mods.creditDisplay = new CreditDisplay("mod_column_right");
+        window.mods.creditDisplay = new CreditDisplay("mod_column_left");
 
         // Thinking detector (DET-01 through DET-06)
         // Always enabled — serves both ad overlay and permission mode
@@ -1520,16 +1540,19 @@ try {
         // Tab status indicator — tracks Claude Code state per terminal tab
         // States: running (green) | input (red) | completed (orange) | idle (blue)
         window.updateTabStatuses = () => {
-            for (let i = 0; i < 5; i++) {
-                const tabEl = document.getElementById('shell_tab' + i);
-                if (!tabEl || tabEl.classList.contains('shell-dev-btn')) continue;
+            const allTabs = document.querySelectorAll('ul#main_shell_tabs > li[id^="shell_tab"]');
+            allTabs.forEach(tabEl => {
+                if (tabEl.classList.contains('shell-dev-btn')) return;
+
+                const i = parseInt(tabEl.id.replace('shell_tab', ''), 10);
+                if (isNaN(i)) return;
 
                 const term = window.term && window.term[i];
 
                 // No terminal instance → no indicator
                 if (!term || typeof term !== 'object') {
                     tabEl.removeAttribute('data-claude-status');
-                    continue;
+                    return;
                 }
 
                 // Check thinking and attention state from detector
@@ -1537,29 +1560,27 @@ try {
                 const needsAttention = window.thinkingDetector && window.thinkingDetector.isNeedingAttention(i);
 
                 if (needsAttention) {
-                    // Needs attention → input (red) — regardless of thinking state
                     tabEl.setAttribute('data-claude-status', 'input');
                 } else if (isThinking) {
-                    // Thinking + no attention needed → running (green)
                     tabEl.setAttribute('data-claude-status', 'running');
                 } else {
-                    // Not thinking — check if there was a recent session
                     const detState = window.thinkingDetector && window.thinkingDetector._terminals[i];
                     const lastEnd = detState ? detState.lastThinkingEndTime : 0;
 
                     if (lastEnd > 0) {
-                        // Had a thinking session before → completed (orange)
                         tabEl.setAttribute('data-claude-status', 'completed');
                     } else {
-                        // Never had a thinking session → idle (blue)
                         tabEl.setAttribute('data-claude-status', 'idle');
                     }
                 }
-            }
+            });
         };
 
         // Update on thinking state changes
         window.addEventListener('thinking-state-changed', () => window.updateTabStatuses());
+
+        // Periodic polling fallback — catches missed events and keeps tab states fresh
+        setInterval(() => window.updateTabStatuses(), 2000);
 
         // Context banner: show last user input when Claude starts thinking
         window.addEventListener('thinking-state-changed', (e) => {
@@ -1744,8 +1765,7 @@ try {
 
         // Update on Claude state changes (session mapping, live context)
         window.addEventListener('claude-state-changed', () => window.updateTabStatuses());
-        // Periodic refresh as safety net
-        setInterval(() => window.updateTabStatuses(), 2000);
+        // Periodic polling fallback already registered above (line ~1562); avoid duplicate timer.
 
         // Initialize widget loader
         const widgetLoader = new WidgetLoader({
@@ -1775,7 +1795,9 @@ try {
             conninfo: Conninfo,
             gitCommits: GitCommits,
             todoWidget: TodoWidget,
-            agentList: AgentList
+            agentList: AgentList,
+            fileExplorer: FileExplorer,
+            mobileQR: MobileQRWidget
         });
 
         // Load lightweight widgets immediately (Clock, TodoWidget, AgentList)
@@ -1810,6 +1832,38 @@ try {
             window.mods = widgetLoader.getMods();
             if (_cdRef) window.mods.creditDisplay = _cdRef;
 
+            // Right column was removed — enforce default visual priority on the left column.
+            // FILE EXPLORER and WORLD VIEW (globe) sit at the top; PROCESSES (toplist) are last.
+            // appendChild on an already-attached node moves it to the end of its parent, so
+            // iterating in desired order produces the desired DOM order in O(n) — no clones.
+            const leftCol = document.getElementById("mod_column_left");
+            if (leftCol) {
+                const desiredLeftOrder = [
+                    "mod_fileExplorer",       // top priority
+                    "mod_globe",              // world view
+                    "mod_sysinfo",            // manufacturer / model
+                    "mod_hardwareInspector",
+                    "mod_ramwatcher",         // memory
+                    "mod_cpuinfo",
+                    "mod_clock",
+                    "mod_creditDisplay",
+                    "mod_gitCommits",
+                    "mod_mobileQR",           // pair-a-phone tile
+                    "mod_conninfo",
+                    "mod_netstat",
+                    "mod_todoWidget",
+                    "mod_agentList",
+                    "mod_voiceToggle",
+                    "mod_micMonitor",
+                    "ad_panel",
+                    "mod_toplist"             // processes — least priority
+                ];
+                desiredLeftOrder.forEach(id => {
+                    const el = document.getElementById(id);
+                    if (el && el.parentElement === leftCol) leftCol.appendChild(el);
+                });
+            }
+
             // Trigger widget fade-in animations
             document.querySelectorAll(".mod_column").forEach(e => {
                 e.setAttribute("class", "mod_column activated");
@@ -1817,18 +1871,12 @@ try {
 
             let i = 0;
             let left = document.querySelectorAll("#mod_column_left > div");
-            let right = document.querySelectorAll("#mod_column_right > div");
             let x = setInterval(() => {
-                if (!left[i] && !right[i]) {
+                if (!left[i]) {
                     clearInterval(x);
                 } else {
                     window.audioManager.panels.play();
-                    if (left[i]) {
-                        left[i].setAttribute("style", "animation-play-state: running;");
-                    }
-                    if (right[i]) {
-                        right[i].setAttribute("style", "animation-play-state: running;");
-                    }
+                    left[i].setAttribute("style", "animation-play-state: running;");
                     i++;
                 }
             }, 500);

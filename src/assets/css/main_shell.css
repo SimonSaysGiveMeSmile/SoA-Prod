@@ -1,9 +1,13 @@
 section#main_shell {
-    width: 65%;
+    /* Right side panel removed — terminal expands to fill the freed area.
+       margin-left pushes the shell past the left column (16vw) so the column
+       (z-index: 40) doesn't overlap terminal output. The 0.74vh top padding
+       and overall height stay the same so widget initialization remains stable. */
+    width: 82.5%;
     height: 95%;
+    margin-left: 16.5vw;
+    margin-right: 0.5vw;
     padding: 0.74vh;
-    /* border: 0.18vh solid rgba(var(--color_r), var(--color_g), var(--color_b), 0.5); */
-    /* border-radius: 0.278vh; */
 
     --aug-border: 0.18vh;
     --aug-border-bg: rgb(var(--color_r), var(--color_g), var(--color_b));
@@ -34,7 +38,7 @@ h1#main_shell_greeting>em {
 section#main_shell>h3.title {
     top: 0.74vh;
     left: 16.5vw;
-    width: 66%;
+    width: 82.5%;
     transition: opacity .5s cubic-bezier(0.4, 0, 1, 1) .5s;
 }
 
@@ -73,6 +77,7 @@ ul#main_shell_tabs>li {
 
     background: var(--color_light_black);
     transform: skewX(35deg);
+    transition: background 0.4s ease, box-shadow 0.4s ease;
 }
 
 ul#main_shell_tabs>li>p {
@@ -82,6 +87,7 @@ ul#main_shell_tabs>li>p {
     align-items: center;
     justify-content: center;
     gap: 0.3em;
+    transition: color 0.4s ease;
 }
 
 ul#main_shell_tabs>li .tab-close {
@@ -129,77 +135,87 @@ ul#main_shell_tabs>li p[contenteditable="true"] {
     min-width: 50px;
 }
 
-/* Claude Code tab status indicator — single dot, four states */
-ul#main_shell_tabs>li[data-claude-status]>p::before {
-    content: '';
-    display: inline-block;
-    width: 0.5vh;
-    height: 0.5vh;
-    border-radius: 50%;
-    margin-right: 0.35vh;
-    vertical-align: middle;
-    position: relative;
-    top: -0.05vh;
-    transition: background 0.3s, box-shadow 0.3s, opacity 0.3s;
+/* Claude Code tab status — full-tab background color, four states */
+
+/* Running / generating — green background with pulse */
+ul#main_shell_tabs>li[data-claude-status="running"] {
+    background: rgba(0, 230, 118, 0.25);
+    box-shadow: inset 0 0 12px rgba(0, 230, 118, 0.15);
+    animation: tabStatusPulse 1.5s ease-in-out infinite;
+}
+ul#main_shell_tabs>li[data-claude-status="running"]>p {
+    color: #a5f5c8;
 }
 
-/* Running / generating — pulsing green */
-ul#main_shell_tabs>li[data-claude-status="running"]>p::before {
-    background: #00e676;
-    box-shadow: 0 0 3px #00e676, 0 0 6px rgba(0, 230, 118, 0.4);
-    animation: tabStatusPulse 1.2s ease-in-out infinite;
+/* Attention / input required — red background with blink */
+ul#main_shell_tabs>li[data-claude-status="input"] {
+    background: rgba(255, 68, 68, 0.3);
+    box-shadow: inset 0 0 12px rgba(255, 68, 68, 0.2);
+    animation: tabStatusBlink 1.5s ease-in-out infinite;
+}
+ul#main_shell_tabs>li[data-claude-status="input"]>p {
+    color: #ffaaaa;
 }
 
-/* Attention / input required — red */
-ul#main_shell_tabs>li[data-claude-status="input"]>p::before {
-    background: #ff4444;
-    box-shadow: 0 0 3px rgba(255, 68, 68, 0.5);
-    animation: tabStatusBlink 2s ease-in-out infinite;
+/* Execution completed — orange background */
+ul#main_shell_tabs>li[data-claude-status="completed"] {
+    background: rgba(255, 152, 0, 0.2);
+    box-shadow: inset 0 0 8px rgba(255, 152, 0, 0.1);
+}
+ul#main_shell_tabs>li[data-claude-status="completed"]>p {
+    color: #ffc97a;
 }
 
-/* Execution completed — orange */
-ul#main_shell_tabs>li[data-claude-status="completed"]>p::before {
-    background: #ff9800;
-    box-shadow: 0 0 3px rgba(255, 152, 0, 0.4);
+/* Idle — subtle default (no override needed, uses var(--color_light_black)) */
+ul#main_shell_tabs>li[data-claude-status="idle"] {
+    background: var(--color_light_black);
 }
 
-/* Idle — blue */
-ul#main_shell_tabs>li[data-claude-status="idle"]>p::before {
-    background: #42a5f5;
-    box-shadow: 0 0 3px rgba(66, 165, 245, 0.3);
-    opacity: 0.6;
+/* Active tab + status: brighter, more saturated since active tab is already bright */
+ul#main_shell_tabs>li.active[data-claude-status="running"] {
+    background: rgba(0, 200, 100, 0.7);
+    box-shadow:
+        0 0 10px rgba(0, 200, 100, 0.5),
+        0 0 20px rgba(0, 200, 100, 0.2);
+    animation: tabStatusPulse 1.5s ease-in-out infinite;
+}
+ul#main_shell_tabs>li.active[data-claude-status="running"]>p {
+    color: var(--color_light_black);
 }
 
-/* Active tab overrides — darker tones for contrast on bright background */
-ul#main_shell_tabs>li.active[data-claude-status="running"]>p::before {
-    background: #00994d;
-    box-shadow: 0 0 3px rgba(0, 153, 77, 0.6);
+ul#main_shell_tabs>li.active[data-claude-status="input"] {
+    background: rgba(255, 60, 60, 0.75);
+    box-shadow:
+        0 0 10px rgba(255, 60, 60, 0.5),
+        0 0 20px rgba(255, 60, 60, 0.2);
+    animation: tabStatusBlink 1.5s ease-in-out infinite;
+}
+ul#main_shell_tabs>li.active[data-claude-status="input"]>p {
+    color: #fff;
 }
 
-ul#main_shell_tabs>li.active[data-claude-status="input"]>p::before {
-    background: #cc0000;
-    box-shadow: 0 0 3px rgba(204, 0, 0, 0.5);
+ul#main_shell_tabs>li.active[data-claude-status="completed"] {
+    background: rgba(255, 152, 0, 0.65);
+    box-shadow:
+        0 0 10px rgba(255, 152, 0, 0.4),
+        0 0 18px rgba(255, 152, 0, 0.15);
+}
+ul#main_shell_tabs>li.active[data-claude-status="completed"]>p {
+    color: var(--color_light_black);
 }
 
-ul#main_shell_tabs>li.active[data-claude-status="completed"]>p::before {
-    background: #e68a00;
-    box-shadow: 0 0 3px rgba(230, 138, 0, 0.4);
-}
-
-ul#main_shell_tabs>li.active[data-claude-status="idle"]>p::before {
-    background: #1976d2;
-    box-shadow: 0 0 3px rgba(25, 118, 210, 0.4);
-    opacity: 0.5;
+ul#main_shell_tabs>li.active[data-claude-status="idle"] {
+    background: rgb(var(--color_r), var(--color_g), var(--color_b));
 }
 
 @keyframes tabStatusPulse {
     0%, 100% { opacity: 1; }
-    50% { opacity: 0.3; }
+    50% { opacity: 0.55; }
 }
 
 @keyframes tabStatusBlink {
     0%, 100% { opacity: 1; }
-    50% { opacity: 0.4; }
+    50% { opacity: 0.45; }
 }
 
 /* Dev reload/restart buttons in tab bar */

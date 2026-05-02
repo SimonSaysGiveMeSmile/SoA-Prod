@@ -21,24 +21,35 @@ class ThinkingDetector {
         // Per-terminal thinking state (DET-06)
         this._terminals = {};
 
+        // ANSI escape sequence stripper — matches all CSI, OSC, and single-char escapes
+        this._ansiRegex = /\x1b(?:\[[0-9;?]*[a-zA-Z]|\][^\x07\x1b]*(?:\x07|\x1b\\)|\(.|.)/g;
+
         // Detection patterns (DET-01, DET-05)
-        // Claude Code specific: spinner chars appear WITH the ⏺ tool indicator or status text
+        // All patterns run against ANSI-stripped text for reliable matching
         this._patterns = {
             toolUseStart: [
                 /⏺/,                                       // Claude tool use indicator (primary signal)
-                /[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏].*(?:Read|Edit|Write|Bash|Glob|Grep|Task|WebFetch)/,  // Spinner + Claude tool name
-                /(?:Read|Edit|Write|Bash|Glob|Grep|Task|WebFetch|WebSearch).*[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]/, // Tool name + spinner
+                /[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]/,                         // Braille spinner characters (any occurrence)
+                /(?:Read|Edit|Write|Bash|Glob|Grep|Task|WebFetch|WebSearch|TodoRead|TodoWrite|SemanticSearch)\s/,  // Claude tool name followed by space
+                /(?:Read|Edit|Write|Bash|Glob|Grep|Task|WebFetch|WebSearch|TodoRead|TodoWrite|SemanticSearch)\(/,  // Claude tool name followed by paren
             ],
             toolUseEnd: [
-                /\$\s*$/m,                                 // Shell prompt returned
-                /❯\s*$/m,                                  // Alternative prompt (zsh/fish) — only bare ❯ at line end
-                /\w+@\w+.*[\$#]\s*$/m,                     // user@host prompt (specific, not just >)
+                /\$\s*$/m,                                 // Shell prompt returned (bash)
+                /❯\s*$/m,                                  // zsh/fish prompt — only bare ❯ at line end
+                /\w+@\w+.*[\$#]\s*$/m,                     // user@host prompt
+                /%\s*$/m,                                   // zsh default prompt
+                />\s*$/m,                                   // minimal prompt (>)
             ],
             statusMessages: [
                 /Thinking\.\.\./i,
                 /Processing\.\.\./i,
                 /Running\.\.\./i,
                 /Executing\.\.\./i,
+            ],
+            streamingOutput: [
+                /^│\s/m,                                    // Claude Code streaming output prefix (box-drawing vertical bar)
+                /^│$/m,                                     // Empty streaming line
+                /^\s{2,}[^\s]/m,                            // Indented content block (Claude response body)
             ]
         };
 
@@ -52,10 +63,12 @@ class ThinkingDetector {
             /Do you want to continue/i,              // Continue confirmation
             /approve/i,                              // Approval prompts
             /continue\?\s*$/m,                       // "continue?" at end of line
+            /Press Enter to/i,                       // Press Enter prompts
+            /waiting for.*input/i,                   // Waiting for input
         ];
 
         // Accumulation buffer for detecting multi-chunk patterns
-        this._bufferSize = 2048;
+        this._bufferSize = 4096;
 
         this._onThinkingStart = opts.onThinkingStart || (() => {});
         this._onThinkingEnd = opts.onThinkingEnd || (() => {});
@@ -77,6 +90,7 @@ class ThinkingDetector {
             debounceTimer: null,
             timeoutTimer: null,
             lastOutputTime: 0,
+            lastNonEmptyOutput: 0,
             lastThinkingEndTime: 0,
             silenceTimer: null,
             method: null
@@ -123,6 +137,15 @@ class ThinkingDetector {
     }
 
     /**
+     * Strip ANSI escape sequences from text for reliable pattern matching
+     * @param {string} text
+     * @returns {string}
+     */
+    _stripAnsi(text) {
+        return text.replace(this._ansiRegex, '');
+    }
+
+    /**
      * Process terminal output chunk and detect thinking state
      * @param {number} terminalIndex
      * @param {string} data - Raw terminal output
@@ -131,22 +154,28 @@ class ThinkingDetector {
         const state = this._terminals[terminalIndex];
         if (!state) return;
 
-        // Update buffer (rolling window) — used for end-of-thinking prompt detection
-        state.buffer = (state.buffer + data).slice(-this._bufferSize);
+        const clean = this._stripAnsi(data);
+
+        // Update buffer (rolling window) — ANSI-stripped for reliable end-detection
+        state.buffer = (state.buffer + clean).slice(-this._bufferSize);
         state.lastOutputTime = Date.now();
 
-        // Scan for attention patterns — check regardless of thinking state
-        // Claude Code permission prompts may appear before thinking is detected
+        // Track output activity — any non-empty output resets the silence timer
+        if (clean.trim().length > 0) {
+            state.lastNonEmptyOutput = Date.now();
+        }
+
+        // Scan for attention patterns on clean text
         if (!state.needsAttention) {
-            const needsAttention = this._attentionPatterns.some(p => p.test(data));
+            const needsAttention = this._attentionPatterns.some(p => p.test(clean));
             if (needsAttention) {
                 this._setAttention(terminalIndex, true);
             }
         }
 
-        // Use raw data chunk for start detection (avoids stale buffer false positives)
+        // Use clean data chunk for start detection (avoids stale buffer false positives)
         // Use buffer tail for end detection (prompt patterns may span chunks)
-        const startDetected = this._detectThinkingStart(data);
+        const startDetected = this._detectThinkingStart(clean);
         const endDetected = this._detectThinkingEnd(state.buffer);
 
         if (startDetected.detected && !state.isThinking) {
@@ -165,25 +194,38 @@ class ThinkingDetector {
             state.debounceTimer = setTimeout(() => {
                 this._setThinking(terminalIndex, false, null);
             }, this.debounceEndMs);
+        } else if (state.isThinking && startDetected.detected) {
+            // Still thinking + got new start signal — reset the timeout
+            clearTimeout(state.timeoutTimer);
+            state.timeoutTimer = setTimeout(() => {
+                this._setThinking(terminalIndex, false, null);
+            }, this.timeoutMs);
         }
 
-        // Reset silence detection - if output is flowing, check for prompt return
+        // Reset silence detection — if output is flowing, check for prompt return
         if (state.isThinking) {
             clearTimeout(state.silenceTimer);
-            const promptDetected = this._patterns.toolUseEnd.some(p => p.test(data));
+            const promptDetected = this._patterns.toolUseEnd.some(p => p.test(clean));
             if (promptDetected) {
                 clearTimeout(state.debounceTimer);
                 state.debounceTimer = setTimeout(() => {
                     this._setThinking(terminalIndex, false, null);
                 }, this.debounceEndMs);
             }
+
+            // Silence fallback: if no non-empty output for 5s during thinking, end it
+            state.silenceTimer = setTimeout(() => {
+                if (state.isThinking && (Date.now() - state.lastNonEmptyOutput) > 5000) {
+                    this._setThinking(terminalIndex, false, null);
+                }
+            }, 6000);
         }
     }
 
     /**
-     * Detect thinking START patterns in raw data chunk (not buffer)
-     * Using raw data avoids stale ⏺ indicators in the rolling buffer
-     * @param {string} data - Raw incoming terminal output chunk
+     * Detect thinking START patterns in ANSI-stripped data chunk (not buffer)
+     * Using per-chunk data avoids stale ⏺ indicators in the rolling buffer
+     * @param {string} data - ANSI-stripped incoming terminal output chunk
      * @returns {{ detected: boolean, method: string|null }}
      */
     _detectThinkingStart(data) {
@@ -197,16 +239,22 @@ class ThinkingDetector {
                 return { detected: true, method: 'status_message' };
             }
         }
+        for (const pattern of this._patterns.streamingOutput) {
+            if (pattern.test(data)) {
+                return { detected: true, method: 'streaming' };
+            }
+        }
         return { detected: false, method: null };
     }
 
     /**
      * Detect thinking END patterns in buffer tail (prompts may span chunks)
+     * Buffer is already ANSI-stripped
      * @param {string} buffer
      * @returns {boolean}
      */
     _detectThinkingEnd(buffer) {
-        const recent = buffer.slice(-512);
+        const recent = buffer.slice(-1024);
         return this._patterns.toolUseEnd.some(p => p.test(recent));
     }
 

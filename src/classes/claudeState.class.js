@@ -552,10 +552,17 @@ class ClaudeStateManager {
         }
 
         this._updateTimeout = setTimeout(() => {
-            if (this.mainWindow && !this.mainWindow.isDestroyed()) {
-                this.mainWindow.webContents.send('claude-state-update', this.state);
-            }
             this._updateTimeout = null;
+            const win = this.mainWindow;
+            if (!win || win.isDestroyed()) return;
+            const wc = win.webContents;
+            if (!wc || wc.isDestroyed() || wc.isCrashed()) return;
+            try {
+                wc.send('claude-state-update', this.state);
+            } catch (_) {
+                // Render frame can be disposed mid-send during renderer crash/reload;
+                // swallow to avoid flooding the log — next change will retry.
+            }
         }, 100);
     }
 

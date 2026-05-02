@@ -6,8 +6,9 @@ if (cluster.isMaster) {
     const signale = require("signale");
     // Also, leave a core available for the renderer process
     const osCPUs = require("os").cpus().length - 1;
+    // Cap at 4 workers — more than that just adds fork overhead and steals cycles from the renderer.
     // See #904
-    const numCPUs = (osCPUs > 7) ? 7 : osCPUs;
+    const numCPUs = Math.max(1, Math.min(4, osCPUs));
 
     const si = require("systeminformation");
 

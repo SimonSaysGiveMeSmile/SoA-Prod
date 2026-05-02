@@ -26,23 +26,24 @@ class WidgetLoader {
         this._widgetsWithData = new Set();
         this.MONITORED_WIDGET_COUNT = 8;
 
-        // Widget registry with weight classification
+        // Widget registry with weight classification.
+        // Right column was removed — every widget now lives in the left column.
+        // Visual ordering is finalized by a DOM reorder pass in _renderer.js after load.
         this.widgetRegistry = {
-            // Left column
             clock: { column: 'left', weight: 'lightweight', class: null },
             sysinfo: { column: 'left', weight: 'heavy', class: null },
             hardwareInspector: { column: 'left', weight: 'heavy', class: null },
             cpuinfo: { column: 'left', weight: 'heavy', class: null },
             ramwatcher: { column: 'left', weight: 'heavy', class: null },
             toplist: { column: 'left', weight: 'heavy', class: null },
-
-            // Right column
-            netstat: { column: 'right', weight: 'heavy', class: null },
-            globe: { column: 'right', weight: 'heavy', class: null },
-            conninfo: { column: 'right', weight: 'heavy', class: null },
-            gitCommits: { column: 'right', weight: 'heavy', class: null },
-            todoWidget: { column: 'right', weight: 'deferred', class: null },
-            agentList: { column: 'left', weight: 'deferred', class: null }
+            netstat: { column: 'left', weight: 'heavy', class: null },
+            globe: { column: 'left', weight: 'heavy', class: null },
+            conninfo: { column: 'left', weight: 'heavy', class: null },
+            gitCommits: { column: 'left', weight: 'heavy', class: null },
+            todoWidget: { column: 'left', weight: 'deferred', class: null },
+            agentList: { column: 'left', weight: 'deferred', class: null },
+            fileExplorer: { column: 'left', weight: 'deferred', class: null },
+            mobileQR: { column: 'left', weight: 'deferred', class: null }
         };
     }
 
@@ -100,10 +101,11 @@ class WidgetLoader {
         return new Promise((resolve) => {
             if (this.profiler) this.profiler.mark('heavy-widgets-start');
 
-            // Load order: visual positioning takes priority for right column
-            // Right column order: netstat first (top), globe, conninfo, then todoWidget (deferred)
-            // Left column: sysinfo first (fast), then cpu/ram/toplist, hardwareInspector last (slowest)
-            const loadOrder = ['sysinfo', 'netstat', 'globe', 'conninfo', 'gitCommits', 'cpuinfo', 'ramwatcher', 'toplist', 'hardwareInspector'];
+            // Heavy widget load order: WORLD VIEW (globe) gets priority near the top of the column,
+            // followed by hardware identity (sysinfo / hardwareInspector), memory, CPU, then the
+            // less-prioritized network/git/processes widgets last. Final visual position is also
+            // enforced by a DOM reorder pass in _renderer.js after load.
+            const loadOrder = ['globe', 'sysinfo', 'hardwareInspector', 'ramwatcher', 'cpuinfo', 'gitCommits', 'conninfo', 'netstat', 'toplist'];
 
             const heavyWidgets = loadOrder
                 .map(name => [name, this.widgetRegistry[name]])

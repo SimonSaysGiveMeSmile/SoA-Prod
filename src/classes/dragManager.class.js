@@ -11,7 +11,9 @@ class DragManager {
             left: document.getElementById('mod_column_left'),
             right: document.getElementById('mod_column_right')
         };
-        this.storageKey = options.storageKey || 'soa_widget_order';
+        // v2: single-column layout — invalidate any previously saved two-column orders so the
+        // new default priority (FileExplorer/Globe on top) isn't overridden by stale state.
+        this.storageKey = options.storageKey || 'soa_widget_order_v2';
         this._draggedEl = null;
         this._placeholder = null;
         this._boundHandlers = {};

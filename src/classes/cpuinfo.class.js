@@ -106,15 +106,15 @@ class Cpuinfo {
             this.updateCPUtasks();
             this.loadUpdater = setInterval(() => {
                 this.updateCPUload();
-            }, 500);
+            }, 1500);
             if (process.platform !== "win32") {
                 this.tempUpdater = setInterval(() => {
                     this.updateCPUtemp();
-                }, 2000);
+                }, 5000);
             }
             this.speedUpdater = setInterval(() => {
                 this.updateCPUspeed();
-            }, 1000);
+            }, 30000);
             this.tasksUpdater = setInterval(() => {
                 this.updateCPUtasks();
             }, 5000);

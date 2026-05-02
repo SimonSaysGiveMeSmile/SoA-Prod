@@ -50,6 +50,7 @@ process.on("uncaughtException", e => {
 
 app.on('will-quit', () => {
     cleanupVoiceIPC();
+    teardownMobileBridge().catch(() => { /* ignore */ });
 });
 
 signale.start(`Starting Son of Anton v${app.getVersion()}`);
@@ -73,6 +74,7 @@ const which = require("which");
 const Terminal = require("./classes/terminal.class.js").Terminal;
 const ClaudeStateManager = require("./classes/claudeState.class.js");
 const { setupVoiceIPC, cleanupVoiceIPC } = require('./main/ipc/voiceHandlers');
+const { setupMobileBridgeIPC, teardownMobileBridge } = require('./main/ipc/mobileBridgeHandlers');
 
 profiler.mark('modules-loaded');
 
@@ -325,6 +327,10 @@ function createWindow(settings) {
         // Initialize voice IPC handlers
         setupVoiceIPC(win);
         signale.success("Voice IPC handlers initialized");
+
+        // Initialize mobile bridge IPC handlers (server starts lazily on demand)
+        setupMobileBridgeIPC(win);
+        signale.success("Mobile bridge IPC handlers initialized");
 
         // Notify renderer to track when ready
         win.webContents.send('main-window-loaded');

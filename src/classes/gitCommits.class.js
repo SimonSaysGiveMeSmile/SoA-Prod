@@ -1,10 +1,11 @@
 /**
  * GitCommits - Side panel widget showing GitHub commit activity
  *
- * Fetches commit history via GitHub API (PAT or public).
- * Displays a contribution heatmap + recent commit list.
+ * Fetches commit history via GitHub Search Commits API (public 60 req/hr).
+ * Only requires a GitHub username — shows commits across all public repos.
+ * Displays a contribution heatmap + recent commit list with repo labels.
  * Configurable via window.settings.gitCommits:
- *   { owner, repo, pat, days }
+ *   { username, pat, days }
  */
 class GitCommits {
     constructor(parentId) {
@@ -13,17 +14,16 @@ class GitCommits {
         this.parent = document.getElementById(parentId);
 
         const cfg = (window.settings && window.settings.gitCommits) || {};
-        this.owner = cfg.owner || "";
-        this.repo = cfg.repo || "";
+        this.username = cfg.username || "";
         this.pat = cfg.pat || "";
         this.days = cfg.days || 30;
 
         this._buildDOM();
         this._cacheEls();
 
-        if (!this.owner || !this.repo) {
-            this._autoDetectRepo().then(() => {
-                if (this.owner && this.repo) {
+        if (!this.username) {
+            this._autoDetectUsername().then(() => {
+                if (this.username) {
                     this._prefillConfig();
                     this._safeFetchAndRender();
                 } else {
@@ -37,7 +37,7 @@ class GitCommits {
         this._interval = setInterval(() => this._safeFetchAndRender(), 5 * 60 * 1000);
     }
 
-    async _autoDetectRepo() {
+    async _autoDetectUsername() {
         try {
             const { execSync } = require("child_process");
             const cwd = (window.term && window.term[0] && window.term[0].cwd)
@@ -48,19 +48,17 @@ class GitCommits {
                 cwd, encoding: "utf8", timeout: 3000
             }).trim();
 
-            const match = remoteUrl.match(/github\.com[:/]([^/]+)\/([^/.]+)/);
+            const match = remoteUrl.match(/github\.com[:/]([^/]+)\//);
             if (match) {
-                this.owner = match[1];
-                this.repo = match[2];
+                this.username = match[1];
             }
         } catch (_) {
-            // not a git repo or no remote — user must configure manually
+            // not a git repo or no remote
         }
     }
 
     _prefillConfig() {
-        document.getElementById("gc_cfg_owner").value = this.owner;
-        document.getElementById("gc_cfg_repo").value = this.repo;
+        document.getElementById("gc_cfg_username").value = this.username;
     }
 
     _buildDOM() {
@@ -78,17 +76,14 @@ class GitCommits {
             <div id="mod_gitCommits_list"></div>
             <div id="mod_gitCommits_config" style="display:none">
                 <div class="gc-cfg-row">
-                    <label>OWNER</label>
-                    <input id="gc_cfg_owner" type="text" spellcheck="false" placeholder="owner" />
-                </div>
-                <div class="gc-cfg-row">
-                    <label>REPO</label>
-                    <input id="gc_cfg_repo" type="text" spellcheck="false" placeholder="repo" />
+                    <label>USER</label>
+                    <input id="gc_cfg_username" type="text" spellcheck="false" placeholder="github username" />
                 </div>
                 <div class="gc-cfg-row">
                     <label>PAT</label>
                     <input id="gc_cfg_pat" type="password" spellcheck="false" placeholder="ghp_... (optional)" />
                 </div>
+                <div class="gc-cfg-hint">Public API: 60 req/hr · PAT: 5,000 req/hr</div>
                 <button id="gc_cfg_save">CONNECT</button>
             </div>
         </div>`;
@@ -123,33 +118,23 @@ class GitCommits {
         this.configEl.style.display = "flex";
         this.infoEl.innerText = "SETUP REQUIRED";
 
-        if (this.owner) document.getElementById("gc_cfg_owner").value = this.owner;
-        if (this.repo) document.getElementById("gc_cfg_repo").value = this.repo;
+        if (this.username) document.getElementById("gc_cfg_username").value = this.username;
         if (this.pat) document.getElementById("gc_cfg_pat").value = this.pat;
     }
 
     async _saveConfig() {
-        const ownerInput = document.getElementById("gc_cfg_owner");
-        const repoInput = document.getElementById("gc_cfg_repo");
-        const owner = ownerInput.value.trim();
-        const repo = repoInput.value.trim();
+        const usernameInput = document.getElementById("gc_cfg_username");
+        const username = usernameInput.value.trim();
         const pat = document.getElementById("gc_cfg_pat").value.trim();
 
-        if (!owner) {
-            ownerInput.classList.add("gc-input-error");
-            this.infoEl.innerText = "ENTER OWNER";
-            setTimeout(() => ownerInput.classList.remove("gc-input-error"), 1500);
-            return;
-        }
-        if (!repo) {
-            repoInput.classList.add("gc-input-error");
-            this.infoEl.innerText = "ENTER REPO NAME";
-            setTimeout(() => repoInput.classList.remove("gc-input-error"), 1500);
+        if (!username) {
+            usernameInput.classList.add("gc-input-error");
+            this.infoEl.innerText = "ENTER USERNAME";
+            setTimeout(() => usernameInput.classList.remove("gc-input-error"), 1500);
             return;
         }
 
-        this.owner = owner;
-        this.repo = repo;
+        this.username = username;
         this.pat = pat;
 
         const saveBtn = document.getElementById("gc_cfg_save");
@@ -160,10 +145,11 @@ class GitCommits {
             await this._fetchAndRender();
 
             if (!window.settings.gitCommits) window.settings.gitCommits = {};
-            window.settings.gitCommits.owner = owner;
-            window.settings.gitCommits.repo = repo;
+            window.settings.gitCommits.username = username;
             window.settings.gitCommits.pat = pat;
             window.settings.gitCommits.days = this.days;
+            delete window.settings.gitCommits.owner;
+            delete window.settings.gitCommits.repo;
 
             const fs = require("fs");
             const path = require("path");
@@ -197,14 +183,14 @@ class GitCommits {
     }
 
     async _fetchAndRender() {
-        if (!this.owner || !this.repo) return;
+        if (!this.username) return;
 
         this.infoEl.innerText = "FETCHING...";
 
         const commits = await this._fetchCommits();
         this._renderHeatmap(commits);
         this._renderList(commits);
-        this.infoEl.innerText = `${commits.length} COMMITS · ${this.days}D`;
+        this.infoEl.innerText = `@${this._esc(this.username)} · ${commits.length} COMMITS · ${this.days}D`;
     }
 
     async _safeFetchAndRender() {
@@ -220,17 +206,28 @@ class GitCommits {
     async _fetchCommits() {
         const since = new Date();
         since.setDate(since.getDate() - this.days);
+        const sinceStr = since.toISOString().slice(0, 10);
 
         const headers = { "Accept": "application/vnd.github+json" };
         if (this.pat) headers["Authorization"] = `Bearer ${this.pat}`;
 
-        let allCommits = [];
+        let allItems = [];
         let page = 1;
         const perPage = 100;
 
         while (true) {
-            const url = `https://api.github.com/repos/${this.owner}/${this.repo}/commits?since=${since.toISOString()}&per_page=${perPage}&page=${page}`;
+            const q = encodeURIComponent(`author:${this.username} author-date:>${sinceStr}`);
+            const url = `https://api.github.com/search/commits?q=${q}&sort=author-date&order=desc&per_page=${perPage}&page=${page}`;
             const resp = await fetch(url, { headers });
+
+            if (resp.status === 403) {
+                const remaining = resp.headers.get("x-ratelimit-remaining");
+                if (remaining === "0") {
+                    const reset = resp.headers.get("x-ratelimit-reset");
+                    const resetIn = reset ? Math.ceil((parseInt(reset) * 1000 - Date.now()) / 60000) : "?";
+                    throw new Error(`Rate limited — resets in ${resetIn}m. Add a PAT for 5,000 req/hr.`);
+                }
+            }
 
             if (!resp.ok) {
                 const body = await resp.text();
@@ -238,15 +235,16 @@ class GitCommits {
             }
 
             const data = await resp.json();
-            if (data.length === 0) break;
+            const items = data.items || [];
+            if (items.length === 0) break;
 
-            allCommits = allCommits.concat(data);
-            if (data.length < perPage) break;
+            allItems = allItems.concat(items);
+            if (items.length < perPage || allItems.length >= data.total_count) break;
             page++;
             if (page > 10) break;
         }
 
-        return allCommits;
+        return allItems;
     }
 
     _renderHeatmap(commits) {
@@ -266,7 +264,6 @@ class GitCommits {
 
         const max = Math.max(1, ...dayMap.values());
         const cols = Math.min(this.days, 7);
-        const rows = Math.ceil(this.days / cols);
 
         let html = "";
         const sortedDays = [...dayMap.entries()].reverse();
@@ -287,20 +284,22 @@ class GitCommits {
             return;
         }
 
-        const recent = commits.slice(0, 15);
+        const recent = commits.slice(0, 20);
         let html = "";
 
         recent.forEach(c => {
             const msg = (c.commit.message || "").split("\n")[0];
-            const author = (c.commit.author && c.commit.author.name) || "unknown";
             const date = c.commit.author && c.commit.author.date;
             const ago = this._timeAgo(date);
             const sha = (c.sha || "").slice(0, 7);
+            const repoName = (c.repository && c.repository.full_name) || "";
 
             html += `<div class="gc-row">`;
             html += `<div class="gc-msg">${this._esc(msg)}</div>`;
-            html += `<div class="gc-meta">${this._esc(sha)} · ${this._esc(author)} · ${ago}</div>`;
-            html += `</div>`;
+            html += `<div class="gc-meta">`;
+            if (repoName) html += `<span class="gc-repo">${this._esc(repoName)}</span> · `;
+            html += `${this._esc(sha)} · ${ago}`;
+            html += `</div></div>`;
         });
 
         this.listEl.innerHTML = html;

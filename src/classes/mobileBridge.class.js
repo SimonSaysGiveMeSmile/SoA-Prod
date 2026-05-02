@@ -1,0 +1,380 @@
+/**
+ * MobileBridge (renderer side)
+ *
+ * Owns the renderer<->main IPC for the mobile companion bridge:
+ *
+ *   1. Snapshots the current UI state (open tabs, active terminal output,
+ *      core widget data) on a throttle and pushes it to the main process,
+ *      which broadcasts it to mobile clients.
+ *   2. Streams raw terminal output as it arrives so the mobile terminal
+ *      view stays responsive.
+ *   3. Receives input events from a paired mobile device and dispatches them
+ *      into the existing renderer surfaces (terminal, tab switching, etc.).
+ *
+ * Designed to be cheap when no mobile clients are connected:
+ *   - the snapshot timer only runs while clients > 0
+ *   - terminal output is only forwarded after the bridge starts
+ */
+
+// NOTE on require() placement
+// ----------------------------
+// This file is loaded via a <script src> tag in ui.html. In Electron's
+// renderer with nodeIntegration: true, top-level require() calls inside such
+// <script>-loaded files can crash the renderer hard (silent black screen,
+// no console output, app never boots). Every other <script>-loaded widget
+// class in this project (clock, fileExplorer, gitCommits, …) follows the same
+// rule: keep require() inside methods, never at module top-level. Do not
+// hoist these requires outside the methods that use them.
+
+const SNAPSHOT_THROTTLE_MS = 250;       // 4 fps is plenty for the snapshot view
+const TERMINAL_BUFFER_BYTES = 16 * 1024; // last 16 KiB of terminal output for late joiners
+
+class MobileBridge {
+    constructor() {
+        const electron = require('electron');
+        this._ipc = electron.ipcRenderer;
+
+        this.status = { running: false, clients: 0 };
+        this._snapshotTimer = null;
+        this._snapshotPending = false;
+        this._lastSnapshotAt = 0;
+        this._termBuffers = {};   // { [index]: string }  — ring buffer of recent output per tab
+        this._termHooked = new Set();
+        this._listeners = new Set();
+
+        this._ipc.on('mobile:input', (_e, input) => this._handleInput(input || {}));
+        this._ipc.on('mobile:clients-changed', (_e, payload) => {
+            this.status.clients = (payload && payload.clients) || 0;
+            this._notify();
+            this._maybeStartLoop();
+        });
+        this._ipc.on('mobile:status-changed', (_e, status) => {
+            this.status = Object.assign({}, this.status, status || {});
+            this._notify();
+            this._maybeStartLoop();
+        });
+    }
+
+    /** Subscribe to status updates (used by the QR widget). */
+    onStatus(fn) {
+        this._listeners.add(fn);
+        try { fn(this.status); } catch (_) {}
+        return () => this._listeners.delete(fn);
+    }
+
+    _notify() {
+        for (const fn of this._listeners) {
+            try { fn(this.status); } catch (_) {}
+        }
+    }
+
+    async refreshStatus() {
+        const s = await this._ipc.invoke('mobile:status');
+        if (s && s.ok) {
+            this.status = Object.assign({}, this.status, s);
+            this._notify();
+        }
+        return this.status;
+    }
+
+    async start({ withTunnel = true } = {}) {
+        const s = await this._ipc.invoke('mobile:start', { withTunnel });
+        if (s && s.ok) {
+            this.status = Object.assign({}, this.status, s);
+            this._hookTerminals();
+            this._maybeStartLoop();
+            this._pushSnapshot(); // immediate first snapshot so the UI sees data
+        }
+        this._notify();
+        return s;
+    }
+
+    async stop() {
+        const s = await this._ipc.invoke('mobile:stop');
+        if (s && s.ok) {
+            this.status = Object.assign({}, this.status, s, { running: false });
+            this._stopLoop();
+        }
+        this._notify();
+        return s;
+    }
+
+    /** Ask main to render a QR code; returns a data URL. */
+    async getQrDataUrl(text, opts) {
+        const r = await this._ipc.invoke('mobile:qr', { text, opts });
+        return (r && r.ok && r.dataUrl) ? r.dataUrl : null;
+    }
+
+    notice(level, text) {
+        this._ipc.send('mobile:push-notice', { level, text });
+    }
+
+    // ── snapshot loop ──────────────────────────────────────────────────
+    _maybeStartLoop() {
+        if (this.status.running && this.status.clients > 0) this._startLoop();
+        else this._stopLoop();
+    }
+
+    _startLoop() {
+        if (this._snapshotTimer) return;
+        this._snapshotTimer = setInterval(() => this._pushSnapshot(), SNAPSHOT_THROTTLE_MS);
+    }
+
+    _stopLoop() {
+        if (this._snapshotTimer) {
+            clearInterval(this._snapshotTimer);
+            this._snapshotTimer = null;
+        }
+    }
+
+    /** Public: explicitly request a snapshot push (e.g. after a tab switch). */
+    requestSnapshot() {
+        if (!this.status.running) return;
+        // coalesce — at most one extra push per frame
+        if (this._snapshotPending) return;
+        this._snapshotPending = true;
+        Promise.resolve().then(() => {
+            this._snapshotPending = false;
+            this._pushSnapshot();
+        });
+    }
+
+    _pushSnapshot() {
+        if (!this.status.running) return;
+        let snapshot;
+        try { snapshot = this._buildSnapshot(); }
+        catch (e) { return; }
+        this._ipc.send('mobile:push-snapshot', snapshot);
+        this._lastSnapshotAt = Date.now();
+    }
+
+    _buildSnapshot() {
+        const w = window;
+        const activeIndex = (typeof w.currentTerm === 'number') ? w.currentTerm : 0;
+
+        const tabs = [];
+        const names = w.terminalNames || {};
+        const types = w.tabType || {};
+        const terms = w.term || {};
+        const maxTabs = Math.max(
+            Object.keys(names).length,
+            Object.keys(terms).length,
+            5
+        );
+        for (let i = 0; i < maxTabs; i++) {
+            const exists = !!terms[i] || (names[i] && names[i] !== 'EMPTY');
+            if (!exists && !terms[i]) continue;
+            tabs.push({
+                index: i,
+                name: names[i] || `TAB ${i + 1}`,
+                type: types[i] || 'terminal',
+                active: i === activeIndex,
+                process: terms[i] && terms[i]._lastProcess ? terms[i]._lastProcess : null,
+            });
+        }
+
+        // Pull a chunk of recent output from the active terminal for the snapshot.
+        const recent = this._termBuffers[activeIndex] || '';
+
+        const widgets = this._collectWidgetData();
+
+        return {
+            ts: Date.now(),
+            host: this._getHostInfo(),
+            activeTab: activeIndex,
+            tabs,
+            terminal: {
+                index: activeIndex,
+                recent,
+                cols: terms[activeIndex] && terms[activeIndex].term ? terms[activeIndex].term.cols : 80,
+                rows: terms[activeIndex] && terms[activeIndex].term ? terms[activeIndex].term.rows : 24,
+            },
+            widgets,
+        };
+    }
+
+    _getHostInfo() {
+        try {
+            const remote = require('@electron/remote');
+            const os = require('os');
+            return {
+                name: os.hostname(),
+                platform: process.platform,
+                appVersion: remote.app.getVersion(),
+            };
+        } catch (_) {
+            return { name: 'son-of-anton', platform: process.platform };
+        }
+    }
+
+    _collectWidgetData() {
+        const w = window;
+        const data = {};
+        try {
+            if (w.mods && w.mods.clock) {
+                data.clock = { time: new Date().toISOString() };
+            }
+            if (w.mods && w.mods.cpuinfo && w.mods.cpuinfo._lastUsage != null) {
+                data.cpu = { usagePct: w.mods.cpuinfo._lastUsage };
+            }
+            if (w.mods && w.mods.ramwatcher && w.mods.ramwatcher._lastUsage != null) {
+                data.ram = { usagePct: w.mods.ramwatcher._lastUsage };
+            }
+            if (w.mods && w.mods.netstat && w.mods.netstat._last) {
+                data.net = w.mods.netstat._last;
+            }
+        } catch (_) { /* widgets are best-effort */ }
+        return data;
+    }
+
+    // ── terminal output streaming ─────────────────────────────────────
+    _hookTerminals() {
+        const terms = window.term || {};
+        Object.keys(terms).forEach(idx => this._hookOneTerminal(parseInt(idx, 10)));
+
+        // Also re-hook periodically for tabs created later. Lightweight.
+        if (!this._hookInterval) {
+            this._hookInterval = setInterval(() => {
+                const t = window.term || {};
+                Object.keys(t).forEach(idx => this._hookOneTerminal(parseInt(idx, 10)));
+            }, 2000);
+            if (this._hookInterval.unref) this._hookInterval.unref();
+        }
+    }
+
+    _hookOneTerminal(index) {
+        if (this._termHooked.has(index)) return;
+        const t = window.term && window.term[index];
+        if (!t || !t.term || typeof t.term.onData !== 'function') return;
+        // xterm.js exposes onRender / onData / parser hooks; we want what it *renders*.
+        // The simplest reliable signal is `term.onWriteParsed` if available, otherwise
+        // we wrap term.write.
+        if (typeof t.term.onWriteParsed === 'function') {
+            t.term.onWriteParsed(chunk => this._captureTerminalChunk(index, chunk));
+        } else if (typeof t.term.write === 'function') {
+            const orig = t.term.write.bind(t.term);
+            t.term.write = (data, cb) => {
+                this._captureTerminalChunk(index, data);
+                return orig(data, cb);
+            };
+        }
+        this._termHooked.add(index);
+    }
+
+    _captureTerminalChunk(index, chunk) {
+        if (chunk == null) return;
+        const text = (typeof chunk === 'string') ? chunk : (chunk.toString ? chunk.toString() : '');
+        if (!text) return;
+        // Maintain ring buffer
+        const prev = this._termBuffers[index] || '';
+        let next = prev + text;
+        if (next.length > TERMINAL_BUFFER_BYTES) {
+            next = next.slice(next.length - TERMINAL_BUFFER_BYTES);
+        }
+        this._termBuffers[index] = next;
+        // Stream to mobile if anyone is listening
+        if (this.status.running && this.status.clients > 0) {
+            this._ipc.send('mobile:push-term-data', { index, data: text });
+        }
+    }
+
+    // ── inbound: mobile → desktop input ───────────────────────────────
+    _handleInput(input) {
+        const kind = input && input.kind;
+        if (!kind) return;
+        const w = window;
+        const activeIndex = (typeof w.currentTerm === 'number') ? w.currentTerm : 0;
+        const term = w.term && w.term[activeIndex];
+
+        switch (kind) {
+            case 'term-keys': {
+                const text = String(input.text || '');
+                if (!text) return;
+                if (term && term.socket && term.socket.readyState === 1) {
+                    try { term.socket.send(text); } catch (_) {}
+                } else if (term && term.term) {
+                    try { term.term.input ? term.term.input(text) : term.term.write(text); } catch (_) {}
+                }
+                break;
+            }
+            case 'shell-command': {
+                const line = String(input.line || '');
+                if (!line) return;
+                if (term && term.socket && term.socket.readyState === 1) {
+                    try { term.socket.send(line + '\n'); } catch (_) {}
+                }
+                break;
+            }
+            case 'switch-tab': {
+                const i = parseInt(input.index, 10);
+                if (Number.isFinite(i) && typeof w.focusShellTab === 'function') {
+                    try { w.focusShellTab(i); } catch (_) {}
+                    this.requestSnapshot();
+                }
+                break;
+            }
+            case 'new-tab': {
+                if (typeof w.addShellTab === 'function') {
+                    try { w.addShellTab(); } catch (_) {}
+                    this.requestSnapshot();
+                }
+                break;
+            }
+            case 'close-tab': {
+                const i = parseInt(input.index, 10);
+                if (Number.isFinite(i) && typeof w.closeShellTab === 'function') {
+                    try { w.closeShellTab(i); } catch (_) {}
+                    this.requestSnapshot();
+                }
+                break;
+            }
+            case 'hotkey': {
+                this._sendHotkey(String(input.combo || ''));
+                break;
+            }
+            case 'voice-toggle': {
+                if (typeof w.toggleMic === 'function') {
+                    try { w.toggleMic(); } catch (_) {}
+                }
+                break;
+            }
+            default:
+                /* ignore */
+                break;
+        }
+    }
+
+    _sendHotkey(combo) {
+        // Translate a small set of common combos into the right control bytes
+        // and forward to the active terminal. Anything more elaborate can be
+        // added as the mobile UI grows.
+        const map = {
+            'ctrl+c':  '\x03',
+            'ctrl+d':  '\x04',
+            'ctrl+l':  '\x0c',
+            'ctrl+u':  '\x15',
+            'ctrl+w':  '\x17',
+            'ctrl+r':  '\x12',
+            'ctrl+a':  '\x01',
+            'ctrl+e':  '\x05',
+            'ctrl+z':  '\x1a',
+            'esc':     '\x1b',
+            'tab':     '\t',
+            'enter':   '\r',
+            'up':      '\x1b[A',
+            'down':    '\x1b[B',
+            'right':   '\x1b[C',
+            'left':    '\x1b[D',
+        };
+        const bytes = map[combo.toLowerCase()];
+        if (!bytes) return;
+        const w = window;
+        const activeIndex = (typeof w.currentTerm === 'number') ? w.currentTerm : 0;
+        const term = w.term && w.term[activeIndex];
+        if (term && term.socket && term.socket.readyState === 1) {
+            try { term.socket.send(bytes); } catch (_) {}
+        }
+    }
+}
+
+module.exports = { MobileBridge };

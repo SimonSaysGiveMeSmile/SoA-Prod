@@ -1,9 +1,9 @@
 section.mod_column {
-    width: 17%;
+    width: 16%;
     top: 2.5vh;
     min-height: 10%;
     max-height: 96%;
-    padding: 1.39vh;
+    padding: 0.9vh;
     padding-bottom: 0vh;
     box-sizing: border-box;
     position: absolute;
@@ -11,7 +11,7 @@ section.mod_column {
     display: flex;
     flex-direction: column;
     justify-content: flex-start;
-    gap: 1vh;
+    gap: 0.55vh;
     overflow-y: auto;
     scrollbar-width: none; /* Firefox */
 
@@ -53,22 +53,19 @@ section#mod_column_left {
     left: 0;
     align-items: flex-end;
     overflow-x: hidden;
-    max-width: 17vw;
+    max-width: 16vw;
 }
 
 section#mod_column_left > h3.title {
     left: 0;
 }
 
+/* Right side panel removed — kept in DOM as a hidden mount point so any legacy
+   code that still queries #mod_column_right doesn't crash, but it is invisible
+   and contributes zero layout space. The terminal section expands into the
+   freed area. */
 section#mod_column_right {
-    right: 0;
-    align-items: flex-start;
-    overflow-x: hidden;
-    max-width: 17vw;
-}
-
-section#mod_column_right > h3.title {
-    right: 0;
+    display: none !important;
 }
 
 /* --- Drag-and-drop tile reordering --- */

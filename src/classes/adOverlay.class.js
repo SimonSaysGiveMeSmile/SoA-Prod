@@ -15,7 +15,7 @@ class AdOverlay {
         this.mode = localStorage.getItem('soa_ad_mode') || opts.mode || null; // null = needs picker
         this.placeholderUrl = opts.placeholderUrl || null;
         this.creditSystem = opts.creditSystem || null;
-        this.panelParentId = opts.panelParentId || 'mod_column_right';
+        this.panelParentId = opts.panelParentId || 'mod_column_left';
 
         // Image rotation support
         this._imageUrls = opts.imageUrls || [];   // Array of image paths to cycle through

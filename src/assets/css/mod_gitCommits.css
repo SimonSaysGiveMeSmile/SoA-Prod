@@ -142,6 +142,11 @@ div#mod_gitCommits_list::-webkit-scrollbar-thumb {
     text-overflow: ellipsis;
 }
 
+.gc-repo {
+    opacity: 0.8;
+    color: rgb(var(--color_r), var(--color_g), var(--color_b));
+}
+
 .gc-empty {
     text-align: center;
     opacity: 0.5;
@@ -225,6 +230,14 @@ button#gc_cfg_save:disabled {
     0%, 100% { transform: translateX(0); }
     25% { transform: translateX(-3px); }
     75% { transform: translateX(3px); }
+}
+
+.gc-cfg-hint {
+    font-size: 1.0vh;
+    opacity: 0.35;
+    text-align: center;
+    padding: 0.2vh 0;
+    letter-spacing: 0.04vh;
 }
 
 /* Error message below form */

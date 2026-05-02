@@ -88,7 +88,7 @@ class Conninfo {
         this.updateInfo();
         this.infoUpdater = setInterval(() => {
             this.updateInfo();
-        }, 1000);
+        }, 2000);
     }
     updateInfo() {
         let time = new Date().getTime();
