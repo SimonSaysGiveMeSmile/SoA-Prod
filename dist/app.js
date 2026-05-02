@@ -70,8 +70,9 @@ class App {
         this.reconnectOpenBrowser = document.getElementById('reconnect-open-browser');
 
         this._snapshot = null;
-        this._termState = newState();
-        this._termText = '';
+        this._activeTab = 0;
+        this._tabStates = new Map(); // tabIndex → { termState, pendingData }
+        this._flushScheduled = false;
 
         const token = readToken();
         if (!token) {
@@ -220,7 +221,17 @@ class App {
     _applySnapshot(snap) {
         if (!snap) return;
         this._snapshot = snap;
-        this._renderTabs(snap.tabs || [], snap.activeTab);
+
+        const tabs = snap.tabs || [];
+        const activeTab = tabs.find(t => t.active);
+        this._activeTab = activeTab ? activeTab.index : 0;
+
+        this._tabStates.clear();
+        for (const t of tabs) {
+            this._tabStates.set(t.index, { termState: newState(), pendingData: '' });
+        }
+
+        this._renderTabs(tabs, snap.activeTab);
         this._renderTerminalSnapshot(snap.terminal || {});
         this._renderWidgets(snap.widgets || {}, snap.host || {});
     }
@@ -234,39 +245,123 @@ class App {
             const proc = t.process ? `<span class="tab-proc">${escapeHtml(t.process)}</span>` : '';
             el.innerHTML = `<span class="tab-name">${escapeHtml(t.name || `TAB ${t.index + 1}`)}</span>${proc}`;
             el.addEventListener('click', () => this.socket.sendInput('switch-tab', { index: t.index }));
-            // Long-press to close
+
             let pressTimer = null;
+            let didLongPress = false;
             el.addEventListener('pointerdown', () => {
+                didLongPress = false;
                 pressTimer = setTimeout(() => {
-                    if (confirm(`Close ${t.name}?`)) this.socket.sendInput('close-tab', { index: t.index });
-                }, 600);
+                    didLongPress = true;
+                    this._showTabMenu(t, el);
+                }, 500);
             });
-            const cancelLongPress = () => { if (pressTimer) { clearTimeout(pressTimer); pressTimer = null; } };
-            el.addEventListener('pointerup', cancelLongPress);
-            el.addEventListener('pointerleave', cancelLongPress);
+            const cancel = () => { if (pressTimer) { clearTimeout(pressTimer); pressTimer = null; } };
+            el.addEventListener('pointerup', (e) => { cancel(); if (didLongPress) e.preventDefault(); });
+            el.addEventListener('pointerleave', cancel);
+            el.addEventListener('pointermove', cancel);
             frag.appendChild(el);
         }
+
+        const addBtn = document.createElement('button');
+        addBtn.type = 'button';
+        addBtn.className = 'tab tab-add';
+        addBtn.textContent = '+';
+        addBtn.addEventListener('click', () => this.socket.sendInput('new-tab'));
+        frag.appendChild(addBtn);
+
         this.tabsEl.innerHTML = '';
         this.tabsEl.appendChild(frag);
     }
 
+    _showTabMenu(tab, anchorEl) {
+        this._dismissTabMenu();
+        const menu = document.createElement('div');
+        menu.className = 'tab-menu';
+
+        const rect = anchorEl.getBoundingClientRect();
+        menu.style.left = `${rect.left}px`;
+        menu.style.top = `${rect.bottom + 4}px`;
+
+        const renameBtn = document.createElement('button');
+        renameBtn.textContent = 'RENAME';
+        renameBtn.addEventListener('click', () => {
+            this._dismissTabMenu();
+            const name = prompt('Tab name:', tab.name || '');
+            if (name !== null) this.socket.sendInput('rename-tab', { index: tab.index, name });
+        });
+
+        const closeBtn = document.createElement('button');
+        closeBtn.textContent = 'CLOSE';
+        closeBtn.addEventListener('click', () => {
+            this._dismissTabMenu();
+            if (confirm(`Close ${tab.name || 'this tab'}?`)) {
+                this.socket.sendInput('close-tab', { index: tab.index });
+            }
+        });
+
+        menu.appendChild(renameBtn);
+        menu.appendChild(closeBtn);
+        document.body.appendChild(menu);
+        this._tabMenu = menu;
+
+        const dismiss = (e) => {
+            if (!menu.contains(e.target)) {
+                this._dismissTabMenu();
+                document.removeEventListener('pointerdown', dismiss);
+            }
+        };
+        requestAnimationFrame(() => document.addEventListener('pointerdown', dismiss));
+    }
+
+    _dismissTabMenu() {
+        if (this._tabMenu) {
+            this._tabMenu.remove();
+            this._tabMenu = null;
+        }
+    }
+
     _renderTerminalSnapshot(term) {
-        // Replace the current view with the snapshot's recent buffer.
-        this._termText = term.recent || '';
-        this._termState = newState();
-        const { html, state } = ansiToHtml(this._termText, this._termState);
-        this._termState = state;
+        const ts = this._getTabState(this._activeTab);
+        ts.termState = newState();
+        ts.pendingData = '';
+        const text = term.recent || '';
+        const { html, state } = ansiToHtml(text, ts.termState);
+        ts.termState = state;
         this.termEl.innerHTML = html;
         this._scrollTermBottom();
     }
 
     _applyTerminalChunk(payload) {
         if (!payload || typeof payload.data !== 'string') return;
-        // Only the active terminal flows through here; the desktop already filters.
-        const { html, state } = ansiToHtml(payload.data, this._termState);
-        this._termState = state;
+        const tabIndex = payload.tab != null ? payload.tab : this._activeTab;
+        const ts = this._getTabState(tabIndex);
+        ts.pendingData += payload.data;
+
+        if (tabIndex === this._activeTab && !this._flushScheduled) {
+            this._flushScheduled = true;
+            requestAnimationFrame(() => this._flushPending());
+        }
+    }
+
+    _getTabState(index) {
+        if (!this._tabStates.has(index)) {
+            this._tabStates.set(index, { termState: newState(), pendingData: '' });
+        }
+        return this._tabStates.get(index);
+    }
+
+    _flushPending() {
+        this._flushScheduled = false;
+        const ts = this._getTabState(this._activeTab);
+        if (!ts.pendingData) return;
+
+        const data = ts.pendingData;
+        ts.pendingData = '';
+
+        const { html, state } = ansiToHtml(data, ts.termState);
+        ts.termState = state;
         this.termEl.insertAdjacentHTML('beforeend', html);
-        // Bound the DOM size so very long sessions don't OOM mobile Safari.
+
         const MAX_NODES = 4000;
         while (this.termEl.childNodes.length > MAX_NODES) {
             this.termEl.removeChild(this.termEl.firstChild);
