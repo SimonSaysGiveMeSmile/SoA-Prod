@@ -282,6 +282,13 @@ class App {
         menu.style.left = `${rect.left}px`;
         menu.style.top = `${rect.bottom + 4}px`;
 
+        const resyncBtn = document.createElement('button');
+        resyncBtn.textContent = 'RESYNC';
+        resyncBtn.addEventListener('click', () => {
+            this._dismissTabMenu();
+            this._resync();
+        });
+
         const renameBtn = document.createElement('button');
         renameBtn.textContent = 'RENAME';
         renameBtn.addEventListener('click', () => {
@@ -299,6 +306,7 @@ class App {
             }
         });
 
+        menu.appendChild(resyncBtn);
         menu.appendChild(renameBtn);
         menu.appendChild(closeBtn);
         document.body.appendChild(menu);
@@ -318,6 +326,12 @@ class App {
             this._tabMenu.remove();
             this._tabMenu = null;
         }
+    }
+
+    _resync() {
+        this._tabStates.clear();
+        this.termEl.innerHTML = '';
+        this.socket.send('request', { what: 'snapshot' });
     }
 
     _renderTerminalSnapshot(term) {

@@ -19,6 +19,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import url from 'node:url';
 import net from 'node:net';
+import os from 'node:os';
 
 const ROOT = path.resolve(path.dirname(url.fileURLToPath(import.meta.url)), '..', 'dist');
 const PORT = Number(process.env.PORT) || 5173;
@@ -110,7 +111,7 @@ server.listen(PORT, '0.0.0.0', () => {
 });
 
 function listLanAddresses() {
-    const ifs = require('node:os').networkInterfaces();
+    const ifs = os.networkInterfaces();
     const out = [];
     for (const list of Object.values(ifs)) {
         for (const i of list || []) {
