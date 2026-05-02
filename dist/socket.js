@@ -179,9 +179,15 @@ export class BridgeSocket extends EventTarget {
         const httpOrigin = this.baseUrl.replace(/^ws(s?):\/\//, 'http$1://');
 
         try {
-            const res = await fetch(httpOrigin + '/', { signal, mode: 'no-cors', cache: 'no-store' });
+            const res = await fetch(httpOrigin + '/api/ping', {
+                signal, cache: 'no-store',
+            });
             clearTimeout(timeoutId);
-            if (res.type === 'opaque' || res.ok) return Diagnosis.CONNECTED;
+            if (res.ok) {
+                const body = await res.json().catch(() => null);
+                if (body && body.ok) return Diagnosis.CONNECTED;
+            }
+            return Diagnosis.CAPTIVE_PORTAL;
         } catch (_) {
             // Server unreachable — check internet to classify further
         }
