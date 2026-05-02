@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no" />
+    <meta name="theme-color" content="#000000" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Son of Anton" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="icon" href="/icon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="/icon.svg" />
+    <title>Son of Anton · Mobile</title>
+    <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+    <div id="app">
+        <header id="topbar">
+            <div class="brand">
+                <span class="brand-mark"></span>
+                <span class="brand-text">SON&nbsp;OF&nbsp;ANTON</span>
+            </div>
+            <div class="status" id="status">
+                <span class="status-dot" data-state="connecting"></span>
+                <span class="status-text">connecting…</span>
+            </div>
+        </header>
+
+        <nav id="tabs" aria-label="Open tabs"></nav>
+
+        <main id="stage">
+            <section id="terminal-view" class="view active">
+                <pre id="term"></pre>
+            </section>
+            <section id="widgets-view" class="view">
+                <div id="widgets"></div>
+            </section>
+        </main>
+
+        <nav id="bottombar">
+            <button class="bb-btn" data-view="terminal-view" aria-pressed="true">TERMINAL</button>
+            <button class="bb-btn" data-view="widgets-view">SYSTEM</button>
+            <button class="bb-btn bb-icon" id="btn-mic" title="Toggle microphone">MIC</button>
+            <button class="bb-btn bb-icon" id="btn-newtab" title="New tab">+</button>
+        </nav>
+
+        <section id="kbd" aria-label="Virtual keyboard"></section>
+    </div>
+
+    <div id="reconnect-overlay" hidden>
+        <div class="reconnect-card">
+            <div class="reconnect-spinner"></div>
+            <div class="reconnect-title">RECONNECTING</div>
+            <div class="reconnect-sub" id="reconnect-sub">checking link…</div>
+        </div>
+    </div>
+
+    <script type="module" src="/app.js"></script>
+</body>
+</html>

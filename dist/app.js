@@ -1,0 +1,305 @@
+/**
+ * Son of Anton — Mobile Companion App entry point.
+ *
+ * Lifecycle:
+ *   1. Read the session token from the URL (?t=…) or localStorage.
+ *   2. Open a BridgeSocket to the same host that served us. Once paired we
+ *      remember the token so accidental tab closes can resume seamlessly.
+ *   3. Render snapshots into the tab strip + active terminal view.
+ *   4. Stream incremental terminal output into the <pre>.
+ *   5. Forward every user input back to the desktop.
+ *
+ * Reconnection is handled inside BridgeSocket — we just react to its state
+ * events to show / hide the reconnect overlay.
+ */
+
+import { BridgeSocket, SocketState } from './socket.js';
+import { ansiToHtml, newState } from './ansi.js';
+import { VirtualKeyboard } from './keyboard.js';
+
+const STORAGE_KEY = 'son-of-anton.session';
+
+function readToken() {
+    const params = new URLSearchParams(location.search);
+    let t = params.get('t');
+    if (t) {
+        // Persist for next launch (e.g. PWA reopen).
+        try {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify({
+                token: t,
+                origin: location.origin,
+                ts: Date.now(),
+            }));
+        } catch (_) { /* private mode etc. */ }
+        // Clean the URL so the token isn't shown / shared.
+        if (history.replaceState) {
+            const clean = location.origin + location.pathname;
+            history.replaceState(null, '', clean);
+        }
+        return t;
+    }
+    try {
+        const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
+        if (saved && saved.token && saved.origin === location.origin) return saved.token;
+    } catch (_) { /* ignore */ }
+    return null;
+}
+
+function wsBaseFromHttp(origin) {
+    if (origin.startsWith('https://')) return 'wss://' + origin.slice('https://'.length);
+    if (origin.startsWith('http://'))  return 'ws://'  + origin.slice('http://'.length);
+    return origin;
+}
+
+class App {
+    constructor() {
+        this.statusDot   = document.querySelector('#status .status-dot');
+        this.statusText  = document.querySelector('#status .status-text');
+        this.tabsEl      = document.getElementById('tabs');
+        this.termEl      = document.getElementById('term');
+        this.widgetsEl   = document.getElementById('widgets');
+        this.kbdEl       = document.getElementById('kbd');
+        this.viewEls     = Array.from(document.querySelectorAll('.view'));
+        this.viewBtns    = Array.from(document.querySelectorAll('.bb-btn[data-view]'));
+        this.btnNewTab   = document.getElementById('btn-newtab');
+        this.btnMic      = document.getElementById('btn-mic');
+        this.reconnectOverlay = document.getElementById('reconnect-overlay');
+        this.reconnectSub     = document.getElementById('reconnect-sub');
+
+        this._snapshot = null;
+        this._termState = newState();
+        this._termText = '';
+
+        const token = readToken();
+        if (!token) {
+            this._showFatal('No session token. Re-scan the QR code on the desktop.');
+            return;
+        }
+
+        this.socket = new BridgeSocket({
+            url: wsBaseFromHttp(location.origin),
+            token,
+        });
+
+        this.kbd = new VirtualKeyboard(this.kbdEl, {
+            onInput: (kind, payload) => this.socket.sendInput(kind, payload),
+        });
+
+        this._wireSocket();
+        this._wireUi();
+
+        this.socket.connect();
+    }
+
+    _wireSocket() {
+        this.socket.addEventListener('state', (ev) => {
+            const { state, attempt, code } = ev.detail;
+            switch (state) {
+                case SocketState.CONNECTING:
+                    this._setStatus('connecting', `connecting${attempt > 1 ? ` · try ${attempt}` : '…'}`);
+                    if (attempt > 1) this._showReconnect(`attempt ${attempt}`);
+                    break;
+                case SocketState.CONNECTED:
+                    this._setStatus('connected', 'paired');
+                    this._hideReconnect();
+                    break;
+                case SocketState.DISCONNECTED:
+                    this._setStatus('disconnected', `link lost${code ? ` (${code})` : ''}`);
+                    this._showReconnect('link lost · retrying');
+                    break;
+            }
+        });
+
+        this.socket.addEventListener('reconnect-scheduled', (ev) => {
+            const { delay } = ev.detail;
+            const secs = Math.max(0, Math.round(delay / 100) / 10);
+            this.reconnectSub.textContent = secs > 0
+                ? `retrying in ${secs}s`
+                : 'retrying now…';
+        });
+
+        this.socket.addEventListener('message', (ev) => {
+            const msg = ev.detail;
+            switch (msg.t) {
+                case 'hello':    /* nothing yet */ break;
+                case 'snapshot': this._applySnapshot(msg.d); break;
+                case 'term-data': this._applyTerminalChunk(msg.d); break;
+                case 'notice':    this._showNotice(msg.d); break;
+            }
+        });
+    }
+
+    _wireUi() {
+        this.viewBtns.forEach(btn => {
+            btn.addEventListener('click', () => {
+                const target = btn.getAttribute('data-view');
+                this._showView(target);
+            });
+        });
+
+        this.btnNewTab.addEventListener('click', () => this.socket.sendInput('new-tab'));
+        this.btnMic.addEventListener('click', () => this.socket.sendInput('voice-toggle'));
+
+        // Tap the terminal to focus → hint the keyboard to stay visible
+        this.termEl.addEventListener('click', () => this._showView('terminal-view'));
+
+        // Drop input on widgets-view shouldn't show keyboard
+    }
+
+    _showView(target) {
+        this.viewEls.forEach(v => v.classList.toggle('active', v.id === target));
+        this.viewBtns.forEach(b => b.setAttribute('aria-pressed', b.getAttribute('data-view') === target ? 'true' : 'false'));
+        if (target === 'terminal-view') this.kbd.show(); else this.kbd.hide();
+    }
+
+    _setStatus(state, text) {
+        this.statusDot.setAttribute('data-state', state);
+        this.statusText.textContent = text;
+    }
+
+    _showReconnect(text) {
+        this.reconnectOverlay.hidden = false;
+        if (text) this.reconnectSub.textContent = text;
+    }
+    _hideReconnect() {
+        this.reconnectOverlay.hidden = true;
+    }
+
+    _applySnapshot(snap) {
+        if (!snap) return;
+        this._snapshot = snap;
+        this._renderTabs(snap.tabs || [], snap.activeTab);
+        this._renderTerminalSnapshot(snap.terminal || {});
+        this._renderWidgets(snap.widgets || {}, snap.host || {});
+    }
+
+    _renderTabs(tabs, activeIndex) {
+        const frag = document.createDocumentFragment();
+        for (const t of tabs) {
+            const el = document.createElement('button');
+            el.type = 'button';
+            el.className = 'tab' + (t.active ? ' active' : '');
+            const proc = t.process ? `<span class="tab-proc">${escapeHtml(t.process)}</span>` : '';
+            el.innerHTML = `<span class="tab-name">${escapeHtml(t.name || `TAB ${t.index + 1}`)}</span>${proc}`;
+            el.addEventListener('click', () => this.socket.sendInput('switch-tab', { index: t.index }));
+            // Long-press to close
+            let pressTimer = null;
+            el.addEventListener('pointerdown', () => {
+                pressTimer = setTimeout(() => {
+                    if (confirm(`Close ${t.name}?`)) this.socket.sendInput('close-tab', { index: t.index });
+                }, 600);
+            });
+            const cancelLongPress = () => { if (pressTimer) { clearTimeout(pressTimer); pressTimer = null; } };
+            el.addEventListener('pointerup', cancelLongPress);
+            el.addEventListener('pointerleave', cancelLongPress);
+            frag.appendChild(el);
+        }
+        this.tabsEl.innerHTML = '';
+        this.tabsEl.appendChild(frag);
+    }
+
+    _renderTerminalSnapshot(term) {
+        // Replace the current view with the snapshot's recent buffer.
+        this._termText = term.recent || '';
+        this._termState = newState();
+        const { html, state } = ansiToHtml(this._termText, this._termState);
+        this._termState = state;
+        this.termEl.innerHTML = html;
+        this._scrollTermBottom();
+    }
+
+    _applyTerminalChunk(payload) {
+        if (!payload || typeof payload.data !== 'string') return;
+        // Only the active terminal flows through here; the desktop already filters.
+        const { html, state } = ansiToHtml(payload.data, this._termState);
+        this._termState = state;
+        this.termEl.insertAdjacentHTML('beforeend', html);
+        // Bound the DOM size so very long sessions don't OOM mobile Safari.
+        const MAX_NODES = 4000;
+        while (this.termEl.childNodes.length > MAX_NODES) {
+            this.termEl.removeChild(this.termEl.firstChild);
+        }
+        this._scrollTermBottom();
+    }
+
+    _scrollTermBottom() {
+        // Defer to next frame so layout is up to date
+        requestAnimationFrame(() => {
+            this.termEl.scrollTop = this.termEl.scrollHeight;
+        });
+    }
+
+    _renderWidgets(widgets, host) {
+        const cards = [];
+        if (host && host.name) {
+            cards.push(card('HOST', host.name, host.platform ? host.platform.toUpperCase() : ''));
+        }
+        if (widgets.clock) {
+            const t = new Date(widgets.clock.time);
+            const hh = String(t.getHours()).padStart(2, '0');
+            const mm = String(t.getMinutes()).padStart(2, '0');
+            const ss = String(t.getSeconds()).padStart(2, '0');
+            cards.push(card('CLOCK', `${hh}:${mm}:${ss}`, t.toDateString()));
+        }
+        if (widgets.cpu) {
+            cards.push(meterCard('CPU', widgets.cpu.usagePct));
+        }
+        if (widgets.ram) {
+            cards.push(meterCard('MEMORY', widgets.ram.usagePct));
+        }
+        if (widgets.net) {
+            const inbps  = formatRate(widgets.net.rx_sec || widgets.net.rxBytesPerSec);
+            const outbps = formatRate(widgets.net.tx_sec || widgets.net.txBytesPerSec);
+            cards.push(card('NETWORK', `${inbps} ↓ · ${outbps} ↑`, ''));
+        }
+        this.widgetsEl.innerHTML = cards.join('') || `<div class="w-card"><h2>No data yet</h2><div class="w-meta">Waiting for the desktop to push state…</div></div>`;
+    }
+
+    _showNotice({ level, text }) {
+        // Lightweight: just print into the terminal as a coloured line for now.
+        if (!text) return;
+        const colour = level === 'error' ? '\x1b[91m' : (level === 'warn' ? '\x1b[93m' : '\x1b[92m');
+        this._applyTerminalChunk({ data: `\r\n${colour}[${(level || 'info').toUpperCase()}] ${text}\x1b[0m\r\n` });
+    }
+
+    _showFatal(text) {
+        document.getElementById('app').innerHTML = `
+            <div style="padding:32px;text-align:center;color:#ff5d6f;font-size:14px;letter-spacing:.18em;">
+                <div style="font-size:18px;margin-bottom:14px;color:#aaffaa;">SESSION REQUIRED</div>
+                <div>${escapeHtml(text)}</div>
+            </div>`;
+    }
+}
+
+function escapeHtml(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, c => (
+        { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]
+    ));
+}
+
+function card(title, value, meta) {
+    return `<div class="w-card"><h2>${escapeHtml(title)}</h2><div class="w-value">${escapeHtml(value)}</div>${meta ? `<div class="w-meta">${escapeHtml(meta)}</div>` : ''}</div>`;
+}
+
+function meterCard(title, pct) {
+    const v = Math.max(0, Math.min(100, Number(pct) || 0));
+    return `<div class="w-card">
+        <h2>${escapeHtml(title)}</h2>
+        <div class="w-value">${v.toFixed(0)}%</div>
+        <div class="w-bar"><span style="width:${v}%"></span></div>
+    </div>`;
+}
+
+function formatRate(bps) {
+    if (!Number.isFinite(bps)) return '—';
+    if (bps < 1024) return `${bps.toFixed(0)} B/s`;
+    if (bps < 1024 * 1024) return `${(bps / 1024).toFixed(1)} KB/s`;
+    return `${(bps / 1024 / 1024).toFixed(2)} MB/s`;
+}
+
+window.addEventListener('DOMContentLoaded', () => {
+    new App();
+    if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('/sw.js').catch(() => { /* fine if it fails */ });
+    }
+});

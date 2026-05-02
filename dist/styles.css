@@ -1,0 +1,329 @@
+/* Son of Anton Mobile — sci-fi green-on-black, mobile-first */
+
+:root {
+    --bg:        #000000;
+    --bg-alt:    #03130a;
+    --fg:        #aaffaa;
+    --fg-dim:    rgba(170, 255, 170, 0.55);
+    --fg-faint:  rgba(170, 255, 170, 0.2);
+    --accent:    #5fff5f;
+    --warn:      #ffb84d;
+    --err:       #ff5d6f;
+    --line:      rgba(170, 255, 170, 0.22);
+    --gap:       12px;
+    --radius:    2px;
+    --kbd-h:     34vh;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    color-scheme: dark;
+    -webkit-font-smoothing: antialiased;
+    -webkit-tap-highlight-color: transparent;
+    -webkit-touch-callout: none;
+    user-select: none;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+    margin: 0;
+    height: 100%;
+    background: var(--bg);
+    color: var(--fg);
+    overflow: hidden;
+    overscroll-behavior: none;
+}
+
+button {
+    font: inherit;
+    color: inherit;
+    background: transparent;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 6px 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    cursor: pointer;
+    transition: background 0.12s, border-color 0.12s;
+}
+button:active { background: rgba(170, 255, 170, 0.12); }
+
+#app {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    height: 100dvh;
+    width: 100vw;
+}
+
+/* ── Top bar ───────────────────────────────────────── */
+#topbar {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: max(env(safe-area-inset-top), 8px) 14px 8px;
+    border-bottom: 1px solid var(--line);
+    background: linear-gradient(180deg, rgba(170,255,170,0.06), transparent);
+}
+
+.brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 13px;
+    letter-spacing: 0.22em;
+}
+
+.brand-mark {
+    width: 12px;
+    height: 12px;
+    border: 1px solid var(--accent);
+    transform: rotate(45deg);
+    box-shadow: 0 0 6px rgba(95, 255, 95, 0.6);
+}
+
+.status {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 11px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    opacity: 0.85;
+}
+
+.status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--fg-dim);
+    transition: background 0.18s, box-shadow 0.18s;
+}
+.status-dot[data-state="connected"]    { background: var(--accent); box-shadow: 0 0 6px rgba(95,255,95,0.7); }
+.status-dot[data-state="connecting"]   { background: var(--warn); animation: pulse 0.8s ease-in-out infinite; }
+.status-dot[data-state="disconnected"] { background: var(--err); }
+
+@keyframes pulse {
+    0%,100%{ opacity: 1; }
+    50%    { opacity: 0.35; }
+}
+
+/* ── Tab strip ─────────────────────────────────────── */
+#tabs {
+    flex: 0 0 auto;
+    display: flex;
+    gap: 4px;
+    padding: 6px 10px;
+    border-bottom: 1px solid var(--line);
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    background: rgba(0,0,0,0.6);
+}
+#tabs::-webkit-scrollbar { display: none; }
+
+.tab {
+    flex: 0 0 auto;
+    padding: 5px 10px;
+    border: 1px solid var(--line);
+    color: var(--fg-dim);
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    background: rgba(0,0,0,0.4);
+    transition: color 0.12s, border-color 0.12s, background 0.12s;
+    max-width: 36vw;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.tab.active {
+    color: var(--accent);
+    border-color: var(--accent);
+    background: rgba(95,255,95,0.08);
+    box-shadow: 0 0 6px rgba(95,255,95,0.25) inset;
+}
+.tab .tab-proc {
+    margin-left: 6px;
+    opacity: 0.6;
+    font-size: 10px;
+}
+
+/* ── Main stage ────────────────────────────────────── */
+#stage {
+    flex: 1 1 auto;
+    position: relative;
+    overflow: hidden;
+}
+.view {
+    position: absolute;
+    inset: 0;
+    display: none;
+    overflow: hidden;
+}
+.view.active { display: block; }
+
+/* Terminal */
+#term {
+    margin: 0;
+    padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
+    height: 100%;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 12px;
+    line-height: 1.35;
+    white-space: pre-wrap;
+    word-break: break-all;
+    color: var(--fg);
+    background: var(--bg);
+}
+#term .ansi-bold   { font-weight: 700; }
+#term .ansi-dim    { opacity: 0.6; }
+#term .ansi-italic { font-style: italic; }
+#term .ansi-under  { text-decoration: underline; }
+#term .ansi-rev    { background: var(--fg); color: var(--bg); }
+
+/* Widgets view */
+#widgets-view { padding: 14px; overflow-y: auto; }
+.w-card {
+    border: 1px solid var(--line);
+    padding: 10px 12px;
+    margin-bottom: 10px;
+    background: rgba(0,0,0,0.55);
+}
+.w-card h2 {
+    margin: 0 0 6px;
+    font-size: 11px;
+    letter-spacing: 0.22em;
+    color: var(--fg-dim);
+    font-weight: 400;
+    text-transform: uppercase;
+}
+.w-card .w-value {
+    font-size: 22px;
+    letter-spacing: 0.05em;
+    color: var(--accent);
+}
+.w-card .w-meta {
+    font-size: 11px;
+    color: var(--fg-dim);
+    margin-top: 4px;
+}
+.w-bar {
+    margin-top: 6px;
+    height: 4px;
+    background: var(--fg-faint);
+    overflow: hidden;
+    border-radius: 1px;
+}
+.w-bar > span {
+    display: block;
+    height: 100%;
+    background: var(--accent);
+    box-shadow: 0 0 6px rgba(95,255,95,0.4);
+    transition: width 0.4s;
+}
+
+/* ── Bottom bar ────────────────────────────────────── */
+#bottombar {
+    flex: 0 0 auto;
+    display: flex;
+    gap: 6px;
+    padding: 6px 8px;
+    border-top: 1px solid var(--line);
+    background: rgba(0,0,0,0.85);
+}
+.bb-btn {
+    flex: 1 1 0;
+    padding: 10px 4px;
+    font-size: 11px;
+    letter-spacing: 0.18em;
+    border: 1px solid var(--line);
+    color: var(--fg-dim);
+}
+.bb-btn[aria-pressed="true"] {
+    color: var(--accent);
+    border-color: var(--accent);
+    background: rgba(95,255,95,0.06);
+}
+.bb-icon { flex: 0 0 64px; font-size: 14px; }
+
+/* ── Virtual keyboard ──────────────────────────────── */
+#kbd {
+    flex: 0 0 auto;
+    display: grid;
+    grid-template-columns: repeat(10, 1fr);
+    gap: 4px;
+    padding: 6px 6px calc(6px + env(safe-area-inset-bottom));
+    background: rgba(0,0,0,0.92);
+    border-top: 1px solid var(--line);
+    user-select: none;
+    touch-action: manipulation;
+}
+#kbd.hidden { display: none; }
+.k {
+    text-align: center;
+    font-size: 13px;
+    padding: 9px 0;
+    border: 1px solid var(--line);
+    color: var(--fg);
+    background: rgba(0,0,0,0.5);
+    border-radius: var(--radius);
+    transition: background 0.06s, border-color 0.06s;
+    text-transform: none;
+    letter-spacing: 0;
+}
+.k:active, .k.pressed { background: rgba(170,255,170,0.18); border-color: var(--accent); }
+.k.k-mod { color: var(--fg-dim); font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; }
+.k.k-mod.active { color: var(--accent); border-color: var(--accent); }
+.k.k-wide { grid-column: span 2; }
+.k.k-3   { grid-column: span 3; }
+.k.k-4   { grid-column: span 4; }
+.k.k-arrow { font-size: 16px; }
+.k.k-row-end { color: var(--accent); }
+
+/* ── Reconnect overlay ─────────────────────────────── */
+#reconnect-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.78);
+    backdrop-filter: blur(3px);
+    -webkit-backdrop-filter: blur(3px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+    pointer-events: auto;
+}
+#reconnect-overlay[hidden] { display: none; }
+
+.reconnect-card {
+    text-align: center;
+    padding: 20px 26px;
+    border: 1px solid var(--line);
+    background: rgba(0,0,0,0.75);
+    min-width: 220px;
+}
+.reconnect-spinner {
+    width: 30px;
+    height: 30px;
+    margin: 0 auto 14px;
+    border: 2px solid var(--fg-faint);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.9s linear infinite;
+    box-shadow: 0 0 8px rgba(95,255,95,0.4);
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.reconnect-title {
+    font-size: 12px;
+    letter-spacing: 0.28em;
+    color: var(--accent);
+}
+.reconnect-sub {
+    margin-top: 6px;
+    font-size: 11px;
+    color: var(--fg-dim);
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+}
