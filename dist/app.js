@@ -13,7 +13,7 @@
  * events to show / hide the reconnect overlay.
  */
 
-import { BridgeSocket, SocketState } from './socket.js';
+import { BridgeSocket, SocketState, Diagnosis } from './socket.js';
 import { ansiToHtml, newState } from './ansi.js';
 import { VirtualKeyboard } from './keyboard.js';
 
@@ -65,6 +65,9 @@ class App {
         this.btnMic      = document.getElementById('btn-mic');
         this.reconnectOverlay = document.getElementById('reconnect-overlay');
         this.reconnectSub     = document.getElementById('reconnect-sub');
+        this.reconnectDiag    = document.getElementById('reconnect-diag');
+        this.reconnectRetry   = document.getElementById('reconnect-retry');
+        this.reconnectOpenBrowser = document.getElementById('reconnect-open-browser');
 
         this._snapshot = null;
         this._termState = newState();
@@ -127,6 +130,10 @@ class App {
                 case 'notice':    this._showNotice(msg.d); break;
             }
         });
+
+        this.socket.addEventListener('diagnosis', (ev) => {
+            this._showDiagnosis(ev.detail.diagnosis);
+        });
     }
 
     _wireUi() {
@@ -140,10 +147,18 @@ class App {
         this.btnNewTab.addEventListener('click', () => this.socket.sendInput('new-tab'));
         this.btnMic.addEventListener('click', () => this.socket.sendInput('voice-toggle'));
 
-        // Tap the terminal to bring up the OS keyboard
         this.termEl.addEventListener('click', () => {
             this._showView('terminal-view');
             this.kbd.focus();
+        });
+
+        this.reconnectRetry.addEventListener('click', () => {
+            this.reconnectSub.textContent = 'retrying now…';
+            this.socket.retryNow();
+        });
+
+        this.reconnectOpenBrowser.addEventListener('click', () => {
+            window.open('http://captive.apple.com/hotspot-detect.html', '_blank');
         });
     }
 
@@ -166,9 +181,40 @@ class App {
     _showReconnect(text) {
         this.reconnectOverlay.hidden = false;
         if (text) this.reconnectSub.textContent = text;
+        this.reconnectRetry.hidden = false;
     }
     _hideReconnect() {
         this.reconnectOverlay.hidden = true;
+        this.reconnectDiag.hidden = true;
+        this.reconnectRetry.hidden = true;
+        this.reconnectOpenBrowser.hidden = true;
+    }
+
+    _showDiagnosis(diag) {
+        if (diag === Diagnosis.CONNECTED || diag === Diagnosis.NONE) {
+            this.reconnectDiag.hidden = true;
+            this.reconnectOpenBrowser.hidden = true;
+            return;
+        }
+        this.reconnectDiag.hidden = false;
+        this.reconnectRetry.hidden = false;
+        this.reconnectOpenBrowser.hidden = true;
+
+        switch (diag) {
+            case Diagnosis.CAPTIVE_PORTAL:
+                this.reconnectDiag.textContent =
+                    'WiFi login required — complete the WiFi sign-in page, then tap RETRY.';
+                this.reconnectOpenBrowser.hidden = false;
+                break;
+            case Diagnosis.SERVER_UNREACHABLE:
+                this.reconnectDiag.textContent =
+                    'Desktop not reachable on this network. Public WiFi often blocks local connections — re-scan the PUB (tunnel) QR code from the desktop.';
+                break;
+            case Diagnosis.NETWORK_OFFLINE:
+                this.reconnectDiag.textContent =
+                    'No internet connection. Connect to a network and tap RETRY.';
+                break;
+        }
     }
 
     _applySnapshot(snap) {

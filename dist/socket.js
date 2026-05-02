@@ -15,7 +15,15 @@ export const SocketState = Object.freeze({
     CONNECTING:   'connecting',
     CONNECTED:    'connected',
     DISCONNECTED: 'disconnected',
-    GIVING_UP:    'giving-up',  // we never actually give up; this is reserved for fatal auth errors
+    GIVING_UP:    'giving-up',
+});
+
+export const Diagnosis = Object.freeze({
+    NONE:               'none',
+    CONNECTED:          'connected',
+    CAPTIVE_PORTAL:     'captive-portal',
+    SERVER_UNREACHABLE: 'server-unreachable',
+    NETWORK_OFFLINE:    'network-offline',
 });
 
 export class BridgeSocket extends EventTarget {
@@ -24,24 +32,34 @@ export class BridgeSocket extends EventTarget {
         this.baseUrl = url;          // e.g. ws://192.168.1.7:7330
         this.token = token;
         this.state = SocketState.IDLE;
+        this.diagnosis = Diagnosis.NONE;
         this.ws = null;
         this._attempt = 0;
         this._stop = false;
         this._reconnectTimer = null;
         this._heartbeatTimer = null;
         this._lastPongAt = 0;
+        this._probeController = null;
 
-        // When the tab becomes visible again, kick a reconnect immediately
-        // (browsers may freeze WebSockets in the background).
         document.addEventListener('visibilitychange', () => {
             if (document.visibilityState === 'visible' && this.state !== SocketState.CONNECTED) {
                 this._scheduleReconnect(0);
             }
         });
-        // Same trick for online/offline.
+
         window.addEventListener('online', () => {
             if (this.state !== SocketState.CONNECTED) this._scheduleReconnect(0);
         });
+        window.addEventListener('offline', () => {
+            this._setDiagnosis(Diagnosis.NETWORK_OFFLINE);
+        });
+
+        const conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+        if (conn) {
+            conn.addEventListener('change', () => {
+                if (this.state !== SocketState.CONNECTED) this._scheduleReconnect(0);
+            });
+        }
     }
 
     connect() {
@@ -74,6 +92,17 @@ export class BridgeSocket extends EventTarget {
         return this.send('input', Object.assign({ kind }, payload));
     }
 
+    retryNow() {
+        this._attempt = 0;
+        this._scheduleReconnect(0);
+    }
+
+    _setDiagnosis(diag) {
+        if (this.diagnosis === diag) return;
+        this.diagnosis = diag;
+        this.dispatchEvent(new CustomEvent('diagnosis', { detail: { diagnosis: diag } }));
+    }
+
     _setState(state, detail) {
         if (this.state === state) return;
         this.state = state;
@@ -85,50 +114,89 @@ export class BridgeSocket extends EventTarget {
         const url = `${this.baseUrl}/ws?t=${encodeURIComponent(this.token)}`;
         this._setState(SocketState.CONNECTING, { attempt: this._attempt + 1 });
 
-        let ws;
-        try {
-            ws = new WebSocket(url);
-        } catch (e) {
-            this._scheduleReconnect();
-            return;
-        }
-        this.ws = ws;
+        this._probeConnectivity().then(diag => {
+            if (this._stop) return;
+            this._setDiagnosis(diag);
 
-        ws.addEventListener('open', () => {
-            this._attempt = 0;
-            this._lastPongAt = Date.now();
-            this._setState(SocketState.CONNECTED);
-            this._startHeartbeat();
-            // Ask for a fresh snapshot in case our cached one is stale.
-            this.send('request', { what: 'snapshot' });
-        });
+            if (diag === Diagnosis.NETWORK_OFFLINE || diag === Diagnosis.CAPTIVE_PORTAL) {
+                this._scheduleReconnect();
+                return;
+            }
 
-        ws.addEventListener('message', (ev) => {
-            let msg;
-            try { msg = JSON.parse(ev.data); }
-            catch (_) { return; }
-            if (!msg || typeof msg.t !== 'string') return;
-            if (msg.t === 'pong') {
+            let ws;
+            try {
+                ws = new WebSocket(url);
+            } catch (e) {
+                this._scheduleReconnect();
+                return;
+            }
+            this.ws = ws;
+
+            ws.addEventListener('open', () => {
+                this._attempt = 0;
                 this._lastPongAt = Date.now();
-                return;
-            }
-            this.dispatchEvent(new CustomEvent('message', { detail: msg }));
-        });
+                this._setDiagnosis(Diagnosis.CONNECTED);
+                this._setState(SocketState.CONNECTED);
+                this._startHeartbeat();
+                this.send('request', { what: 'snapshot' });
+            });
 
-        ws.addEventListener('error', () => {
-            // The 'close' handler will still fire, so we just record it for diagnostics.
-        });
+            ws.addEventListener('message', (ev) => {
+                let msg;
+                try { msg = JSON.parse(ev.data); }
+                catch (_) { return; }
+                if (!msg || typeof msg.t !== 'string') return;
+                if (msg.t === 'pong') {
+                    this._lastPongAt = Date.now();
+                    return;
+                }
+                this.dispatchEvent(new CustomEvent('message', { detail: msg }));
+            });
 
-        ws.addEventListener('close', (ev) => {
-            this._stopHeartbeat();
-            this.ws = null;
-            if (this._stop) {
-                this._setState(SocketState.IDLE, { code: ev.code });
-                return;
-            }
-            this._setState(SocketState.DISCONNECTED, { code: ev.code, reason: ev.reason });
-            this._scheduleReconnect();
+            ws.addEventListener('error', () => {});
+
+            ws.addEventListener('close', (ev) => {
+                this._stopHeartbeat();
+                this.ws = null;
+                if (this._stop) {
+                    this._setState(SocketState.IDLE, { code: ev.code });
+                    return;
+                }
+                this._setState(SocketState.DISCONNECTED, { code: ev.code, reason: ev.reason });
+                this._scheduleReconnect();
+            });
         });
+    }
+
+    async _probeConnectivity() {
+        if (!navigator.onLine) return Diagnosis.NETWORK_OFFLINE;
+
+        if (this._probeController) this._probeController.abort();
+        this._probeController = new AbortController();
+        const signal = this._probeController.signal;
+        const timeoutId = setTimeout(() => this._probeController.abort(), 6000);
+
+        const httpOrigin = this.baseUrl.replace(/^ws(s?):\/\//, 'http$1://');
+
+        try {
+            const res = await fetch(httpOrigin + '/', { signal, mode: 'no-cors', cache: 'no-store' });
+            clearTimeout(timeoutId);
+            if (res.type === 'opaque' || res.ok) return Diagnosis.CONNECTED;
+        } catch (_) {
+            // Server unreachable — check internet to classify further
+        }
+
+        try {
+            const res = await fetch('http://connectivitycheck.gstatic.com/generate_204', {
+                signal, mode: 'no-cors', cache: 'no-store', redirect: 'manual',
+            });
+            clearTimeout(timeoutId);
+            if (res.type === 'opaqueredirect') return Diagnosis.CAPTIVE_PORTAL;
+            return Diagnosis.SERVER_UNREACHABLE;
+        } catch (_) {
+            clearTimeout(timeoutId);
+            return navigator.onLine ? Diagnosis.CAPTIVE_PORTAL : Diagnosis.NETWORK_OFFLINE;
+        }
     }
 
     _scheduleReconnect(forcedDelayMs) {
