@@ -140,16 +140,22 @@ class App {
         this.btnNewTab.addEventListener('click', () => this.socket.sendInput('new-tab'));
         this.btnMic.addEventListener('click', () => this.socket.sendInput('voice-toggle'));
 
-        // Tap the terminal to focus → hint the keyboard to stay visible
-        this.termEl.addEventListener('click', () => this._showView('terminal-view'));
-
-        // Drop input on widgets-view shouldn't show keyboard
+        // Tap the terminal to bring up the OS keyboard
+        this.termEl.addEventListener('click', () => {
+            this._showView('terminal-view');
+            this.kbd.focus();
+        });
     }
 
     _showView(target) {
         this.viewEls.forEach(v => v.classList.toggle('active', v.id === target));
         this.viewBtns.forEach(b => b.setAttribute('aria-pressed', b.getAttribute('data-view') === target ? 'true' : 'false'));
-        if (target === 'terminal-view') this.kbd.show(); else this.kbd.hide();
+        if (target === 'terminal-view') {
+            this.kbd.show();
+        } else {
+            this.kbd.hide();
+            this.kbd.blur();
+        }
     }
 
     _setStatus(state, text) {

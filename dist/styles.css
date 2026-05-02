@@ -12,7 +12,6 @@
     --line:      rgba(170, 255, 170, 0.22);
     --gap:       12px;
     --radius:    2px;
-    --kbd-h:     34vh;
     font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
     color-scheme: dark;
     -webkit-font-smoothing: antialiased;
@@ -248,19 +247,30 @@ button:active { background: rgba(170, 255, 170, 0.12); }
 }
 .bb-icon { flex: 0 0 64px; font-size: 14px; }
 
-/* ── Virtual keyboard ──────────────────────────────── */
+/* ── Keyboard strip (OS-native input + modifier row) ── */
 #kbd {
     flex: 0 0 auto;
-    display: grid;
-    grid-template-columns: repeat(10, 1fr);
-    gap: 4px;
-    padding: 6px 6px calc(6px + env(safe-area-inset-bottom));
     background: rgba(0,0,0,0.92);
     border-top: 1px solid var(--line);
     user-select: none;
     touch-action: manipulation;
 }
 #kbd.hidden { display: none; }
+
+.kbd-hidden-input {
+    position: absolute;
+    left: -9999px;
+    width: 1px;
+    height: 1px;
+    opacity: 0;
+    font-size: 16px; /* prevents iOS zoom on focus */
+}
+
+.kbd-mods {
+    display: flex;
+    gap: 4px;
+    padding: 6px 6px calc(6px + env(safe-area-inset-bottom));
+}
 .k {
     text-align: center;
     font-size: 13px;
@@ -274,13 +284,10 @@ button:active { background: rgba(170, 255, 170, 0.12); }
     letter-spacing: 0;
 }
 .k:active, .k.pressed { background: rgba(170,255,170,0.18); border-color: var(--accent); }
-.k.k-mod { color: var(--fg-dim); font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; }
+.k.k-mod { flex: 1 1 0; color: var(--fg-dim); font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; }
 .k.k-mod.active { color: var(--accent); border-color: var(--accent); }
-.k.k-wide { grid-column: span 2; }
-.k.k-3   { grid-column: span 3; }
-.k.k-4   { grid-column: span 4; }
 .k.k-arrow { font-size: 16px; }
-.k.k-row-end { color: var(--accent); }
+.k.k-enter { color: var(--accent); }
 
 /* ── Reconnect overlay ─────────────────────────────── */
 #reconnect-overlay {
