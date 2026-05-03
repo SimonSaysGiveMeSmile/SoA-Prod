@@ -377,8 +377,6 @@ class App {
                 case SocketState.CONNECTED:
                     this._setStatus('connected', 'paired');
                     this._hideReconnect();
-                    this.termEl.style.border = '2px solid #ff0000';
-                    this.termEl.textContent = '[ BRIDGE CONNECTED — if you see this, #term is visible ]\n';
                     break;
                 case SocketState.DISCONNECTED:
                     this._setStatus('disconnected', `link lost${code ? ` (${code})` : ''}`);
@@ -691,14 +689,6 @@ class App {
         let data = ts.pendingData;
         ts.pendingData = '';
 
-        if (!this._flushCount) this._flushCount = 0;
-        this._flushCount++;
-        if (this._flushCount <= 3) {
-            const preview = data.slice(0, 80).replace(/[^\x20-\x7E]/g, '.');
-            this.termEl.insertAdjacentHTML('beforeend',
-                `<div style="color:#5fff5f;border:1px solid #5fff5f;padding:4px;margin:4px 0;font-size:11px;">[FLUSH #${this._flushCount} len=${data.length}] ${preview}</div>`);
-        }
-
         const wasAtBottom = this._isAtBottom();
 
         data = data.replace(/\r\n/g, '\n');
@@ -822,5 +812,8 @@ window.addEventListener('DOMContentLoaded', () => {
     window._app = new App();
     if ('serviceWorker' in navigator) {
         navigator.serviceWorker.register('/sw.js').catch(() => {});
+        navigator.serviceWorker.addEventListener('controllerchange', () => {
+            location.reload();
+        });
     }
 });
