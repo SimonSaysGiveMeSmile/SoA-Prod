@@ -650,12 +650,10 @@ class App {
         const ts = this._getTabState(this._activeTab);
         ts.termState = newState();
         ts.pendingData = '';
-        let text = term.recent || '';
-        text = text.replace(/\r\n/g, '\n');
-        text = text.split('\n').map(line => {
-            const parts = line.split('\r');
-            return parts[parts.length - 1];
-        }).join('\n');
+        let text = term.screen || term.recent || '';
+        if (!term.screen) {
+            text = text.replace(/\r\n/g, '\n').replace(/\r/g, '');
+        }
         const { html, state } = ansiToHtml(text, ts.termState);
         ts.termState = state;
         this.termEl.innerHTML = html;
