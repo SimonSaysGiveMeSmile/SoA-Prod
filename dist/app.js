@@ -244,9 +244,16 @@ class App {
         this._tabStates = new Map();
         this._flushScheduled = false;
         this._currentTheme = loadSavedTheme();
+        this._idleTimer = null;
+        this._chromeHidden = false;
 
-        this._renderThemeGrid();
-        this._wireSettings();
+        this._pullHint = document.createElement('div');
+        this._pullHint.className = 'pull-hint';
+        document.body.appendChild(this._pullHint);
+
+        if (this.themeGrid) this._renderThemeGrid();
+        if (this.btnSettings) this._wireSettings();
+        this._wireIdleHide();
 
         const token = readToken();
         if (!token) {
@@ -301,6 +308,7 @@ class App {
     }
 
     _wireSettings() {
+        if (!this.settingsOverlay || !this.settingsClose) return;
         this.btnSettings.addEventListener('click', () => this._openSettings());
         this.settingsClose.addEventListener('click', () => this._closeSettings());
         this.settingsOverlay.addEventListener('click', (e) => {
@@ -309,11 +317,51 @@ class App {
     }
 
     _openSettings() {
-        this.settingsOverlay.classList.add('open');
+        if (this.settingsOverlay) this.settingsOverlay.classList.add('open');
     }
 
     _closeSettings() {
-        this.settingsOverlay.classList.remove('open');
+        if (this.settingsOverlay) this.settingsOverlay.classList.remove('open');
+    }
+
+    /* ── Auto-hide chrome ── */
+
+    _wireIdleHide() {
+        const app = document.getElementById('app');
+        const resetIdle = () => this._showChrome();
+        for (const evt of ['pointerdown', 'pointermove', 'keydown', 'touchstart']) {
+            app.addEventListener(evt, resetIdle, { passive: true });
+        }
+        this._resetIdleTimer();
+    }
+
+    _resetIdleTimer() {
+        clearTimeout(this._idleTimer);
+        this._idleTimer = setTimeout(() => {
+            if (this.settingsOverlay && this.settingsOverlay.classList.contains('open')) return;
+            if (this.reconnectOverlay && !this.reconnectOverlay.hidden) return;
+            this._hideChrome();
+        }, 5000);
+    }
+
+    _hideChrome() {
+        if (this._chromeHidden) return;
+        this._chromeHidden = true;
+        const bb = document.getElementById('bottombar');
+        if (bb) bb.classList.add('chrome-hidden');
+        if (this.kbdEl) this.kbdEl.classList.add('chrome-hidden');
+        this._pullHint.classList.add('visible');
+    }
+
+    _showChrome() {
+        if (this._chromeHidden) {
+            this._chromeHidden = false;
+            const bb = document.getElementById('bottombar');
+            if (bb) bb.classList.remove('chrome-hidden');
+            if (this.kbdEl) this.kbdEl.classList.remove('chrome-hidden');
+            this._pullHint.classList.remove('visible');
+        }
+        this._resetIdleTimer();
     }
 
     /* ── Socket ── */
@@ -329,6 +377,8 @@ class App {
                 case SocketState.CONNECTED:
                     this._setStatus('connected', 'paired');
                     this._hideReconnect();
+                    this.termEl.style.border = '2px solid #ff0000';
+                    this.termEl.textContent = '[ BRIDGE CONNECTED — if you see this, #term is visible ]\n';
                     break;
                 case SocketState.DISCONNECTED:
                     this._setStatus('disconnected', `link lost${code ? ` (${code})` : ''}`);
@@ -345,8 +395,13 @@ class App {
                 : 'retrying now…';
         });
 
+        this._msgCounts = { hello: 0, snapshot: 0, 'term-data': 0, notice: 0, other: 0 };
+        this._lastMsgAt = 0;
+
         this.socket.addEventListener('message', (ev) => {
             const msg = ev.detail;
+            this._lastMsgAt = Date.now();
+            this._msgCounts[msg.t] = (this._msgCounts[msg.t] || 0) + 1;
             switch (msg.t) {
                 case 'hello':    break;
                 case 'snapshot': this._applySnapshot(msg.d); break;
@@ -400,6 +455,34 @@ class App {
     _setStatus(state, text) {
         this.statusDot.setAttribute('data-state', state);
         this.statusText.textContent = text;
+        if (state === 'connected' && !this._diagTimer) {
+            this._diagTimer = setInterval(() => this._updateDiagStatus(), 2000);
+        }
+    }
+
+    _updateDiagStatus() {
+        if (this.socket.state !== 'connected') {
+            if (this._diagTimer) { clearInterval(this._diagTimer); this._diagTimer = null; }
+            return;
+        }
+        const s = this._msgCounts.snapshot;
+        const t = this._msgCounts['term-data'];
+        this.statusText.textContent = `paired · S:${s} T:${t}`;
+    }
+
+    diag() {
+        const age = this._lastMsgAt ? ((Date.now() - this._lastMsgAt) / 1000).toFixed(1) + 's ago' : 'never';
+        return {
+            socketState: this.socket.state,
+            messages: { ...this._msgCounts },
+            lastMessage: age,
+            activeTab: this._activeTab,
+            tabStates: Array.from(this._tabStates.entries()).map(([k, v]) => ({
+                tab: k,
+                pendingBytes: v.pendingData.length,
+            })),
+            termChildNodes: this.termEl.childNodes.length,
+        };
     }
 
     _showReconnect(text) {
@@ -447,15 +530,22 @@ class App {
 
         const tabs = snap.tabs || [];
         const activeTab = tabs.find(t => t.active);
-        this._activeTab = activeTab ? activeTab.index : 0;
+        const newActiveTab = activeTab ? activeTab.index : 0;
+        const tabChanged = newActiveTab !== this._activeTab;
+        const firstSnapshot = !this._hasReceivedSnapshot;
+        this._hasReceivedSnapshot = true;
+        this._activeTab = newActiveTab;
 
-        this._tabStates.clear();
         for (const t of tabs) {
-            this._tabStates.set(t.index, { termState: newState(), pendingData: '' });
+            if (!this._tabStates.has(t.index)) {
+                this._tabStates.set(t.index, { termState: newState(), pendingData: '' });
+            }
         }
 
         this._renderTabs(tabs, snap.activeTab);
-        this._renderTerminalSnapshot(snap.terminal || {});
+        if (firstSnapshot || tabChanged) {
+            this._renderTerminalSnapshot(snap.terminal || {});
+        }
         this._renderWidgets(snap.widgets || {}, snap.host || {});
     }
 
@@ -553,6 +643,7 @@ class App {
 
     _resync() {
         this._tabStates.clear();
+        this._hasReceivedSnapshot = false;
         this.termEl.innerHTML = '';
         this.socket.send('request', { what: 'snapshot' });
     }
@@ -575,7 +666,7 @@ class App {
 
     _applyTerminalChunk(payload) {
         if (!payload || typeof payload.data !== 'string') return;
-        const tabIndex = payload.tab != null ? payload.tab : this._activeTab;
+        const tabIndex = payload.tab ?? payload.index ?? this._activeTab;
         const ts = this._getTabState(tabIndex);
         ts.pendingData += payload.data;
 
@@ -599,6 +690,14 @@ class App {
 
         let data = ts.pendingData;
         ts.pendingData = '';
+
+        if (!this._flushCount) this._flushCount = 0;
+        this._flushCount++;
+        if (this._flushCount <= 3) {
+            const preview = data.slice(0, 80).replace(/[^\x20-\x7E]/g, '.');
+            this.termEl.insertAdjacentHTML('beforeend',
+                `<div style="color:#5fff5f;border:1px solid #5fff5f;padding:4px;margin:4px 0;font-size:11px;">[FLUSH #${this._flushCount} len=${data.length}] ${preview}</div>`);
+        }
 
         const wasAtBottom = this._isAtBottom();
 
@@ -720,7 +819,7 @@ function formatRate(bps) {
 }
 
 window.addEventListener('DOMContentLoaded', () => {
-    new App();
+    window._app = new App();
     if ('serviceWorker' in navigator) {
         navigator.serviceWorker.register('/sw.js').catch(() => {});
     }
