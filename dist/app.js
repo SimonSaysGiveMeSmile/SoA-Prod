@@ -18,20 +18,185 @@ import { ansiToHtml, newState } from './ansi.js';
 import { VirtualKeyboard } from './keyboard.js';
 
 const STORAGE_KEY = 'son-of-anton.session';
+const THEME_KEY = 'son-of-anton.theme';
+
+/* ── Theme definitions ──────────────────────────────── */
+
+const THEMES = {
+    mono: {
+        name: 'Mono',
+        preview: ['#000000', '#ffffff'],
+        vars: {
+            '--bg':             '#000000',
+            '--bg-alt':         '#111111',
+            '--fg':             '#e0e0e0',
+            '--fg-dim':         'rgba(224,224,224,0.55)',
+            '--fg-faint':       'rgba(224,224,224,0.2)',
+            '--accent':         '#ffffff',
+            '--accent-glow':    'rgba(255,255,255,0.5)',
+            '--accent-bg':      'rgba(255,255,255,0.08)',
+            '--accent-bg-hover':'rgba(255,255,255,0.15)',
+            '--warn':           '#ffb84d',
+            '--err':            '#ff5d6f',
+            '--line':           'rgba(224,224,224,0.22)',
+            '--radius':         '2px',
+            '--panel-bg':       'rgba(0,0,0,0.75)',
+            '--font':           'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
+        },
+        colorScheme: 'dark',
+    },
+    matrix: {
+        name: 'Matrix',
+        preview: ['#000000', '#5fff5f'],
+        vars: {
+            '--bg':             '#000000',
+            '--bg-alt':         '#03130a',
+            '--fg':             '#aaffaa',
+            '--fg-dim':         'rgba(170,255,170,0.55)',
+            '--fg-faint':       'rgba(170,255,170,0.2)',
+            '--accent':         '#5fff5f',
+            '--accent-glow':    'rgba(95,255,95,0.6)',
+            '--accent-bg':      'rgba(95,255,95,0.08)',
+            '--accent-bg-hover':'rgba(95,255,95,0.15)',
+            '--warn':           '#ffb84d',
+            '--err':            '#ff5d6f',
+            '--line':           'rgba(170,255,170,0.22)',
+            '--radius':         '2px',
+            '--panel-bg':       'rgba(3,19,10,0.85)',
+            '--font':           'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
+        },
+        colorScheme: 'dark',
+    },
+    amber: {
+        name: 'Amber',
+        preview: ['#0a0800', '#ffb347'],
+        vars: {
+            '--bg':             '#0a0800',
+            '--bg-alt':         '#141000',
+            '--fg':             '#ffd9a0',
+            '--fg-dim':         'rgba(255,217,160,0.55)',
+            '--fg-faint':       'rgba(255,217,160,0.2)',
+            '--accent':         '#ffb347',
+            '--accent-glow':    'rgba(255,179,71,0.6)',
+            '--accent-bg':      'rgba(255,179,71,0.08)',
+            '--accent-bg-hover':'rgba(255,179,71,0.15)',
+            '--warn':           '#ffe066',
+            '--err':            '#ff5d6f',
+            '--line':           'rgba(255,217,160,0.22)',
+            '--radius':         '2px',
+            '--panel-bg':       'rgba(10,8,0,0.85)',
+            '--font':           'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
+        },
+        colorScheme: 'dark',
+    },
+    ocean: {
+        name: 'Ocean',
+        preview: ['#020c18', '#5fa8ff'],
+        vars: {
+            '--bg':             '#020c18',
+            '--bg-alt':         '#081828',
+            '--fg':             '#b0d4ff',
+            '--fg-dim':         'rgba(176,212,255,0.55)',
+            '--fg-faint':       'rgba(176,212,255,0.2)',
+            '--accent':         '#5fa8ff',
+            '--accent-glow':    'rgba(95,168,255,0.6)',
+            '--accent-bg':      'rgba(95,168,255,0.08)',
+            '--accent-bg-hover':'rgba(95,168,255,0.15)',
+            '--warn':           '#ffb84d',
+            '--err':            '#ff5d6f',
+            '--line':           'rgba(176,212,255,0.22)',
+            '--radius':         '2px',
+            '--panel-bg':       'rgba(2,12,24,0.85)',
+            '--font':           'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
+        },
+        colorScheme: 'dark',
+    },
+    rose: {
+        name: 'Rose',
+        preview: ['#0e0408', '#ff6b8a'],
+        vars: {
+            '--bg':             '#0e0408',
+            '--bg-alt':         '#180812',
+            '--fg':             '#ffc0d0',
+            '--fg-dim':         'rgba(255,192,208,0.55)',
+            '--fg-faint':       'rgba(255,192,208,0.2)',
+            '--accent':         '#ff6b8a',
+            '--accent-glow':    'rgba(255,107,138,0.6)',
+            '--accent-bg':      'rgba(255,107,138,0.08)',
+            '--accent-bg-hover':'rgba(255,107,138,0.15)',
+            '--warn':           '#ffb84d',
+            '--err':            '#ff5d6f',
+            '--line':           'rgba(255,192,208,0.22)',
+            '--radius':         '2px',
+            '--panel-bg':       'rgba(14,4,8,0.85)',
+            '--font':           'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
+        },
+        colorScheme: 'dark',
+    },
+    'liquid-glass': {
+        name: 'Liquid Glass',
+        preview: ['#f0f2f5', '#0071e3'],
+        vars: {
+            '--bg':             '#f0f2f5',
+            '--bg-alt':         '#e8eaed',
+            '--fg':             '#1d1d1f',
+            '--fg-dim':         'rgba(29,29,31,0.5)',
+            '--fg-faint':       'rgba(29,29,31,0.15)',
+            '--accent':         '#0071e3',
+            '--accent-glow':    'rgba(0,113,227,0.3)',
+            '--accent-bg':      'rgba(0,113,227,0.08)',
+            '--accent-bg-hover':'rgba(0,113,227,0.14)',
+            '--warn':           '#e67e00',
+            '--err':            '#e3342f',
+            '--line':           'rgba(0,0,0,0.1)',
+            '--radius':         '14px',
+            '--panel-bg':       'rgba(255,255,255,0.55)',
+            '--font':           "-apple-system, BlinkMacSystemFont, 'SF Pro Display', system-ui, sans-serif",
+        },
+        colorScheme: 'light',
+    },
+};
+
+const DEFAULT_THEME = 'mono';
+
+function applyTheme(name) {
+    const theme = THEMES[name] || THEMES[DEFAULT_THEME];
+    const root = document.documentElement;
+    for (const [prop, val] of Object.entries(theme.vars)) {
+        root.style.setProperty(prop, val);
+    }
+    root.setAttribute('data-theme', name);
+    root.style.colorScheme = theme.colorScheme;
+    root.style.fontFamily = theme.vars['--font'];
+    const meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) meta.setAttribute('content', theme.vars['--bg']);
+    try { localStorage.setItem(THEME_KEY, name); } catch (_) {}
+}
+
+function loadSavedTheme() {
+    try {
+        const saved = localStorage.getItem(THEME_KEY);
+        if (saved && THEMES[saved]) return saved;
+    } catch (_) {}
+    return DEFAULT_THEME;
+}
+
+/* ── Boot theme immediately to avoid FOUC ────────── */
+applyTheme(loadSavedTheme());
+
+/* ── App ─────────────────────────────────────────── */
 
 function readToken() {
     const params = new URLSearchParams(location.search);
     let t = params.get('t');
     if (t) {
-        // Persist for next launch (e.g. PWA reopen).
         try {
             localStorage.setItem(STORAGE_KEY, JSON.stringify({
                 token: t,
                 origin: location.origin,
                 ts: Date.now(),
             }));
-        } catch (_) { /* private mode etc. */ }
-        // Clean the URL so the token isn't shown / shared.
+        } catch (_) {}
         if (history.replaceState) {
             const clean = location.origin + location.pathname;
             history.replaceState(null, '', clean);
@@ -41,7 +206,7 @@ function readToken() {
     try {
         const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
         if (saved && saved.token && saved.origin === location.origin) return saved.token;
-    } catch (_) { /* ignore */ }
+    } catch (_) {}
     return null;
 }
 
@@ -63,16 +228,25 @@ class App {
         this.viewBtns    = Array.from(document.querySelectorAll('.bb-btn[data-view]'));
         this.btnNewTab   = document.getElementById('btn-newtab');
         this.btnMic      = document.getElementById('btn-mic');
+        this.btnSettings = document.getElementById('btn-settings');
         this.reconnectOverlay = document.getElementById('reconnect-overlay');
         this.reconnectSub     = document.getElementById('reconnect-sub');
         this.reconnectDiag    = document.getElementById('reconnect-diag');
         this.reconnectRetry   = document.getElementById('reconnect-retry');
         this.reconnectOpenBrowser = document.getElementById('reconnect-open-browser');
 
+        this.settingsOverlay = document.getElementById('settings-overlay');
+        this.themeGrid = document.getElementById('theme-grid');
+        this.settingsClose = document.getElementById('settings-close');
+
         this._snapshot = null;
         this._activeTab = 0;
-        this._tabStates = new Map(); // tabIndex → { termState, pendingData }
+        this._tabStates = new Map();
         this._flushScheduled = false;
+        this._currentTheme = loadSavedTheme();
+
+        this._renderThemeGrid();
+        this._wireSettings();
 
         const token = readToken();
         if (!token) {
@@ -94,6 +268,55 @@ class App {
 
         this.socket.connect();
     }
+
+    /* ── Settings / Themes ── */
+
+    _renderThemeGrid() {
+        this.themeGrid.innerHTML = '';
+        for (const [id, theme] of Object.entries(THEMES)) {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'theme-swatch' + (id === this._currentTheme ? ' active' : '');
+            btn.dataset.theme = id;
+
+            const [bgColor, accentColor] = theme.preview;
+            btn.innerHTML = `
+                <div class="swatch-preview" style="background:${bgColor};">
+                    <div style="position:absolute;inset:25%;border-radius:50%;background:${accentColor};"></div>
+                </div>
+                <span class="swatch-name">${escapeHtml(theme.name)}</span>
+            `;
+            btn.addEventListener('click', () => this._selectTheme(id));
+            this.themeGrid.appendChild(btn);
+        }
+    }
+
+    _selectTheme(id) {
+        if (!THEMES[id]) return;
+        this._currentTheme = id;
+        applyTheme(id);
+        this.themeGrid.querySelectorAll('.theme-swatch').forEach(el => {
+            el.classList.toggle('active', el.dataset.theme === id);
+        });
+    }
+
+    _wireSettings() {
+        this.btnSettings.addEventListener('click', () => this._openSettings());
+        this.settingsClose.addEventListener('click', () => this._closeSettings());
+        this.settingsOverlay.addEventListener('click', (e) => {
+            if (e.target === this.settingsOverlay) this._closeSettings();
+        });
+    }
+
+    _openSettings() {
+        this.settingsOverlay.classList.add('open');
+    }
+
+    _closeSettings() {
+        this.settingsOverlay.classList.remove('open');
+    }
+
+    /* ── Socket ── */
 
     _wireSocket() {
         this.socket.addEventListener('state', (ev) => {
@@ -125,7 +348,7 @@ class App {
         this.socket.addEventListener('message', (ev) => {
             const msg = ev.detail;
             switch (msg.t) {
-                case 'hello':    /* nothing yet */ break;
+                case 'hello':    break;
                 case 'snapshot': this._applySnapshot(msg.d); break;
                 case 'term-data': this._applyTerminalChunk(msg.d); break;
                 case 'notice':    this._showNotice(msg.d); break;
@@ -456,7 +679,6 @@ class App {
     }
 
     _showNotice({ level, text }) {
-        // Lightweight: just print into the terminal as a coloured line for now.
         if (!text) return;
         const colour = level === 'error' ? '\x1b[91m' : (level === 'warn' ? '\x1b[93m' : '\x1b[92m');
         this._applyTerminalChunk({ data: `\r\n${colour}[${(level || 'info').toUpperCase()}] ${text}\x1b[0m\r\n` });
@@ -464,8 +686,8 @@ class App {
 
     _showFatal(text) {
         document.getElementById('app').innerHTML = `
-            <div style="padding:32px;text-align:center;color:#ff5d6f;font-size:14px;letter-spacing:.18em;">
-                <div style="font-size:18px;margin-bottom:14px;color:#aaffaa;">SESSION REQUIRED</div>
+            <div style="padding:32px;text-align:center;color:var(--err);font-size:14px;letter-spacing:.18em;">
+                <div style="font-size:18px;margin-bottom:14px;color:var(--fg);">SESSION REQUIRED</div>
                 <div>${escapeHtml(text)}</div>
             </div>`;
     }
@@ -500,6 +722,6 @@ function formatRate(bps) {
 window.addEventListener('DOMContentLoaded', () => {
     new App();
     if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.register('/sw.js').catch(() => { /* fine if it fails */ });
+        navigator.serviceWorker.register('/sw.js').catch(() => {});
     }
 });

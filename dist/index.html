@@ -41,10 +41,25 @@
             <button class="bb-btn" data-view="terminal-view" aria-pressed="true">TERMINAL</button>
             <button class="bb-btn" data-view="widgets-view">SYSTEM</button>
             <button class="bb-btn bb-icon" id="btn-mic" title="Toggle microphone">MIC</button>
+            <button class="bb-btn bb-icon-sm" id="btn-settings" title="Settings">&#9881;</button>
             <button class="bb-btn bb-icon" id="btn-newtab" title="New tab">+</button>
         </nav>
 
         <section id="kbd" aria-label="Virtual keyboard"></section>
+    </div>
+
+    <div id="settings-overlay">
+        <div class="settings-sheet">
+            <div class="settings-handle"><span></span></div>
+            <div class="settings-header">
+                <div class="settings-title">Settings</div>
+                <button class="settings-close" id="settings-close">&times;</button>
+            </div>
+            <div class="settings-section">
+                <div class="settings-label">Theme</div>
+                <div class="theme-grid" id="theme-grid"></div>
+            </div>
+        </div>
     </div>
 
     <div id="reconnect-overlay" hidden>
