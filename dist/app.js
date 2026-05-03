@@ -338,7 +338,12 @@ class App {
         const ts = this._getTabState(this._activeTab);
         ts.termState = newState();
         ts.pendingData = '';
-        const text = term.recent || '';
+        let text = term.recent || '';
+        text = text.replace(/\r\n/g, '\n');
+        text = text.split('\n').map(line => {
+            const parts = line.split('\r');
+            return parts[parts.length - 1];
+        }).join('\n');
         const { html, state } = ansiToHtml(text, ts.termState);
         ts.termState = state;
         this.termEl.innerHTML = html;
@@ -369,25 +374,59 @@ class App {
         const ts = this._getTabState(this._activeTab);
         if (!ts.pendingData) return;
 
-        const data = ts.pendingData;
+        let data = ts.pendingData;
         ts.pendingData = '';
 
-        const { html, state } = ansiToHtml(data, ts.termState);
-        ts.termState = state;
-        this.termEl.insertAdjacentHTML('beforeend', html);
+        const wasAtBottom = this._isAtBottom();
+
+        data = data.replace(/\r\n/g, '\n');
+        const crParts = data.split('\r');
+
+        for (let ci = 0; ci < crParts.length; ci++) {
+            if (ci > 0) this._eraseCurrentLine();
+            const seg = crParts[ci];
+            if (!seg) continue;
+            const { html, state } = ansiToHtml(seg, ts.termState);
+            ts.termState = state;
+            this.termEl.insertAdjacentHTML('beforeend', html);
+        }
 
         const MAX_NODES = 4000;
         while (this.termEl.childNodes.length > MAX_NODES) {
             this.termEl.removeChild(this.termEl.firstChild);
         }
-        this._scrollTermBottom();
+
+        if (wasAtBottom) {
+            requestAnimationFrame(() => {
+                this.termEl.scrollTop = this.termEl.scrollHeight;
+            });
+        }
     }
 
     _scrollTermBottom() {
-        // Defer to next frame so layout is up to date
         requestAnimationFrame(() => {
             this.termEl.scrollTop = this.termEl.scrollHeight;
         });
+    }
+
+    _isAtBottom() {
+        const el = this.termEl;
+        return (el.scrollHeight - el.scrollTop - el.clientHeight) < 50;
+    }
+
+    _eraseCurrentLine() {
+        const el = this.termEl;
+        while (el.childNodes.length) {
+            const last = el.childNodes[el.childNodes.length - 1];
+            if (last.nodeType === Node.TEXT_NODE) {
+                const nlPos = last.textContent.lastIndexOf('\n');
+                if (nlPos !== -1) {
+                    last.textContent = last.textContent.substring(0, nlPos + 1);
+                    return;
+                }
+            }
+            el.removeChild(last);
+        }
     }
 
     _renderWidgets(widgets, host) {

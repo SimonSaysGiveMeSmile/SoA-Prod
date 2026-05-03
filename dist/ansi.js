@@ -125,6 +125,15 @@ export function ansiToHtml(input, state = newState()) {
     let i = 0;
     while (i < input.length) {
         const c = input[i];
+        if (c === '\r') { i++; continue; }
+        if (c === '\n') {
+            flushBuf();
+            closeSpan();
+            out += '\n';
+            openSpanIfNeeded();
+            i++;
+            continue;
+        }
         if (c !== ESC) {
             buf += c;
             i++;
