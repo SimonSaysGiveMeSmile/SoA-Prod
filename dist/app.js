@@ -537,8 +537,6 @@ class App {
         const tabs = snap.tabs || [];
         const activeTab = tabs.find(t => t.active);
         const newActiveTab = activeTab ? activeTab.index : 0;
-        const tabChanged = newActiveTab !== this._activeTab;
-        const firstSnapshot = !this._hasReceivedSnapshot;
         this._hasReceivedSnapshot = true;
         this._activeTab = newActiveTab;
 
@@ -549,9 +547,7 @@ class App {
         }
 
         this._renderTabs(tabs, snap.activeTab);
-        if (firstSnapshot || tabChanged) {
-            this._renderTerminalSnapshot(snap.terminal || {});
-        }
+        this._renderTerminalSnapshot(snap.terminal || {});
         this._renderWidgets(snap.widgets || {}, snap.host || {});
     }
 
@@ -670,6 +666,7 @@ class App {
 
     _applyTerminalChunk(payload) {
         if (!payload || typeof payload.data !== 'string') return;
+        if (this._hasReceivedSnapshot) return;
         const tabIndex = payload.tab ?? payload.index ?? this._activeTab;
         const ts = this._getTabState(tabIndex);
         ts.pendingData += payload.data;
