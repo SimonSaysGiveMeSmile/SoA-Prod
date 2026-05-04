@@ -255,7 +255,7 @@ class App {
         this._idleTimer = null;
         this._chromeHidden = false;
 
-        this._baseFontSize = 13;
+        this._baseFontSize = 20;
         this._termCols = 80;
         this._userScrolledUp = false;
 
@@ -567,6 +567,7 @@ class App {
             const el = document.createElement('button');
             el.type = 'button';
             el.className = 'tab' + (t.active ? ' active' : '');
+            if (t.status) el.setAttribute('data-status', t.status);
             const proc = t.process ? `<span class="tab-proc">${escapeHtml(t.process)}</span>` : '';
             el.innerHTML = `<span class="tab-name">${escapeHtml(t.name || `TAB ${t.index + 1}`)}</span>${proc}`;
             el.addEventListener('click', () => this.socket.sendInput('switch-tab', { index: t.index }));

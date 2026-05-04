@@ -148,6 +148,45 @@ button:active { background: var(--accent-bg-hover); }
     border-color: var(--accent);
     background: var(--accent-bg);
 }
+
+/* Tab status color indicators */
+.tab[data-status]::before {
+    content: '';
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    margin-right: 6px;
+    vertical-align: middle;
+    transition: background 0.3s, box-shadow 0.3s;
+}
+.tab[data-status="running"]::before {
+    background: #00e676;
+    box-shadow: 0 0 4px #00e676;
+    animation: tabPulse 1.2s ease-in-out infinite;
+}
+.tab[data-status="input"]::before {
+    background: #ff4444;
+    box-shadow: 0 0 4px rgba(255, 68, 68, 0.5);
+    animation: tabBlink 2s ease-in-out infinite;
+}
+.tab[data-status="completed"]::before {
+    background: #ff9800;
+    box-shadow: 0 0 4px rgba(255, 152, 0, 0.4);
+}
+.tab[data-status="idle"]::before {
+    background: #42a5f5;
+    box-shadow: 0 0 4px rgba(66, 165, 245, 0.3);
+    opacity: 0.6;
+}
+@keyframes tabPulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+}
+@keyframes tabBlink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+}
 .tab .tab-proc {
     margin-left: 6px;
     opacity: 0.5;
@@ -212,7 +251,7 @@ button:active { background: var(--accent-bg-hover); }
     overflow-x: hidden;
     -webkit-overflow-scrolling: touch;
     font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-    font-size: 13px;
+    font-size: 20px;
     line-height: 1.45;
     white-space: pre;
     color: var(--fg);
