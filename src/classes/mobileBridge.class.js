@@ -26,8 +26,8 @@
 // rule: keep require() inside methods, never at module top-level. Do not
 // hoist these requires outside the methods that use them.
 
-const SNAPSHOT_THROTTLE_MS = 1000;       // 1 fps — saves bandwidth for ngrok
-const TERMINAL_BUFFER_BYTES = 8 * 1024;  // last 8 KiB of terminal output for late joiners
+const SNAPSHOT_THROTTLE_MS = 250;       // 4 fps is plenty for the snapshot view
+const TERMINAL_BUFFER_BYTES = 16 * 1024; // last 16 KiB of terminal output for late joiners
 
 class MobileBridge {
     constructor() {
@@ -38,8 +38,6 @@ class MobileBridge {
         this._snapshotTimer = null;
         this._snapshotPending = false;
         this._lastSnapshotAt = 0;
-        this._lastSnapshotHash = '';
-        this._cachedHostInfo = null;
         this._termBuffers = {};   // { [index]: string }  — ring buffer of recent output per tab
         this._termHooked = new Set();
         this._listeners = new Set();
@@ -146,13 +144,6 @@ class MobileBridge {
         let snapshot;
         try { snapshot = this._buildSnapshot(); }
         catch (e) { return; }
-        const json = JSON.stringify(snapshot);
-        let hash = 0;
-        for (let i = 0; i < json.length; i++) {
-            hash = ((hash << 5) - hash + json.charCodeAt(i)) | 0;
-        }
-        if (hash === this._lastSnapshotHash) return;
-        this._lastSnapshotHash = hash;
         this._ipc.send('mobile:push-snapshot', snapshot);
         this._lastSnapshotAt = Date.now();
     }
@@ -173,13 +164,18 @@ class MobileBridge {
         for (let i = 0; i < maxTabs; i++) {
             const exists = !!terms[i] || (names[i] && names[i] !== 'EMPTY');
             if (!exists && !terms[i]) continue;
+            let status = 'idle';
+            try {
+                const tabEl = document.querySelector(`#shell_tab${i}`);
+                if (tabEl) status = tabEl.getAttribute('data-claude-status') || 'idle';
+            } catch (_) {}
             tabs.push({
                 index: i,
                 name: names[i] || `TAB ${i + 1}`,
                 type: types[i] || 'terminal',
                 active: i === activeIndex,
                 process: terms[i] && terms[i]._lastProcess ? terms[i]._lastProcess : null,
-                status: this._getTabStatus(i),
+                status,
             });
         }
 
@@ -234,9 +230,9 @@ class MobileBridge {
                         lineStr += ch || ' ';
                     }
                     lineStr += '\x1b[0m';
-                    lines.push(lineStr.replace(/(\x1b\[0m)?\s+$/, '\x1b[0m'));
+                    lines.push(lineStr);
                 }
-                screen = lines.join('\n').replace(/(\n\x1b\[0m)+$/, '');
+                screen = lines.join('\n');
             }
         } catch (_) {}
 
@@ -249,7 +245,7 @@ class MobileBridge {
             tabs,
             terminal: {
                 index: activeIndex,
-                recent: screen ? '' : recent,
+                recent,
                 screen,
                 cols: terms[activeIndex] && terms[activeIndex].term ? terms[activeIndex].term.cols : 80,
                 rows: terms[activeIndex] && terms[activeIndex].term ? terms[activeIndex].term.rows : 24,
@@ -259,27 +255,17 @@ class MobileBridge {
     }
 
     _getHostInfo() {
-        if (this._cachedHostInfo) return this._cachedHostInfo;
         try {
             const remote = require('@electron/remote');
             const os = require('os');
-            this._cachedHostInfo = {
+            return {
                 name: os.hostname(),
                 platform: process.platform,
                 appVersion: remote.app.getVersion(),
             };
-            return this._cachedHostInfo;
         } catch (_) {
             return { name: 'son-of-anton', platform: process.platform };
         }
-    }
-
-    _getTabStatus(index) {
-        try {
-            const tabEl = document.getElementById('shell_tab' + index);
-            if (tabEl) return tabEl.getAttribute('data-claude-status') || null;
-        } catch (_) {}
-        return null;
     }
 
     _collectWidgetData() {
@@ -347,6 +333,10 @@ class MobileBridge {
             next = next.slice(next.length - TERMINAL_BUFFER_BYTES);
         }
         this._termBuffers[index] = next;
+        // Stream to mobile if anyone is listening
+        if (this.status.running && this.status.clients > 0) {
+            this._ipc.send('mobile:push-term-data', { index, data: text });
+        }
     }
 
     // ── inbound: mobile → desktop input ───────────────────────────────
@@ -401,14 +391,19 @@ class MobileBridge {
             }
             case 'rename-tab': {
                 const i = parseInt(input.index, 10);
-                const name = String(input.name || '');
-                if (Number.isFinite(i)) {
-                    if (!w.terminalNames) w.terminalNames = {};
+                const name = String(input.name || '').trim().substring(0, 20);
+                if (Number.isFinite(i) && name && w.terminalNames) {
                     w.terminalNames[i] = name;
-                    const tabEl = document.getElementById('shell_tab' + i);
+                    if (typeof w.saveTerminalNames === 'function') {
+                        try { w.saveTerminalNames(); } catch (_) {}
+                    }
+                    const tabEl = document.querySelector(`#shell_tab${i} p`);
                     if (tabEl) {
-                        const label = tabEl.querySelector('p');
-                        if (label) label.textContent = name || `TAB ${i + 1}`;
+                        try {
+                            const escFn = w._escapeHtml || (s => s);
+                            const closeBtn = w._tabCloseBtn ? w._tabCloseBtn(i) : '';
+                            tabEl.innerHTML = escFn(name) + closeBtn;
+                        } catch (_) {}
                     }
                     this.requestSnapshot();
                 }
