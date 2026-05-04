@@ -189,6 +189,14 @@ applyTheme(loadSavedTheme());
 function readToken() {
     const params = new URLSearchParams(location.search);
     let t = params.get('t');
+    if (!t && location.hash) {
+        const hashParams = new URLSearchParams(location.hash.slice(1));
+        t = hashParams.get('t');
+    }
+    if (!t) {
+        const pathMatch = location.pathname.match(/^\/s\/([A-Za-z0-9_-]+)/);
+        if (pathMatch) t = pathMatch[1];
+    }
     if (t) {
         try {
             localStorage.setItem(STORAGE_KEY, JSON.stringify({
@@ -198,7 +206,7 @@ function readToken() {
             }));
         } catch (_) {}
         if (history.replaceState) {
-            const clean = location.origin + location.pathname;
+            const clean = location.origin + '/';
             history.replaceState(null, '', clean);
         }
         return t;
