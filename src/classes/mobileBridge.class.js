@@ -26,8 +26,8 @@
 // rule: keep require() inside methods, never at module top-level. Do not
 // hoist these requires outside the methods that use them.
 
-const SNAPSHOT_THROTTLE_MS = 250;       // 4 fps is plenty for the snapshot view
-const TERMINAL_BUFFER_BYTES = 16 * 1024; // last 16 KiB of terminal output for late joiners
+const SNAPSHOT_THROTTLE_MS = 1000;       // 1 fps — saves bandwidth for ngrok
+const TERMINAL_BUFFER_BYTES = 8 * 1024;  // last 8 KiB of terminal output for late joiners
 
 class MobileBridge {
     constructor() {
@@ -38,6 +38,8 @@ class MobileBridge {
         this._snapshotTimer = null;
         this._snapshotPending = false;
         this._lastSnapshotAt = 0;
+        this._lastSnapshotHash = '';
+        this._cachedHostInfo = null;
         this._termBuffers = {};   // { [index]: string }  — ring buffer of recent output per tab
         this._termHooked = new Set();
         this._listeners = new Set();
@@ -144,6 +146,13 @@ class MobileBridge {
         let snapshot;
         try { snapshot = this._buildSnapshot(); }
         catch (e) { return; }
+        const json = JSON.stringify(snapshot);
+        let hash = 0;
+        for (let i = 0; i < json.length; i++) {
+            hash = ((hash << 5) - hash + json.charCodeAt(i)) | 0;
+        }
+        if (hash === this._lastSnapshotHash) return;
+        this._lastSnapshotHash = hash;
         this._ipc.send('mobile:push-snapshot', snapshot);
         this._lastSnapshotAt = Date.now();
     }
@@ -170,11 +179,66 @@ class MobileBridge {
                 type: types[i] || 'terminal',
                 active: i === activeIndex,
                 process: terms[i] && terms[i]._lastProcess ? terms[i]._lastProcess : null,
+                status: this._getTabStatus(i),
             });
         }
 
         // Pull a chunk of recent output from the active terminal for the snapshot.
         const recent = this._termBuffers[activeIndex] || '';
+
+        // Serialize the actual screen content from xterm.js with ANSI color
+        // codes so the mobile terminal view preserves colors.
+        let screen = '';
+        try {
+            const t = terms[activeIndex] && terms[activeIndex].term;
+            if (t && t.buffer && t.buffer.active) {
+                const buf = t.buffer.active;
+                const lines = [];
+                for (let y = 0; y < buf.length; y++) {
+                    const line = buf.getLine(y);
+                    if (!line) { lines.push(''); continue; }
+                    let lineStr = '';
+                    let prevFg = -1, prevBg = -1, prevBold = false, prevItalic = false, prevUnder = false, prevDim = false;
+                    for (let x = 0; x < line.length; x++) {
+                        const cell = line.getCell(x);
+                        if (!cell) continue;
+                        const ch = cell.getChars();
+                        const fg = cell.getFgColor();
+                        const bg = cell.getBgColor();
+                        const bold = !!(cell.isBold && cell.isBold());
+                        const italic = !!(cell.isItalic && cell.isItalic());
+                        const under = !!(cell.isUnderline && cell.isUnderline());
+                        const dim = !!(cell.isDim && cell.isDim());
+                        const fgMode = cell.getFgColorMode ? cell.getFgColorMode() : 0;
+                        const bgMode = cell.getBgColorMode ? cell.getBgColorMode() : 0;
+
+                        if (fg !== prevFg || bg !== prevBg || bold !== prevBold || italic !== prevItalic || under !== prevUnder || dim !== prevDim) {
+                            const sgr = [0];
+                            if (bold) sgr.push(1);
+                            if (dim) sgr.push(2);
+                            if (italic) sgr.push(3);
+                            if (under) sgr.push(4);
+                            if (fgMode === 1 && fg >= 0 && fg < 256) {
+                                sgr.push(38, 5, fg);
+                            } else if (fgMode === 2) {
+                                sgr.push(38, 5, fg);
+                            }
+                            if (bgMode === 1 && bg >= 0 && bg < 256) {
+                                sgr.push(48, 5, bg);
+                            } else if (bgMode === 2) {
+                                sgr.push(48, 5, bg);
+                            }
+                            lineStr += '\x1b[' + sgr.join(';') + 'm';
+                            prevFg = fg; prevBg = bg; prevBold = bold; prevItalic = italic; prevUnder = under; prevDim = dim;
+                        }
+                        lineStr += ch || ' ';
+                    }
+                    lineStr += '\x1b[0m';
+                    lines.push(lineStr.replace(/(\x1b\[0m)?\s+$/, '\x1b[0m'));
+                }
+                screen = lines.join('\n').replace(/(\n\x1b\[0m)+$/, '');
+            }
+        } catch (_) {}
 
         const widgets = this._collectWidgetData();
 
@@ -185,7 +249,8 @@ class MobileBridge {
             tabs,
             terminal: {
                 index: activeIndex,
-                recent,
+                recent: screen ? '' : recent,
+                screen,
                 cols: terms[activeIndex] && terms[activeIndex].term ? terms[activeIndex].term.cols : 80,
                 rows: terms[activeIndex] && terms[activeIndex].term ? terms[activeIndex].term.rows : 24,
             },
@@ -194,17 +259,27 @@ class MobileBridge {
     }
 
     _getHostInfo() {
+        if (this._cachedHostInfo) return this._cachedHostInfo;
         try {
             const remote = require('@electron/remote');
             const os = require('os');
-            return {
+            this._cachedHostInfo = {
                 name: os.hostname(),
                 platform: process.platform,
                 appVersion: remote.app.getVersion(),
             };
+            return this._cachedHostInfo;
         } catch (_) {
             return { name: 'son-of-anton', platform: process.platform };
         }
+    }
+
+    _getTabStatus(index) {
+        try {
+            const tabEl = document.getElementById('shell_tab' + index);
+            if (tabEl) return tabEl.getAttribute('data-claude-status') || null;
+        } catch (_) {}
+        return null;
     }
 
     _collectWidgetData() {
@@ -272,10 +347,6 @@ class MobileBridge {
             next = next.slice(next.length - TERMINAL_BUFFER_BYTES);
         }
         this._termBuffers[index] = next;
-        // Stream to mobile if anyone is listening
-        if (this.status.running && this.status.clients > 0) {
-            this._ipc.send('mobile:push-term-data', { index, data: text });
-        }
     }
 
     // ── inbound: mobile → desktop input ───────────────────────────────
@@ -324,6 +395,21 @@ class MobileBridge {
                 const i = parseInt(input.index, 10);
                 if (Number.isFinite(i) && typeof w.closeShellTab === 'function') {
                     try { w.closeShellTab(i); } catch (_) {}
+                    this.requestSnapshot();
+                }
+                break;
+            }
+            case 'rename-tab': {
+                const i = parseInt(input.index, 10);
+                const name = String(input.name || '');
+                if (Number.isFinite(i)) {
+                    if (!w.terminalNames) w.terminalNames = {};
+                    w.terminalNames[i] = name;
+                    const tabEl = document.getElementById('shell_tab' + i);
+                    if (tabEl) {
+                        const label = tabEl.querySelector('p');
+                        if (label) label.textContent = name || `TAB ${i + 1}`;
+                    }
                     this.requestSnapshot();
                 }
                 break;

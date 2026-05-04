@@ -54,6 +54,11 @@ function ensureServer() {
             } catch (_) {}
         }
     };
+    server.onStatusChange = (status) => {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+            try { mainWindow.webContents.send('mobile:status-changed', status); } catch (_) {}
+        }
+    };
     return server;
 }
 

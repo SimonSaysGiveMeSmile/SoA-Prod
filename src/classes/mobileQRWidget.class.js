@@ -155,7 +155,7 @@ class MobileQRWidget {
         this.bridge.getQrDataUrl(url, {
             width: 196,
             margin: 1,
-            color: { dark: '#aaffaa', light: '#00000000' },
+            color: { dark: '#ffffff', light: '#00000000' },
             errorCorrectionLevel: 'M',
         }).then(dataUrl => {
             // Only render if URL hasn't changed since the request was issued

@@ -130,6 +130,7 @@ class MobileBridgeServer {
         this.webappRoot = null;
         this.onInput = null;          // set by IPC layer
         this.onClientChange = null;   // set by IPC layer
+        this.onStatusChange = null;   // set by IPC layer
     }
 
     isRunning() { return !!this.httpServer; }
@@ -139,8 +140,8 @@ class MobileBridgeServer {
         return {
             running: this.isRunning(),
             port: this.port,
-            lanUrl: this.lanIp && this.port ? `http://${this.lanIp}:${this.port}/?t=${this.store.token}` : null,
-            publicUrl: this.tunnel ? `${this.tunnel.url}/?t=${this.store.token}` : null,
+            lanUrl: this.lanIp && this.port ? `http://${this.lanIp}:${this.port}/s/${this.store.token}` : null,
+            publicUrl: this.tunnel ? `${this.tunnel.url}/s/${this.store.token}` : null,
             token: this.store.token,
             clients: this.store.clientCount(),
             startedAt: this.store.startedAt,
@@ -157,7 +158,13 @@ class MobileBridgeServer {
         this.store.startedAt = Date.now();
 
         this.httpServer = http.createServer((req, res) => this._onRequest(req, res));
-        this.wss = new WebSocket.Server({ noServer: true });
+        this.wss = new WebSocket.Server({
+            noServer: true,
+            perMessageDeflate: {
+                zlibDeflateOptions: { level: 1 },
+                threshold: 256,
+            },
+        });
         this.httpServer.on('upgrade', (req, socket, head) => this._onUpgrade(req, socket, head));
 
         await new Promise((resolve, reject) => {
@@ -168,14 +175,23 @@ class MobileBridgeServer {
         this._startHeartbeat();
 
         if (withTunnel) {
-            // Best-effort, non-blocking: the LAN URL is always available immediately.
             openTunnel(this.port).then(t => {
                 if (!this.isRunning()) {
                     if (t) t.close();
                     return;
                 }
                 this.tunnel = t;
-                this.log('info', t ? `Mobile bridge public URL: ${t.url}` : 'Public tunnel unavailable, LAN only');
+                if (t) {
+                    t.onDeath = () => {
+                        this.tunnel = null;
+                        this.log('warning', 'Public tunnel disconnected, LAN only');
+                        if (this.onStatusChange) this.onStatusChange(this.status());
+                    };
+                    this.log('info', `Mobile bridge public URL: ${t.url}`);
+                } else {
+                    this.log('info', 'Public tunnel unavailable, LAN only');
+                }
+                if (this.onStatusChange) this.onStatusChange(this.status());
             }).catch(() => { /* ignored */ });
         }
 
