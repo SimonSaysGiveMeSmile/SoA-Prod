@@ -567,7 +567,6 @@ class App {
             const el = document.createElement('button');
             el.type = 'button';
             el.className = 'tab' + (t.active ? ' active' : '');
-            if (t.status) el.setAttribute('data-status', t.status);
             const proc = t.process ? `<span class="tab-proc">${escapeHtml(t.process)}</span>` : '';
             el.innerHTML = `<span class="tab-name">${escapeHtml(t.name || `TAB ${t.index + 1}`)}</span>${proc}`;
             el.addEventListener('click', () => this.socket.sendInput('switch-tab', { index: t.index }));
@@ -788,7 +787,7 @@ class App {
         if (lineW <= 0) return;
         const scale = availW / lineW;
         const fitted = Math.floor(this._baseFontSize * scale * 100) / 100;
-        const clamped = Math.max(4, Math.min(this._baseFontSize, fitted));
+        const clamped = Math.max(this._baseFontSize, fitted);
         this.termEl.style.fontSize = clamped + 'px';
     }
 
