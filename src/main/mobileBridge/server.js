@@ -158,13 +158,7 @@ class MobileBridgeServer {
         this.store.startedAt = Date.now();
 
         this.httpServer = http.createServer((req, res) => this._onRequest(req, res));
-        this.wss = new WebSocket.Server({
-            noServer: true,
-            perMessageDeflate: {
-                zlibDeflateOptions: { level: 1 },
-                threshold: 256,
-            },
-        });
+        this.wss = new WebSocket.Server({ noServer: true });
         this.httpServer.on('upgrade', (req, socket, head) => this._onUpgrade(req, socket, head));
 
         await new Promise((resolve, reject) => {
