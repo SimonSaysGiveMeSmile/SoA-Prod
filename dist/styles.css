@@ -153,6 +153,52 @@ button:active { background: var(--accent-bg-hover); }
     opacity: 0.5;
     font-size: 10px;
 }
+
+/* Tab status colors — matches desktop indicators */
+.tab[data-status="running"] {
+    border-color: #00e676;
+    color: #a5f5c8;
+    background: rgba(0, 230, 118, 0.2);
+    animation: tabPulse 1.5s ease-in-out infinite;
+}
+.tab[data-status="input"] {
+    border-color: #ff4444;
+    color: #ffaaaa;
+    background: rgba(255, 68, 68, 0.25);
+    animation: tabBlink 1.5s ease-in-out infinite;
+}
+.tab[data-status="completed"] {
+    border-color: #ff9800;
+    color: #ffc97a;
+    background: rgba(255, 152, 0, 0.2);
+}
+.tab[data-status="idle"] {
+    border-color: var(--line);
+    color: var(--fg-dim);
+}
+.tab.active[data-status="running"] {
+    border-color: #00c864;
+    color: #00c864;
+    background: rgba(0, 200, 100, 0.35);
+}
+.tab.active[data-status="input"] {
+    border-color: #ff3c3c;
+    color: #ff3c3c;
+    background: rgba(255, 60, 60, 0.35);
+}
+.tab.active[data-status="completed"] {
+    border-color: #ff9800;
+    color: #ff9800;
+    background: rgba(255, 152, 0, 0.3);
+}
+@keyframes tabPulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.7; }
+}
+@keyframes tabBlink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
 .tab-add {
     color: var(--fg-dim);
     font-size: 16px;
