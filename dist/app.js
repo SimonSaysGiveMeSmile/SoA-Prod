@@ -257,6 +257,7 @@ class App {
 
         this._baseFontSize = 13;
         this._termCols = 80;
+        this._userScrolledUp = false;
 
         this._pullHint = document.createElement('div');
         this._pullHint.className = 'pull-hint';
@@ -285,6 +286,10 @@ class App {
         this._wireUi();
 
         window.addEventListener('resize', () => this._fitTerminalFont());
+
+        this.termEl.addEventListener('scroll', () => {
+            this._userScrolledUp = !this._isAtBottom();
+        }, { passive: true });
 
         this.socket.connect();
     }
@@ -660,7 +665,7 @@ class App {
         ts.termState = newState();
         ts.pendingData = '';
 
-        const wasAtBottom = this._isAtBottom();
+        const prevScrollTop = this.termEl.scrollTop;
 
         let text = term.screen || term.recent || '';
         if (!term.screen) {
@@ -671,7 +676,9 @@ class App {
         this.termEl.innerHTML = html;
         this._fitTerminalFont(term.cols);
 
-        if (wasAtBottom) {
+        if (this._userScrolledUp) {
+            this.termEl.scrollTop = prevScrollTop;
+        } else {
             this._scrollTermBottom();
         }
     }
@@ -704,8 +711,6 @@ class App {
         let data = ts.pendingData;
         ts.pendingData = '';
 
-        const wasAtBottom = this._isAtBottom();
-
         data = data.replace(/\r\n/g, '\n');
         const crParts = data.split('\r');
 
@@ -723,7 +728,7 @@ class App {
             this.termEl.removeChild(this.termEl.firstChild);
         }
 
-        if (wasAtBottom) {
+        if (!this._userScrolledUp) {
             requestAnimationFrame(() => {
                 this.termEl.scrollTop = this.termEl.scrollHeight;
             });
@@ -738,7 +743,7 @@ class App {
 
     _isAtBottom() {
         const el = this.termEl;
-        return (el.scrollHeight - el.scrollTop - el.clientHeight) < 50;
+        return (el.scrollHeight - el.scrollTop - el.clientHeight) < 10;
     }
 
     _eraseCurrentLine() {
