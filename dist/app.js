@@ -255,6 +255,9 @@ class App {
         this._idleTimer = null;
         this._chromeHidden = false;
 
+        this._baseFontSize = 13;
+        this._termCols = 80;
+
         this._pullHint = document.createElement('div');
         this._pullHint.className = 'pull-hint';
         document.body.appendChild(this._pullHint);
@@ -280,6 +283,8 @@ class App {
 
         this._wireSocket();
         this._wireUi();
+
+        window.addEventListener('resize', () => this._fitTerminalFont());
 
         this.socket.connect();
     }
@@ -661,6 +666,7 @@ class App {
         const { html, state } = ansiToHtml(text, ts.termState);
         ts.termState = state;
         this.termEl.innerHTML = html;
+        this._fitTerminalFont(term.cols);
         this._scrollTermBottom();
     }
 
@@ -742,6 +748,36 @@ class App {
             }
             el.removeChild(last);
         }
+    }
+
+    _fitTerminalFont(cols) {
+        if (cols && cols > 0) this._termCols = cols;
+        if (!this._termCols) {
+            const text = this.termEl.textContent || '';
+            const lines = text.split('\n');
+            let maxLen = 0;
+            for (const line of lines) {
+                if (line.length > maxLen) maxLen = line.length;
+            }
+            if (maxLen > 40) this._termCols = maxLen;
+            else this._termCols = 80;
+        }
+        const cs = getComputedStyle(this.termEl);
+        const availW = this.termEl.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+        if (availW <= 0) return;
+
+        const probe = document.createElement('span');
+        probe.style.cssText = 'position:absolute;visibility:hidden;white-space:pre;font:' + this._baseFontSize + 'px/' + 1.45 + ' ' + cs.fontFamily;
+        probe.textContent = 'M'.repeat(this._termCols);
+        document.body.appendChild(probe);
+        const lineW = probe.offsetWidth;
+        document.body.removeChild(probe);
+
+        if (lineW <= 0) return;
+        const scale = availW / lineW;
+        const fitted = Math.floor(this._baseFontSize * scale * 100) / 100;
+        const clamped = Math.max(4, Math.min(this._baseFontSize, fitted));
+        this.termEl.style.fontSize = clamped + 'px';
     }
 
     _renderWidgets(widgets, host) {

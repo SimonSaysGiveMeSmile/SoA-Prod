@@ -57,6 +57,7 @@ button:active { background: var(--accent-bg-hover); }
     height: 100vh;
     height: 100dvh;
     width: 100vw;
+    position: relative;
 }
 
 /* ── Top bar ───────────────────────────────────────── */
@@ -208,12 +209,12 @@ button:active { background: var(--accent-bg-hover); }
     padding: 12px 14px calc(12px + env(safe-area-inset-bottom));
     height: 100%;
     overflow-y: auto;
+    overflow-x: hidden;
     -webkit-overflow-scrolling: touch;
     font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
     font-size: 13px;
     line-height: 1.45;
-    white-space: pre-wrap;
-    word-break: break-all;
+    white-space: pre;
     color: var(--fg);
     background: var(--bg);
 }
@@ -303,11 +304,19 @@ button:active { background: var(--accent-bg-hover); }
     transform: translateY(calc(100% + 20px));
     opacity: 0;
     pointer-events: none;
+    position: absolute;
+    bottom: 0;
+    left: 10px;
+    right: 10px;
 }
 #kbd.chrome-hidden {
     transform: translateY(100%);
     opacity: 0;
     pointer-events: none;
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
 }
 
 .pull-hint {
