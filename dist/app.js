@@ -659,6 +659,9 @@ class App {
         const ts = this._getTabState(this._activeTab);
         ts.termState = newState();
         ts.pendingData = '';
+
+        const wasAtBottom = this._isAtBottom();
+
         let text = term.screen || term.recent || '';
         if (!term.screen) {
             text = text.replace(/\r\n/g, '\n').replace(/\r/g, '');
@@ -667,7 +670,10 @@ class App {
         ts.termState = state;
         this.termEl.innerHTML = html;
         this._fitTerminalFont(term.cols);
-        this._scrollTermBottom();
+
+        if (wasAtBottom) {
+            this._scrollTermBottom();
+        }
     }
 
     _applyTerminalChunk(payload) {
