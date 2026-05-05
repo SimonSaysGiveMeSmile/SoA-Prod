@@ -19,6 +19,11 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
+# Lockfiles — upstream source repos don't ship them; regenerated locally by npm install
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
 # Build output (Electron-builder, bundlers, etc.)
 desktop/dist-electron/
 desktop/out/
