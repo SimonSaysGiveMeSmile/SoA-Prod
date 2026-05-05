@@ -115,6 +115,9 @@ const STATIC_MIME = {
     '.woff': 'font/woff',
     '.woff2':'font/woff2',
     '.webmanifest': 'application/manifest+json',
+    '.wav':  'audio/wav',
+    '.mp3':  'audio/mpeg',
+    '.ogg':  'audio/ogg',
 };
 
 class MobileBridgeServer {
