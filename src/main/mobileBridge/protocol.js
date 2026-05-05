@@ -36,6 +36,7 @@ const INPUT_KIND = Object.freeze({
     SWITCH_TAB:     'switch-tab',    // { index }
     NEW_TAB:        'new-tab',
     CLOSE_TAB:      'close-tab',     // { index }
+    MOVE_TAB:       'move-tab',      // { index, before }  — place tab `index` immediately before tab `before` (-1 = end)
     HOTKEY:         'hotkey',        // { combo: 'ctrl+c' }
     VOICE_TOGGLE:   'voice-toggle',
     SHELL_COMMAND:  'shell-command', // { line }   appended with \n

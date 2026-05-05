@@ -52,6 +52,7 @@ Handled in **`MobileBridge._handleInput()`**:
 | `switch-tab` | `focusShellTab(index)` |
 | `new-tab` | `addShellTab()` |
 | `close-tab` | `closeShellTab(index)` |
+| `move-tab` | Reorder the `#shell_tab*` `<li>` nodes (`{ index, before }`; `before === -1` appends)  |
 | `hotkey` | Combo → control bytes → socket |
 | `voice-toggle` | `toggleMic()` |
 

@@ -156,12 +156,30 @@ class MobileBridge {
         const names = w.terminalNames || {};
         const types = w.tabType || {};
         const terms = w.term || {};
-        const maxTabs = Math.max(
-            Object.keys(names).length,
-            Object.keys(terms).length,
-            5
-        );
-        for (let i = 0; i < maxTabs; i++) {
+
+        // Walk the DOM so tabs are emitted in the user's current on-screen
+        // order, not numeric index order. This keeps mobile ↔ desktop in sync
+        // after a reorder (drag on mobile moves the <li>; the next snapshot
+        // reflects that new order).
+        let orderedIndices = [];
+        try {
+            const tabEls = document.querySelectorAll('ul#main_shell_tabs > li[id^="shell_tab"]');
+            tabEls.forEach(li => {
+                const m = /^shell_tab(\d+)$/.exec(li.id);
+                if (m) orderedIndices.push(parseInt(m[1], 10));
+            });
+        } catch (_) { /* fall back to numeric order below */ }
+
+        if (!orderedIndices.length) {
+            const maxTabs = Math.max(
+                Object.keys(names).length,
+                Object.keys(terms).length,
+                5
+            );
+            for (let i = 0; i < maxTabs; i++) orderedIndices.push(i);
+        }
+
+        for (const i of orderedIndices) {
             const exists = !!terms[i] || (names[i] && names[i] !== 'EMPTY');
             if (!exists && !terms[i]) continue;
             let status = 'idle';
@@ -194,7 +212,8 @@ class MobileBridge {
                     const line = buf.getLine(y);
                     if (!line) { lines.push(''); continue; }
                     let lineStr = '';
-                    let prevFg = -1, prevBg = -1, prevBold = false, prevItalic = false, prevUnder = false, prevDim = false;
+                    let prevFg = -2, prevBg = -2, prevFgKind = 'x', prevBgKind = 'x';
+                    let prevBold = false, prevItalic = false, prevUnder = false, prevDim = false;
                     for (let x = 0; x < line.length; x++) {
                         const cell = line.getCell(x);
                         if (!cell) continue;
@@ -205,27 +224,34 @@ class MobileBridge {
                         const italic = !!(cell.isItalic && cell.isItalic());
                         const under = !!(cell.isUnderline && cell.isUnderline());
                         const dim = !!(cell.isDim && cell.isDim());
-                        const fgMode = cell.getFgColorMode ? cell.getFgColorMode() : 0;
-                        const bgMode = cell.getBgColorMode ? cell.getBgColorMode() : 0;
 
-                        if (fg !== prevFg || bg !== prevBg || bold !== prevBold || italic !== prevItalic || under !== prevUnder || dim !== prevDim) {
+                        // Use xterm.js boolean helpers — reliable across versions.
+                        let fgKind = 'd', bgKind = 'd'; // d=default, p=palette, r=rgb
+                        if (cell.isFgRGB && cell.isFgRGB())      fgKind = 'r';
+                        else if (cell.isFgPalette && cell.isFgPalette()) fgKind = 'p';
+                        if (cell.isBgRGB && cell.isBgRGB())      bgKind = 'r';
+                        else if (cell.isBgPalette && cell.isBgPalette()) bgKind = 'p';
+
+                        if (fg !== prevFg || bg !== prevBg || fgKind !== prevFgKind || bgKind !== prevBgKind
+                            || bold !== prevBold || italic !== prevItalic || under !== prevUnder || dim !== prevDim) {
                             const sgr = [0];
                             if (bold) sgr.push(1);
                             if (dim) sgr.push(2);
                             if (italic) sgr.push(3);
                             if (under) sgr.push(4);
-                            if (fgMode === 1 && fg >= 0 && fg < 256) {
+                            if (fgKind === 'p' && fg >= 0 && fg < 256) {
                                 sgr.push(38, 5, fg);
-                            } else if (fgMode === 2) {
-                                sgr.push(38, 5, fg);
+                            } else if (fgKind === 'r' && fg >= 0) {
+                                sgr.push(38, 2, (fg >> 16) & 0xff, (fg >> 8) & 0xff, fg & 0xff);
                             }
-                            if (bgMode === 1 && bg >= 0 && bg < 256) {
+                            if (bgKind === 'p' && bg >= 0 && bg < 256) {
                                 sgr.push(48, 5, bg);
-                            } else if (bgMode === 2) {
-                                sgr.push(48, 5, bg);
+                            } else if (bgKind === 'r' && bg >= 0) {
+                                sgr.push(48, 2, (bg >> 16) & 0xff, (bg >> 8) & 0xff, bg & 0xff);
                             }
                             lineStr += '\x1b[' + sgr.join(';') + 'm';
-                            prevFg = fg; prevBg = bg; prevBold = bold; prevItalic = italic; prevUnder = under; prevDim = dim;
+                            prevFg = fg; prevBg = bg; prevFgKind = fgKind; prevBgKind = bgKind;
+                            prevBold = bold; prevItalic = italic; prevUnder = under; prevDim = dim;
                         }
                         lineStr += ch || ' ';
                     }
@@ -387,6 +413,36 @@ class MobileBridge {
                     try { w.closeShellTab(i); } catch (_) {}
                     this.requestSnapshot();
                 }
+                break;
+            }
+            case 'move-tab': {
+                const i = parseInt(input.index, 10);
+                // `before` is the index of the tab that `i` should end up
+                // immediately before, or -1 to append at the end of the strip.
+                const before = (input.before === -1 || input.before === undefined)
+                    ? -1
+                    : parseInt(input.before, 10);
+                if (!Number.isFinite(i)) break;
+                try {
+                    const list = document.getElementById('main_shell_tabs');
+                    if (!list) break;
+                    const src = document.getElementById('shell_tab' + i);
+                    if (!src) break;
+                    if (before === i) break;
+                    if (before === -1) {
+                        // Append before the + button (or any trailing add/browser
+                        // buttons) so the dragged tab lands at the end of the
+                        // terminal-tab run.
+                        const addBtn = document.getElementById('shell_add_tab');
+                        if (addBtn) list.insertBefore(src, addBtn);
+                        else list.appendChild(src);
+                    } else {
+                        const ref = document.getElementById('shell_tab' + before);
+                        if (!ref) break;
+                        list.insertBefore(src, ref);
+                    }
+                    this.requestSnapshot();
+                } catch (_) {}
                 break;
             }
             case 'rename-tab': {
