@@ -207,6 +207,33 @@ button:active { background: var(--accent-bg-hover); }
     border-radius: 100px;
 }
 
+/* ── Tab drag-reorder ─────────────────────────────── */
+/* Picked-up but not yet moved: lifted look, user knows it's grabbable. */
+.tab.tab-armed {
+    transform: scale(1.06);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+    transition: transform 0.12s ease, box-shadow 0.12s ease;
+}
+/* Source slot while dragging — reserves space but goes invisible so the
+   ghost under the finger is the only visible copy. */
+.tab.tab-dragging {
+    visibility: hidden;
+}
+/* Floating ghost that tracks the finger. */
+.tab.tab-ghost {
+    position: fixed;
+    z-index: 250;
+    pointer-events: none;
+    margin: 0;
+    transform: scale(1.05);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+    opacity: 0.95;
+}
+/* Live slide of the other tabs as the source moves between them. */
+#tabs .tab:not(.tab-ghost) {
+    transition: transform 0.18s ease, left 0.18s ease;
+}
+
 /* ── Tab context menu ─────────────────────────────── */
 .tab-menu {
     position: fixed;
@@ -255,11 +282,11 @@ button:active { background: var(--accent-bg-hover); }
     padding: 12px 14px calc(12px + env(safe-area-inset-bottom));
     height: 100%;
     overflow-y: auto;
-    overflow-x: hidden;
+    overflow-x: auto;
     -webkit-overflow-scrolling: touch;
     font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-    font-size: 20px;
-    line-height: 1.45;
+    font-size: 12px;
+    line-height: 1.4;
     white-space: pre;
     color: var(--fg);
     background: var(--bg);
@@ -269,6 +296,10 @@ button:active { background: var(--accent-bg-hover); }
 #term .ansi-italic { font-style: italic; }
 #term .ansi-under  { text-decoration: underline; }
 #term .ansi-rev    { background: var(--fg); color: var(--bg); }
+#term .ansi-link   { color: #5fa8ff; text-decoration: underline; text-decoration-color: rgba(95,168,255,0.4); }
+#term .ansi-link:active { opacity: 0.7; }
+#term a            { color: inherit; text-decoration: inherit; }
+#term a.ansi-link  { color: #5fa8ff; text-decoration: underline; text-decoration-color: rgba(95,168,255,0.4); }
 
 /* Widgets view */
 #widgets-view { padding: 14px; overflow-y: auto; }
@@ -616,6 +647,40 @@ button:active { background: var(--accent-bg-hover); }
     text-transform: uppercase;
     color: var(--fg-dim);
     margin-bottom: 14px;
+}
+.settings-hint {
+    font-size: 12px;
+    line-height: 1.4;
+    color: var(--fg-dim);
+    margin-bottom: 14px;
+}
+.settings-row {
+    display: flex;
+    gap: 10px;
+}
+.settings-btn {
+    flex: 1;
+    padding: 12px 10px;
+    font-size: 11px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--fg);
+    background: transparent;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+.settings-btn:active {
+    background: var(--accent-bg-hover);
+    border-color: var(--accent);
+    color: var(--accent);
+}
+.settings-btn-warn {
+    color: var(--warn);
+    border-color: var(--warn);
+}
+.settings-btn-warn:active {
+    background: rgba(255, 184, 77, 0.15);
 }
 
 .theme-grid {

@@ -33,7 +33,7 @@ Wire format over WebSocket (`/ws?t=<token>`):
 **Server → client:** `hello`, `snapshot`, `patch`, `term-data`, `notice`, `pong`, `bye`  
 **Client → server:** `input` (with `kind`), `ping`, `request`
 
-Input kinds: `term-keys`, `term-resize`, `switch-tab`, `new-tab`, `close-tab`, `hotkey`, `voice-toggle`, `shell-command`
+Input kinds: `term-keys`, `term-resize`, `switch-tab`, `new-tab`, `close-tab`, `move-tab`, `hotkey`, `voice-toggle`, `shell-command`
 
 ## Development
 

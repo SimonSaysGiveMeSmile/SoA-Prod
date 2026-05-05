@@ -24,7 +24,6 @@ export class VirtualKeyboard {
         this.root = rootEl;
         this.onInput = onInput;
         this.ctrl = false;
-        this._clearTimer = null;
 
         this._render();
     }
@@ -59,16 +58,14 @@ export class VirtualKeyboard {
                 } else {
                     this.onInput('term-keys', { text });
                 }
+                this.input.value = '';
             }
-            clearTimeout(this._clearTimer);
-            this._clearTimer = setTimeout(() => { this.input.value = ''; }, 800);
         });
 
         this.input.addEventListener('keydown', (e) => {
             if (e.key === 'Enter') {
                 e.preventDefault();
                 this.input.value = '';
-                clearTimeout(this._clearTimer);
                 this.onInput('hotkey', { combo: 'enter' });
             } else if (e.key === 'Backspace') {
                 e.preventDefault();

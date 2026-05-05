@@ -38,11 +38,16 @@ function spanFor(state) {
     if (state.italic)    classes.push('ansi-italic');
     if (state.underline) classes.push('ansi-under');
     if (state.reverse)   classes.push('ansi-rev');
+    if (state.link)      classes.push('ansi-link');
     if (state.fg) styles.push(`color:${state.fg}`);
     if (state.bg) styles.push(`background:${state.bg}`);
-    if (!styles.length && !classes.length) return null;
+    if (!styles.length && !classes.length && !state.link) return null;
     const cls = classes.length ? ` class="${classes.join(' ')}"` : '';
     const sty = styles.length  ? ` style="${styles.join(';')}"`  : '';
+    if (state.link) {
+        const href = escHtml(state.link);
+        return `<a href="${href}" target="_blank" rel="noopener"${cls}${sty}>`;
+    }
     return `<span${cls}${sty}>`;
 }
 
@@ -99,27 +104,38 @@ function palette256(idx) {
     return `rgb(${r},${g},${b})`;
 }
 
+const URL_RE = /\bhttps?:\/\/[^\s<>&"')\]]+/g;
+
+function linkifyUrls(htmlStr) {
+    return htmlStr.replace(URL_RE, match => {
+        return `<a href="${match}" class="ansi-link" target="_blank" rel="noopener">${match}</a>`;
+    });
+}
+
 /**
  * Convert an ANSI string into an HTML fragment (sanitized).
  */
 export function ansiToHtml(input, state = newState()) {
     let out = '';
     let buf = '';
-    let openSpan = false;
+    let openTag = false;
 
     const flushBuf = () => {
         if (!buf) return;
-        out += escHtml(buf);
+        out += linkifyUrls(escHtml(buf));
         buf = '';
     };
 
-    const closeSpan = () => {
-        if (openSpan) { out += '</span>'; openSpan = false; }
+    const closeTag = () => {
+        if (openTag) {
+            out += state.link ? '</a>' : '</span>';
+            openTag = false;
+        }
     };
 
-    const openSpanIfNeeded = () => {
+    const openTagIfNeeded = () => {
         const s = spanFor(state);
-        if (s) { out += s; openSpan = true; }
+        if (s) { out += s; openTag = true; }
     };
 
     let i = 0;
@@ -128,9 +144,9 @@ export function ansiToHtml(input, state = newState()) {
         if (c === '\r') { i++; continue; }
         if (c === '\n') {
             flushBuf();
-            closeSpan();
+            closeTag();
             out += '\n';
-            openSpanIfNeeded();
+            openTagIfNeeded();
             i++;
             continue;
         }
@@ -141,7 +157,7 @@ export function ansiToHtml(input, state = newState()) {
         }
         // Escape sequence
         flushBuf();
-        closeSpan();
+        closeTag();
 
         const next = input[i + 1];
         if (next === '[') {
@@ -158,19 +174,31 @@ export function ansiToHtml(input, state = newState()) {
             if (final === 'm') {
                 const nums = params.split(';').filter(Boolean).map(Number);
                 applySgr(state, nums);
-                openSpanIfNeeded();
+                openTagIfNeeded();
             } else {
                 /* drop everything else — cursor moves, clears, etc. */
             }
         } else if (next === ']') {
-            // OSC: skip until BEL or ST
+            // OSC sequence
             let j = i + 2;
+            let oscBody = '';
             while (j < input.length) {
                 if (input[j] === '\x07') { j++; break; }
                 if (input[j] === ESC && input[j + 1] === '\\') { j += 2; break; }
+                oscBody += input[j];
                 j++;
             }
             i = j;
+            // OSC 8 — hyperlink: \e]8;params;uri\a ... \e]8;;\a
+            if (oscBody.startsWith('8;')) {
+                const parts = oscBody.slice(2);
+                const semiIdx = parts.indexOf(';');
+                if (semiIdx !== -1) {
+                    const uri = parts.slice(semiIdx + 1);
+                    state.link = uri || null;
+                }
+            }
+            openTagIfNeeded();
         } else {
             // Skip any 2-byte escape we don't model
             i += 2;
@@ -178,13 +206,13 @@ export function ansiToHtml(input, state = newState()) {
     }
 
     flushBuf();
-    closeSpan();
+    closeTag();
     return { html: out, state };
 }
 
 export function newState() {
     return {
         bold: false, dim: false, italic: false, underline: false, reverse: false,
-        fg: null, bg: null,
+        fg: null, bg: null, link: null,
     };
 }

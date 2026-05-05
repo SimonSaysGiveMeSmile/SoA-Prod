@@ -246,6 +246,8 @@ class App {
         this.settingsOverlay = document.getElementById('settings-overlay');
         this.themeGrid = document.getElementById('theme-grid');
         this.settingsClose = document.getElementById('settings-close');
+        this.btnReload = document.getElementById('btn-reload');
+        this.btnForceReload = document.getElementById('btn-force-reload');
 
         this._snapshot = null;
         this._activeTab = 0;
@@ -255,9 +257,10 @@ class App {
         this._idleTimer = null;
         this._chromeHidden = false;
 
-        this._baseFontSize = 20;
+        this._baseFontSize = 12;
         this._termCols = 80;
         this._userScrolledUp = false;
+        this._lastSentCols = 0;
 
         this._pullHint = document.createElement('div');
         this._pullHint.className = 'pull-hint';
@@ -332,6 +335,57 @@ class App {
         this.settingsOverlay.addEventListener('click', (e) => {
             if (e.target === this.settingsOverlay) this._closeSettings();
         });
+        this._wireReloadControls();
+    }
+
+    // Reload controls. Deliberately client-local so they work even when the
+    // desktop is wedged: soft reload just bounces the websocket + re-renders
+    // from the latest snapshot; force reload wipes caches + SW and pulls
+    // everything fresh. Neither touches the desktop session state.
+    _wireReloadControls() {
+        if (this.btnReload) {
+            this.btnReload.addEventListener('click', () => this._softReload());
+        }
+        if (this.btnForceReload) {
+            this.btnForceReload.addEventListener('click', () => this._forceReload());
+        }
+    }
+
+    _softReload() {
+        this._closeSettings();
+        try { this.socket && this.socket.close(); } catch (_) {}
+        // Reset local render state so the next snapshot rebuilds from scratch
+        // rather than diffing against stale data from before the hang.
+        this._snapshot = null;
+        this._tabStates = new Map();
+        this._hasReceivedSnapshot = false;
+        if (this.termEl) this.termEl.innerHTML = '';
+        try { this.socket && this.socket.connect(); } catch (_) {}
+    }
+
+    async _forceReload() {
+        if (!confirm('Force reload will clear cached assets and reload the app. Continue?')) return;
+        this._closeSettings();
+        try { this.socket && this.socket.close(); } catch (_) {}
+        // Nuke the service-worker cache so the reload pulls fresh JS/CSS/HTML
+        // instead of whatever the SW had pinned. Keep localStorage intact so
+        // the session token + theme survive.
+        try {
+            if ('caches' in window) {
+                const keys = await caches.keys();
+                await Promise.all(keys.map(k => caches.delete(k)));
+            }
+        } catch (_) {}
+        try {
+            if (navigator.serviceWorker) {
+                const regs = await navigator.serviceWorker.getRegistrations();
+                await Promise.all(regs.map(r => r.unregister()));
+            }
+        } catch (_) {}
+        // Cache-busted URL to bypass any disk cache the browser still has.
+        const url = new URL(location.href);
+        url.searchParams.set('_r', Date.now().toString(36));
+        location.replace(url.toString());
     }
 
     _openSettings() {
@@ -567,24 +621,11 @@ class App {
             const el = document.createElement('button');
             el.type = 'button';
             el.className = 'tab' + (t.active ? ' active' : '');
+            el.dataset.tabIndex = String(t.index);
             if (t.status) el.setAttribute('data-status', t.status);
             const proc = t.process ? `<span class="tab-proc">${escapeHtml(t.process)}</span>` : '';
             el.innerHTML = `<span class="tab-name">${escapeHtml(t.name || `TAB ${t.index + 1}`)}</span>${proc}`;
-            el.addEventListener('click', () => this.socket.sendInput('switch-tab', { index: t.index }));
-
-            let pressTimer = null;
-            let didLongPress = false;
-            el.addEventListener('pointerdown', () => {
-                didLongPress = false;
-                pressTimer = setTimeout(() => {
-                    didLongPress = true;
-                    this._showTabMenu(t, el);
-                }, 500);
-            });
-            const cancel = () => { if (pressTimer) { clearTimeout(pressTimer); pressTimer = null; } };
-            el.addEventListener('pointerup', (e) => { cancel(); if (didLongPress) e.preventDefault(); });
-            el.addEventListener('pointerleave', cancel);
-            el.addEventListener('pointermove', cancel);
+            this._attachTabPointerHandlers(el, t);
             frag.appendChild(el);
         }
 
@@ -597,6 +638,180 @@ class App {
 
         this.tabsEl.innerHTML = '';
         this.tabsEl.appendChild(frag);
+    }
+
+    // Unified pointer state machine for each tab:
+    //   tap                      → switch-tab
+    //   hold ~280ms + drag       → reorder (see _beginTabDrag)
+    //   hold ~500ms stationary   → open menu
+    _attachTabPointerHandlers(el, tab) {
+        const DRAG_ARM_MS = 280;
+        const MENU_MS = 500;
+        const MOVE_THRESHOLD = 8;
+        const state = { startX: 0, startY: 0, armed: false, dragging: false, cancelled: false, didMenu: false };
+        let armTimer = null, menuTimer = null;
+        const clearTimers = () => {
+            if (armTimer) { clearTimeout(armTimer); armTimer = null; }
+            if (menuTimer) { clearTimeout(menuTimer); menuTimer = null; }
+        };
+
+        el.addEventListener('pointerdown', (e) => {
+            if (e.button != null && e.button !== 0) return;
+            state.startX = e.clientX;
+            state.startY = e.clientY;
+            state.armed = false;
+            state.dragging = false;
+            state.cancelled = false;
+            state.didMenu = false;
+            clearTimers();
+            armTimer = setTimeout(() => {
+                if (state.cancelled || state.dragging) return;
+                state.armed = true;
+                el.classList.add('tab-armed');
+                try { if (navigator.vibrate) navigator.vibrate(8); } catch (_) {}
+            }, DRAG_ARM_MS);
+            menuTimer = setTimeout(() => {
+                if (state.dragging || state.cancelled) return;
+                state.didMenu = true;
+                el.classList.remove('tab-armed');
+                this._showTabMenu(tab, el);
+            }, MENU_MS);
+        });
+
+        el.addEventListener('pointermove', (e) => {
+            if (state.cancelled || state.dragging) return;
+            const moved = Math.hypot(e.clientX - state.startX, e.clientY - state.startY) > MOVE_THRESHOLD;
+            if (!moved) return;
+            if (!state.armed) {
+                // Moved before the drag-arm fired — treat as a scroll gesture
+                // and let the strip pan horizontally.
+                clearTimers();
+                state.cancelled = true;
+                return;
+            }
+            state.dragging = true;
+            clearTimers();
+            el.classList.remove('tab-armed');
+            this._beginTabDrag(el, tab, e, state);
+        });
+
+        const endTap = (e) => {
+            if (!state.dragging && !state.cancelled && !state.didMenu && !state.armed) {
+                this.socket.sendInput('switch-tab', { index: tab.index });
+            } else if (state.armed && !state.dragging && !state.didMenu) {
+                el.classList.remove('tab-armed');
+                this._showTabMenu(tab, el);
+                if (e && e.preventDefault) e.preventDefault();
+            }
+            clearTimers();
+            if (!state.dragging) el.classList.remove('tab-armed');
+            state.cancelled = true;
+        };
+        el.addEventListener('pointerup', endTap);
+        el.addEventListener('pointercancel', () => {
+            clearTimers();
+            el.classList.remove('tab-armed');
+            state.cancelled = true;
+        });
+    }
+
+    // Drag-reorder implementation. Browser-tab feel: the picked-up tab floats
+    // under the finger; neighbors slide live as you move; on release we send
+    // `move-tab` to the desktop, which authoritatively reorders its strip and
+    // the next snapshot confirms the new order.
+    _beginTabDrag(srcEl, tab, startEvent, state) {
+        const strip = this.tabsEl;
+        if (!strip) return;
+
+        const startRect = srcEl.getBoundingClientRect();
+        const grabOffsetX = startEvent.clientX - startRect.left;
+        const ghost = srcEl.cloneNode(true);
+        ghost.classList.add('tab-ghost');
+        ghost.style.width = `${startRect.width}px`;
+        ghost.style.height = `${startRect.height}px`;
+        ghost.style.left = `${startRect.left}px`;
+        ghost.style.top = `${startRect.top}px`;
+        document.body.appendChild(ghost);
+        srcEl.classList.add('tab-dragging');
+
+        // Prevent the horizontal strip from scroll-panning while we drag.
+        const prevOverflow = strip.style.overflowX;
+        strip.style.overflowX = 'hidden';
+
+        let finalBeforeIndex = null;
+        const tabSelector = '.tab:not(.tab-add):not(.tab-dragging)';
+
+        const update = (clientX, clientY) => {
+            ghost.style.left = `${clientX - grabOffsetX}px`;
+            ghost.style.top = `${startRect.top}px`;
+
+            // Find the tab (or + button) the finger is over within the strip.
+            const siblings = Array.from(strip.querySelectorAll(tabSelector));
+            const addBtn = strip.querySelector('.tab-add');
+            let placeBefore = null; // DOM node to insertBefore(); null = append at end
+            for (const sib of siblings) {
+                const r = sib.getBoundingClientRect();
+                const mid = r.left + r.width / 2;
+                if (clientX < mid) { placeBefore = sib; break; }
+            }
+            if (!placeBefore && addBtn) placeBefore = addBtn;
+
+            if (placeBefore && placeBefore !== srcEl.nextSibling) {
+                strip.insertBefore(srcEl, placeBefore);
+            }
+
+            // Auto-scroll the strip when the finger nears either edge.
+            const sr = strip.getBoundingClientRect();
+            const EDGE = 40;
+            if (clientX < sr.left + EDGE) strip.scrollLeft -= 8;
+            else if (clientX > sr.right - EDGE) strip.scrollLeft += 8;
+        };
+
+        const move = (e) => {
+            e.preventDefault();
+            update(e.clientX, e.clientY);
+        };
+        const end = (e) => {
+            document.removeEventListener('pointermove', move, { capture: true });
+            document.removeEventListener('pointerup', end, { capture: true });
+            document.removeEventListener('pointercancel', end, { capture: true });
+
+            ghost.remove();
+            srcEl.classList.remove('tab-dragging');
+            strip.style.overflowX = prevOverflow;
+
+            // Compute neighbor index for the move-tab payload: the tab now to
+            // the right of src (skipping the + button). -1 means "append".
+            let after = srcEl.nextElementSibling;
+            while (after && after.classList.contains('tab-add')) after = after.nextElementSibling;
+            if (after && after.dataset.tabIndex != null) {
+                finalBeforeIndex = parseInt(after.dataset.tabIndex, 10);
+            } else {
+                finalBeforeIndex = -1;
+            }
+
+            // Only send if the position actually changed since pickup.
+            const originalNext = srcEl.dataset.origNextIndex;
+            if (String(finalBeforeIndex) !== originalNext) {
+                this.socket.sendInput('move-tab', { index: tab.index, before: finalBeforeIndex });
+            }
+            delete srcEl.dataset.origNextIndex;
+            state.cancelled = true;
+        };
+
+        // Record the neighbor index at pickup time so we can skip no-op sends.
+        let origNext = srcEl.nextElementSibling;
+        while (origNext && origNext.classList.contains('tab-add')) origNext = origNext.nextElementSibling;
+        srcEl.dataset.origNextIndex = String(
+            (origNext && origNext.dataset.tabIndex != null) ? parseInt(origNext.dataset.tabIndex, 10) : -1
+        );
+
+        document.addEventListener('pointermove', move, { capture: true, passive: false });
+        document.addEventListener('pointerup', end, { capture: true });
+        document.addEventListener('pointercancel', end, { capture: true });
+
+        // Apply the initial position using the pointerdown event that triggered us.
+        update(startEvent.clientX, startEvent.clientY);
     }
 
     _showTabMenu(tab, anchorEl) {
@@ -764,32 +979,27 @@ class App {
 
     _fitTerminalFont(cols) {
         if (cols && cols > 0) this._termCols = cols;
-        if (!this._termCols) {
-            const text = this.termEl.textContent || '';
-            const lines = text.split('\n');
-            let maxLen = 0;
-            for (const line of lines) {
-                if (line.length > maxLen) maxLen = line.length;
-            }
-            if (maxLen > 40) this._termCols = maxLen;
-            else this._termCols = 80;
-        }
+
         const cs = getComputedStyle(this.termEl);
         const availW = this.termEl.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
         if (availW <= 0) return;
 
         const probe = document.createElement('span');
         probe.style.cssText = 'position:absolute;visibility:hidden;white-space:pre;font:' + this._baseFontSize + 'px/' + 1.45 + ' ' + cs.fontFamily;
-        probe.textContent = 'M'.repeat(this._termCols);
+        probe.textContent = 'M';
         document.body.appendChild(probe);
-        const lineW = probe.offsetWidth;
+        const charW = probe.offsetWidth;
         document.body.removeChild(probe);
 
-        if (lineW <= 0) return;
-        const scale = availW / lineW;
-        const fitted = Math.floor(this._baseFontSize * scale * 100) / 100;
-        const clamped = Math.max(this._baseFontSize, fitted);
-        this.termEl.style.fontSize = clamped + 'px';
+        if (charW <= 0) return;
+
+        const fitCols = Math.floor(availW / charW);
+        if (fitCols !== this._lastSentCols && fitCols > 10) {
+            this._lastSentCols = fitCols;
+            this.socket.sendInput('term-resize', { cols: fitCols, rows: Math.floor((this.termEl.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom)) / (this._baseFontSize * 1.45)) });
+        }
+
+        this.termEl.style.fontSize = this._baseFontSize + 'px';
     }
 
     _renderWidgets(widgets, host) {
