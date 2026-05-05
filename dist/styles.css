@@ -695,6 +695,30 @@ button:active { background: var(--accent-bg-hover); }
     gap: 10px;
 }
 
+.sound-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+}
+.sound-option {
+    padding: 10px 6px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: transparent;
+    color: var(--fg-dim);
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+}
+.sound-option.active {
+    color: var(--accent);
+    border-color: var(--accent);
+    background: var(--accent-bg);
+}
+.sound-option:active { background: var(--accent-bg-hover); }
+
 .theme-swatch {
     display: flex;
     flex-direction: column;

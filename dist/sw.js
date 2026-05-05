@@ -6,7 +6,7 @@
  * SW is purely about making the app installable and fast to launch.
  */
 
-const VERSION = 'soa-mobile-v25';
+const VERSION = 'soa-mobile-v26';
 const SHELL = [
     '/',
     '/index.html',
@@ -15,8 +15,14 @@ const SHELL = [
     '/socket.js',
     '/ansi.js',
     '/keyboard.js',
+    '/sounds.js',
     '/manifest.webmanifest',
     '/icon.svg',
+    '/audio/granted.wav',
+    '/audio/denied.wav',
+    '/audio/panels.wav',
+    '/audio/keyboard.wav',
+    '/audio/theme.wav',
 ];
 
 self.addEventListener('install', (e) => {

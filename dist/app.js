@@ -16,6 +16,7 @@
 import { BridgeSocket, SocketState, Diagnosis } from './socket.js';
 import { ansiToHtml, newState } from './ansi.js';
 import { VirtualKeyboard } from './keyboard.js';
+import { sounds, PROFILES as SOUND_PROFILES } from './sounds.js';
 
 const STORAGE_KEY = 'son-of-anton.session';
 const THEME_KEY = 'son-of-anton.theme';
@@ -245,6 +246,7 @@ class App {
 
         this.settingsOverlay = document.getElementById('settings-overlay');
         this.themeGrid = document.getElementById('theme-grid');
+        this.soundGrid = document.getElementById('sound-grid');
         this.settingsClose = document.getElementById('settings-close');
         this.btnReload = document.getElementById('btn-reload');
         this.btnForceReload = document.getElementById('btn-force-reload');
@@ -267,6 +269,7 @@ class App {
         document.body.appendChild(this._pullHint);
 
         if (this.themeGrid) this._renderThemeGrid();
+        if (this.soundGrid) this._renderSoundGrid();
         if (this.btnSettings) this._wireSettings();
         this._wireIdleHide();
 
@@ -282,7 +285,10 @@ class App {
         });
 
         this.kbd = new VirtualKeyboard(this.kbdEl, {
-            onInput: (kind, payload) => this.socket.sendInput(kind, payload),
+            onInput: (kind, payload) => {
+                sounds.play('key');
+                this.socket.sendInput(kind, payload);
+            },
         });
 
         this._wireSocket();
@@ -326,6 +332,28 @@ class App {
         this.themeGrid.querySelectorAll('.theme-swatch').forEach(el => {
             el.classList.toggle('active', el.dataset.theme === id);
         });
+    }
+
+    _renderSoundGrid() {
+        this.soundGrid.innerHTML = '';
+        const current = sounds.getProfile();
+        for (const { key, name } of sounds.listProfiles()) {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'sound-option' + (key === current ? ' active' : '');
+            btn.dataset.profile = key;
+            btn.textContent = name;
+            btn.addEventListener('click', () => this._selectSoundProfile(key));
+            this.soundGrid.appendChild(btn);
+        }
+    }
+
+    _selectSoundProfile(key) {
+        sounds.setProfile(key);
+        this.soundGrid.querySelectorAll('.sound-option').forEach(el => {
+            el.classList.toggle('active', el.dataset.profile === key);
+        });
+        sounds.play('tabSwitch');
     }
 
     _wireSettings() {
@@ -449,12 +477,15 @@ class App {
                 case SocketState.CONNECTED:
                     this._setStatus('connected', 'paired');
                     this._hideReconnect();
+                    if (this._prevSocketState !== SocketState.CONNECTED) sounds.play('connect');
                     break;
                 case SocketState.DISCONNECTED:
                     this._setStatus('disconnected', `link lost${code ? ` (${code})` : ''}`);
                     this._showReconnect('link lost · retrying');
+                    if (this._prevSocketState === SocketState.CONNECTED) sounds.play('disconnect');
                     break;
             }
+            this._prevSocketState = state;
         });
 
         this.socket.addEventListener('reconnect-scheduled', (ev) => {
@@ -601,6 +632,9 @@ class App {
         const tabs = snap.tabs || [];
         const activeTab = tabs.find(t => t.active);
         const newActiveTab = activeTab ? activeTab.index : 0;
+        if (this._hasReceivedSnapshot && newActiveTab !== this._activeTab) {
+            sounds.play('tabSwitch');
+        }
         this._hasReceivedSnapshot = true;
         this._activeTab = newActiveTab;
 
