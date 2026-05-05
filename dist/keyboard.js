@@ -1,10 +1,11 @@
 /**
  * VirtualKeyboard — OS-native input with a slim modifier strip.
  *
- * Instead of rendering a full soft keyboard, we use a hidden <input> that
- * triggers the device's native keyboard on focus. A compact modifier row
- * provides terminal-specific keys (Esc, Tab, Ctrl, arrows, etc.) that
- * aren't available on a standard mobile keyboard.
+ * The hidden input is actually visible as a compose preview so the user
+ * can see what they've typed before sending. Each edit (add/remove/
+ * autocorrect replace) is diffed against the previous value and the delta
+ * is synchronized to the remote shell as term-keys. Hitting Enter sends
+ * the newline hotkey and clears the preview.
  */
 
 const MOD_KEYS = [
@@ -24,6 +25,7 @@ export class VirtualKeyboard {
         this.root = rootEl;
         this.onInput = onInput;
         this.ctrl = false;
+        this._lastValue = '';
 
         this._render();
     }
@@ -32,48 +34,27 @@ export class VirtualKeyboard {
         this.root.innerHTML = '';
         this.root.className = 'kbd-strip';
 
-        // Hidden input to capture OS keyboard
         this.input = document.createElement('input');
         this.input.type = 'text';
         this.input.className = 'kbd-hidden-input';
-        this.input.autocomplete = 'off';
-        this.input.autocapitalize = 'none';
-        this.input.autocorrect = 'off';
-        this.input.spellcheck = false;
+        this.input.autocomplete = 'on';
+        this.input.autocapitalize = 'sentences';
+        this.input.autocorrect = 'on';
+        this.input.spellcheck = true;
         this.input.placeholder = 'Type here…';
         this.input.setAttribute('enterkeyhint', 'send');
         this.root.appendChild(this.input);
 
-        this.input.addEventListener('input', (e) => {
-            const text = e.data;
-            if (text) {
-                if (this.ctrl) {
-                    const lower = text.toLowerCase();
-                    if (lower.length === 1 && lower >= 'a' && lower <= 'z') {
-                        this.onInput('term-keys', { text: String.fromCharCode(lower.charCodeAt(0) - 96) });
-                    } else {
-                        this.onInput('term-keys', { text });
-                    }
-                    this._setCtrl(false);
-                } else {
-                    this.onInput('term-keys', { text });
-                }
-                this.input.value = '';
-            }
-        });
+        this.input.addEventListener('input', () => this._onInputEvent());
 
         this.input.addEventListener('keydown', (e) => {
             if (e.key === 'Enter') {
                 e.preventDefault();
-                this.input.value = '';
+                this._flushPendingAndClear();
                 this.onInput('hotkey', { combo: 'enter' });
-            } else if (e.key === 'Backspace') {
-                e.preventDefault();
-                this.onInput('term-keys', { text: '\x7f' });
             }
         });
 
-        // Modifier strip
         const strip = document.createElement('div');
         strip.className = 'kbd-mods';
         for (const m of MOD_KEYS) {
@@ -91,6 +72,46 @@ export class VirtualKeyboard {
         this.root.appendChild(strip);
     }
 
+    _onInputEvent() {
+        const cur = this.input.value;
+        const prev = this._lastValue;
+        if (cur === prev) return;
+
+        // Find common prefix
+        let i = 0;
+        const minLen = Math.min(cur.length, prev.length);
+        while (i < minLen && cur.charCodeAt(i) === prev.charCodeAt(i)) i++;
+
+        const toDelete = prev.length - i;
+        const toInsert = cur.slice(i);
+
+        // Delete backwards first
+        for (let n = 0; n < toDelete; n++) {
+            this.onInput('term-keys', { text: '\x7f' });
+        }
+        // Then insert new text (handling ctrl-prefix for single chars)
+        if (toInsert) {
+            if (this.ctrl && toInsert.length === 1) {
+                const lower = toInsert.toLowerCase();
+                if (lower >= 'a' && lower <= 'z') {
+                    this.onInput('term-keys', { text: String.fromCharCode(lower.charCodeAt(0) - 96) });
+                } else {
+                    this.onInput('term-keys', { text: toInsert });
+                }
+                this._setCtrl(false);
+            } else {
+                this.onInput('term-keys', { text: toInsert });
+            }
+        }
+
+        this._lastValue = cur;
+    }
+
+    _flushPendingAndClear() {
+        this.input.value = '';
+        this._lastValue = '';
+    }
+
     _handleMod(m, el) {
         el.classList.add('pressed');
         setTimeout(() => el.classList.remove('pressed'), 80);
@@ -99,6 +120,9 @@ export class VirtualKeyboard {
                 this._setCtrl(!this.ctrl);
                 break;
             case 'hotkey':
+                if (m.combo === 'enter') {
+                    this._flushPendingAndClear();
+                }
                 if (this.ctrl && m.combo && /^[a-z]$/.test(m.combo)) {
                     this.onInput('hotkey', { combo: `ctrl+${m.combo}` });
                     this._setCtrl(false);
@@ -107,6 +131,11 @@ export class VirtualKeyboard {
                 }
                 break;
             case 'special':
+                // Handle local backspace — trim the preview too
+                if (m.text === '\x7f' && this._lastValue.length > 0) {
+                    this._lastValue = this._lastValue.slice(0, -1);
+                    this.input.value = this._lastValue;
+                }
                 this.onInput('term-keys', { text: m.text });
                 break;
         }
