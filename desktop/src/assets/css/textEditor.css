@@ -1,0 +1,170 @@
+/* Text Editor Overlay */
+#texteditor_overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.6);
+    z-index: 3000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    animation: texteditor_fadeIn 0.15s ease-out;
+}
+
+#texteditor_overlay.closing {
+    animation: texteditor_fadeOut 0.15s ease-in;
+    opacity: 0;
+}
+
+@keyframes texteditor_fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+@keyframes texteditor_fadeOut {
+    from { opacity: 1; }
+    to { opacity: 0; }
+}
+
+#texteditor_container {
+    width: 60vw;
+    max-width: 900px;
+    min-height: 30vh;
+    max-height: 70vh;
+    background: var(--color_light_black);
+    display: flex;
+    flex-direction: column;
+    padding: 1.5vh;
+
+    --aug-border: 0.2vh;
+    --aug-border-bg: rgb(var(--color_r), var(--color_g), var(--color_b));
+    --aug-inset: 4px;
+    --aug-inset-bg: var(--color_light_black);
+    --aug-tl: 12px;
+    --aug-br: 12px;
+}
+
+#texteditor_header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 1vh;
+    padding-bottom: 0.8vh;
+    border-bottom: 0.1vh solid rgba(var(--color_r), var(--color_g), var(--color_b), 0.3);
+}
+
+.texteditor_title {
+    font-family: var(--font_main);
+    font-size: 2.2vh;
+    font-weight: bold;
+    color: rgb(var(--color_r), var(--color_g), var(--color_b));
+    letter-spacing: 0.3vh;
+}
+
+.texteditor_hint {
+    font-family: var(--font_main);
+    font-size: 1.3vh;
+    color: rgb(var(--color_r), var(--color_g), var(--color_b));
+    opacity: 0.6;
+}
+
+#texteditor_textarea {
+    flex: 1;
+    width: 100%;
+    min-height: 20vh;
+    background: rgba(0, 0, 0, 0.4);
+    color: rgb(var(--color_r), var(--color_g), var(--color_b));
+    border: 0.1vh solid rgba(var(--color_r), var(--color_g), var(--color_b), 0.4);
+    border-radius: 0.3vh;
+    padding: 1vh;
+    font-family: var(--font_mono, "Fira Mono", monospace);
+    font-size: 1.6vh;
+    line-height: 1.6;
+    resize: vertical;
+    box-sizing: border-box;
+    tab-size: 4;
+    white-space: pre-wrap;
+    overflow-wrap: break-word;
+    overflow-x: hidden;
+}
+
+#texteditor_textarea:focus {
+    outline: none;
+    border-color: rgb(var(--color_r), var(--color_g), var(--color_b));
+    box-shadow: 0 0 8px rgba(var(--color_r), var(--color_g), var(--color_b), 0.3);
+}
+
+#texteditor_textarea::placeholder {
+    color: rgb(var(--color_r), var(--color_g), var(--color_b));
+    opacity: 0.35;
+}
+
+#texteditor_textarea::selection {
+    background: rgba(var(--color_r), var(--color_g), var(--color_b), 0.4);
+    color: inherit;
+}
+
+/* Scrollbar styling */
+#texteditor_textarea::-webkit-scrollbar {
+    width: 0.6vh;
+    height: 0.6vh;
+}
+
+#texteditor_textarea::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+#texteditor_textarea::-webkit-scrollbar-thumb {
+    background: rgba(var(--color_r), var(--color_g), var(--color_b), 0.3);
+    border-radius: 0.3vh;
+}
+
+#texteditor_textarea::-webkit-scrollbar-thumb:hover {
+    background: rgba(var(--color_r), var(--color_g), var(--color_b), 0.6);
+}
+
+#texteditor_footer {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    margin-top: 1vh;
+    gap: 1vh;
+}
+
+#texteditor_footer button {
+    background: transparent;
+    border: 0.15vh solid rgba(var(--color_r), var(--color_g), var(--color_b), 0.6);
+    border-radius: 0.3vh;
+    color: rgb(var(--color_r), var(--color_g), var(--color_b));
+    font-family: var(--font_main);
+    font-size: 1.5vh;
+    font-weight: bold;
+    padding: 0.5vh 1.2vh;
+    cursor: pointer;
+    letter-spacing: 0.1vh;
+    transition: background 0.15s, border-color 0.15s;
+}
+
+#texteditor_footer button:hover {
+    background: rgba(var(--color_r), var(--color_g), var(--color_b), 0.2);
+    border-color: rgb(var(--color_r), var(--color_g), var(--color_b));
+}
+
+#texteditor_send, #texteditor_sendline {
+    background: rgba(var(--color_r), var(--color_g), var(--color_b), 0.1);
+}
+
+#texteditor_sendline {
+    background: rgba(var(--color_r), var(--color_g), var(--color_b), 0.15);
+    border-color: rgb(var(--color_r), var(--color_g), var(--color_b));
+}
+
+#texteditor_cancel {
+    opacity: 0.7;
+}
+
+#texteditor_cancel:hover {
+    opacity: 1;
+}

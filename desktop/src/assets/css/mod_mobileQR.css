@@ -1,0 +1,210 @@
+/* MobileQR widget — pair-a-phone tile */
+
+div#mod_mobileQR {
+    border-top: 0.092vh solid rgba(var(--color_r), var(--color_g), var(--color_b), 0.3);
+    font-family: var(--font_main_light);
+    letter-spacing: 0.092vh;
+    font-size: 1.111vh;
+    padding: 0vh;
+    padding-top: 0.645vh;
+    color: rgb(var(--color_r), var(--color_g), var(--color_b));
+}
+
+div#mod_mobileQR::before {
+    content: "";
+    border-left: 0.092vh solid rgba(var(--color_r), var(--color_g), var(--color_b), 0.3);
+    position: relative;
+    display: block;
+    left: -0.092vh;
+    top: -1.111vh;
+    height: 0.833vh;
+    width: 0;
+}
+
+div#mod_mobileQR > h1 {
+    font-size: 1.48vh;
+    margin: 0vh;
+    width: 98%;
+    padding-left: 2%;
+    margin-bottom: 0.7vh;
+    font-weight: 400;
+    letter-spacing: 0.18em;
+}
+
+div#mod_mobileQR .mqr-row {
+    display: flex;
+    align-items: center;
+    padding: 0 4%;
+    gap: 0.6vh;
+    font-size: 1.18vh;
+}
+
+div#mod_mobileQR .mqr-status-row {
+    margin-bottom: 0.4vh;
+    opacity: 0.85;
+}
+
+div#mod_mobileQR .mqr-dot {
+    width: 0.9vh;
+    height: 0.9vh;
+    border-radius: 50%;
+    background: rgba(var(--color_r), var(--color_g), var(--color_b), 0.25);
+    box-shadow: none;
+    flex-shrink: 0;
+    transition: background 0.18s, box-shadow 0.18s;
+}
+
+div#mod_mobileQR .mqr-dot[data-state="idle"] {
+    background: rgba(var(--color_r), var(--color_g), var(--color_b), 0.55);
+    box-shadow: 0 0 0.4vh rgba(var(--color_r), var(--color_g), var(--color_b), 0.5);
+}
+
+div#mod_mobileQR .mqr-dot[data-state="on"] {
+    background: rgb(var(--color_r), var(--color_g), var(--color_b));
+    box-shadow: 0 0 0.7vh rgba(var(--color_r), var(--color_g), var(--color_b), 0.85);
+    animation: mqr-pulse 1.6s ease-in-out infinite;
+}
+
+div#mod_mobileQR .mqr-dot[data-state="pending"] {
+    background: rgba(var(--color_r), var(--color_g), var(--color_b), 0.55);
+    animation: mqr-pulse 0.7s ease-in-out infinite;
+}
+
+@keyframes mqr-pulse {
+    0%, 100% { opacity: 1; }
+    50%      { opacity: 0.35; }
+}
+
+div#mod_mobileQR .mqr-status-text {
+    text-transform: uppercase;
+    font-size: 1.05vh;
+    letter-spacing: 0.13em;
+}
+
+div#mod_mobileQR .mqr-qr-wrap {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0.6vh auto;
+    padding: 0.8vh;
+    width: 22vh;
+    min-height: 22vh;
+    border: 0.092vh solid rgba(var(--color_r), var(--color_g), var(--color_b), 0.3);
+    background: rgba(0, 0, 0, 0.45);
+    box-sizing: border-box;
+}
+
+div#mod_mobileQR .mqr-qr {
+    width: 100% !important;
+    height: auto !important;
+    image-rendering: pixelated;
+}
+
+div#mod_mobileQR .mqr-qr-placeholder {
+    text-align: center;
+    opacity: 0.5;
+    font-size: 1.05vh;
+    line-height: 1.45;
+    padding: 0 1vh;
+}
+
+div#mod_mobileQR .mqr-qr-fallback {
+    word-break: break-all;
+    font-family: var(--font_main_light);
+    font-size: 0.95vh;
+    text-align: center;
+    line-height: 1.4;
+    color: rgba(var(--color_r), var(--color_g), var(--color_b), 0.85);
+}
+
+div#mod_mobileQR .mqr-urls {
+    padding: 0 4%;
+    margin: 0.4vh 0;
+}
+
+div#mod_mobileQR .mqr-url-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5vh;
+    margin: 0.2vh 0;
+    font-size: 1vh;
+}
+
+div#mod_mobileQR .mqr-url-label {
+    flex: 0 0 auto;
+    width: 2.6vh;
+    opacity: 0.55;
+    text-transform: uppercase;
+    font-size: 0.85vh;
+    letter-spacing: 0.18em;
+}
+
+div#mod_mobileQR .mqr-url-value {
+    flex: 1 1 auto;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: rgba(var(--color_r), var(--color_g), var(--color_b), 0.85);
+}
+
+div#mod_mobileQR .mqr-copy {
+    flex: 0 0 auto;
+    background: transparent;
+    border: 0.092vh solid rgba(var(--color_r), var(--color_g), var(--color_b), 0.4);
+    color: rgb(var(--color_r), var(--color_g), var(--color_b));
+    padding: 0.15vh 0.6vh;
+    font-family: var(--font_main_light);
+    font-size: 0.9vh;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    cursor: pointer;
+}
+
+div#mod_mobileQR .mqr-copy:hover:not(:disabled) {
+    background: rgba(var(--color_r), var(--color_g), var(--color_b), 0.15);
+}
+
+div#mod_mobileQR .mqr-copy:disabled {
+    opacity: 0.6;
+    cursor: default;
+}
+
+div#mod_mobileQR .mqr-actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.6vh;
+    padding: 0.4vh 4% 0.2vh;
+    margin-top: 0.3vh;
+    border-top: 0.092vh solid rgba(var(--color_r), var(--color_g), var(--color_b), 0.18);
+    padding-top: 0.6vh;
+}
+
+div#mod_mobileQR .mqr-toggle {
+    background: transparent;
+    border: 0.092vh solid rgba(var(--color_r), var(--color_g), var(--color_b), 0.55);
+    color: rgb(var(--color_r), var(--color_g), var(--color_b));
+    padding: 0.35vh 1.4vh;
+    font-family: var(--font_main_light);
+    font-size: 1.1vh;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: background 0.15s;
+}
+
+div#mod_mobileQR .mqr-toggle:hover:not(:disabled) {
+    background: rgba(var(--color_r), var(--color_g), var(--color_b), 0.18);
+}
+
+div#mod_mobileQR .mqr-toggle:disabled {
+    opacity: 0.6;
+    cursor: default;
+}
+
+div#mod_mobileQR .mqr-clients {
+    font-size: 0.95vh;
+    opacity: 0.65;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+}

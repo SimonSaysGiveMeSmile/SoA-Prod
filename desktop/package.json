@@ -1,0 +1,140 @@
+{
+  "name": "edex-ui",
+  "productName": "Son of Anton",
+  "version": "2.2.15",
+  "description": "A science fiction desktop running everywhere. Awesome.",
+  "keywords": [
+    "desktop",
+    "sci-fi",
+    "gui",
+    "portable",
+    "tty",
+    "terminal"
+  ],
+  "main": "src/_boot.js",
+  "scripts": {
+    "start": "electron src",
+    "install-linux": "npm install && cd src && npm install && ./../node_modules/.bin/electron-rebuild -f -w node-pty && cd ..",
+    "preinstall-windows": "npm install --global --production windows-build-tools && npm install --global node-gyp && setx PYTHON \"%USERPROFILE%\\.windows-build-tools\\python27\\python.exe\"",
+    "install-windows": "npm install && cd src && npm install && ..\\node_modules\\.bin\\electron-rebuild -f -w node-pty && cd ..",
+    "prebuild-linux": "rsync -a --info=progress2 src/ prebuild-src --exclude node_modules && node prebuild-minify.js && cd prebuild-src && npm install",
+    "prebuild-darwin": "rsync -a src/ prebuild-src --exclude node_modules && node prebuild-minify.js && cd prebuild-src && npm install --legacy-peer-deps",
+    "prebuild-windows": "mkdir prebuild-src && xcopy src\\* prebuild-src\\ /E /C /Q /Y && node prebuild-minify.js && cd prebuild-src && npm install",
+    "build-linux": "./node_modules/.bin/electron-builder build -l --x64 --ia32 --arm64 --armv7l",
+    "build-darwin": "./node_modules/.bin/electron-builder build -m",
+    "build-windows": "node_modules\\.bin\\electron-builder build -w",
+    "postbuild-linux": "rm -R prebuild-src",
+    "postbuild-darwin": "rm -R prebuild-src",
+    "postbuild-windows": "rmdir /S /Q prebuild-src",
+    "test": "jest --config jest.config.js",
+    "test:coverage": "jest --config jest.config.js --coverage",
+    "test:security": "rsync -a --info=progress2 src/ prebuild-src --exclude node_modules && node prebuild-minify.js && cd prebuild-src && npm install && snyk test && cd .. && rm -R prebuild-src",
+    "init-file-icons": "git submodule update --init",
+    "update-file-icons": "git submodule foreach git pull origin master && node file-icons-generator.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/yifu001/son-of-anton.git"
+  },
+  "author": "Gabriel 'Squared' SAILLARD <gabriel@saillard.dev> (https://gaby.dev)",
+  "license": "GPL-3.0",
+  "bugs": {
+    "url": "https://github.com/yifu001/son-of-anton/issues"
+  },
+  "homepage": "https://github.com/yifu001/son-of-anton#readme",
+  "build": {
+    "appId": "com.edex.ui",
+    "productName": "Son of Anton",
+    "publish": "github",
+    "asar": true,
+    "asarUnpack": [
+      "node_modules/node-pty/**",
+      "node_modules/@picovoice/**",
+      "node_modules/osx-temperature-sensor/**",
+      "main/voice/**"
+    ],
+    "compression": "normal",
+    "copyright": "Copyright © 2017-2021 Gabriel 'Squared' SAILLARD <gabriel@saillard.dev> (https://gaby.dev)",
+    "directories": {
+      "output": "dist",
+      "app": "prebuild-src"
+    },
+    "afterPack": "./scripts/afterPack.js",
+    "forceCodeSigning": false,
+    "npmRebuild": true,
+    "artifactName": "Son of Anton-${os}-${arch}.${ext}",
+    "linux": {
+      "target": [
+        "AppImage"
+      ],
+      "category": "System",
+      "icon": "media/linuxIcons"
+    },
+    "appImage": {
+      "artifactName": "Son of Anton-Linux-${arch}.AppImage"
+    },
+    "mac": {
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
+      ],
+      "identity": "8834A62403DDA6CE1425CACD5A03199888EF5CD5",
+      "hardenedRuntime": true,
+      "entitlements": "entitlements.mac.plist",
+      "entitlementsInherit": "entitlements.mac.inherit.plist",
+      "category": "public.app-category.utilities",
+      "icon": "media/icon.icns",
+      "extendInfo": {
+        "NSMicrophoneUsageDescription": "This app uses the microphone for voice input and voice commands.",
+        "NSSpeechRecognitionUsageDescription": "This app uses speech recognition for voice dictation."
+      }
+    },
+    "dmg": {
+      "artifactName": "Son of Anton-macOS-${arch}.dmg"
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64",
+            "ia32"
+          ]
+        }
+      ],
+      "icon": "media/icon.ico"
+    },
+    "nsis": {
+      "artifactName": "Son of Anton-Windows-${arch}.exe",
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "deleteAppDataOnUninstall": true
+    }
+  },
+  "dependencies": {
+    "@electron/rebuild": "^4.0.0",
+    "clean-css": "5.2.1",
+    "electron": "^28.0.0",
+    "electron-builder": "^26.0.0",
+    "mime-types": "^2.1.33",
+    "node-abi": "^3.0.0",
+    "node-json-minify": "1.0.0",
+    "node-pty": "^1.0.0",
+    "terser": "^5.9.0"
+  },
+  "optionalDependencies": {
+    "cson-parser": "4.0.9"
+  },
+  "devDependencies": {
+    "jest": "^30.2.0",
+    "jest-environment-jsdom": "^30.2.0",
+    "jimp": "^0.16.1",
+    "playwright": "^1.58.2",
+    "png2icons": "^2.0.1"
+  }
+}

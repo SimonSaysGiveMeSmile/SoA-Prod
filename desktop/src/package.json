@@ -1,0 +1,63 @@
+{
+  "name": "edex-ui",
+  "productName": "Son of Anton",
+  "version": "2.2.14",
+  "description": "Son of Anton sci-fi interface",
+  "keywords": [
+    "desktop",
+    "sci-fi",
+    "gui",
+    "portable",
+    "tty",
+    "terminal"
+  ],
+  "main": "_boot.js",
+  "scripts": {
+    "start": "electron ."
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/yifu001/son-of-anton.git"
+  },
+  "author": "Gabriel 'Squared' SAILLARD <gabriel@saillard.dev> (https://gaby.dev)",
+  "license": "GPL-3.0",
+  "bugs": {
+    "url": "https://github.com/yifu001/son-of-anton/issues"
+  },
+  "homepage": "https://github.com/yifu001/son-of-anton#readme",
+  "dependencies": {
+    "@electron/remote": "^2.1.2",
+    "@picovoice/porcupine-node": "^4.0.1",
+    "augmented-ui": "^1.1.2",
+    "chokidar": "^3.5.3",
+    "color": "3.2.1",
+    "dotenv": "^17.2.3",
+    "geolite2-redist": "^2.0.4",
+    "howler": "2.2.3",
+    "localtunnel": "^2.0.2",
+    "maxmind": "4.3.2",
+    "mime-types": "^2.1.33",
+    "nanoid": "3.1.30",
+    "node-pty": "^1.1.0",
+    "openai": "^4.10.0",
+    "pdfjs-dist": "2.11.338",
+    "pretty-bytes": "5.6.0",
+    "qrcode": "^1.5.4",
+    "shell-env": "3.0.1",
+    "signale": "1.4.0",
+    "smoothie": "1.35.0",
+    "systeminformation": "5.9.7",
+    "tail": "2.2.4",
+    "username": "5.1.0",
+    "which": "2.0.2",
+    "ws": "7.5.5",
+    "xterm": "4.14.1",
+    "xterm-addon-attach": "0.6.0",
+    "xterm-addon-fit": "0.5.0",
+    "xterm-addon-ligatures": "0.5.1",
+    "xterm-addon-webgl": "^0.11.2"
+  },
+  "optionalDependencies": {
+    "osx-temperature-sensor": "1.0.7"
+  }
+}

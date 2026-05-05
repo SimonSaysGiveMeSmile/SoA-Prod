@@ -1,0 +1,449 @@
+/* Ad Overlay - Displays during AI thinking time */
+
+/* Base overlay — lives on document.body, always position:fixed for top-level stacking */
+.ad-overlay {
+    position: fixed;
+    z-index: 900;
+    pointer-events: none;
+    transition: opacity 0.3s ease, transform 0.3s ease;
+    opacity: 1;
+}
+
+/* Hidden state */
+.ad-overlay--hidden {
+    opacity: 0;
+    pointer-events: none !important;
+    transform: translateY(10px);
+    z-index: -1;
+    visibility: hidden;
+}
+
+/* ── Fullscreen mode ──
+   Covers the upper half of the terminal area only, leaving side panels
+   and the bottom half visible so you can still see AI output. */
+.ad-overlay--fullscreen {
+    position: fixed;
+    top: calc(5vh + 10px);
+    left: 17.5%;
+    width: 65%;
+    height: 62%;
+    max-height: calc(100vh - 5vh - 10px);
+    max-width: calc(100vw - 17.5% - 17.5%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.92);
+    pointer-events: auto;
+    z-index: 1000;
+    visibility: visible;
+    overflow: hidden;
+}
+
+.ad-overlay--fullscreen .ad-overlay__content {
+    width: 80%;
+    max-width: 90vh;
+    text-align: center;
+    padding: 2vh;
+    border-width: 0.15vh;
+}
+
+.ad-overlay--fullscreen .ad-overlay__image-container {
+    width: 100%;
+    height: 38vh;
+    margin: 1.5vh 0;
+}
+
+.ad-overlay--fullscreen .ad-overlay__badge {
+    font-size: 1.4vh;
+    letter-spacing: 0.3vh;
+    margin-bottom: 1vh;
+}
+
+.ad-overlay--fullscreen .ad-overlay__info {
+    font-size: 1.4vh;
+    margin-top: 1vh;
+}
+
+.ad-overlay--fullscreen .ad-overlay__close {
+    width: 3.5vh;
+    height: 3.5vh;
+    font-size: 1.8vh;
+    line-height: 3.5vh;
+    top: 1vh;
+    right: 1vh;
+}
+
+/* ── Corner mode ──
+   Small overlay in bottom-right of terminal area, clear of side panels */
+.ad-overlay--corner {
+    position: fixed;
+    bottom: 5vh;
+    right: 17.5%;
+    width: 20vh;
+    max-width: calc(100vw - 17.5% - 2vh);
+    max-height: calc(100vh - 6vh);
+    visibility: visible;
+    pointer-events: auto;
+    z-index: 900;
+    overflow: visible;
+}
+
+.ad-overlay--corner .ad-overlay__content {
+    width: 100%;
+}
+
+.ad-overlay--corner .ad-overlay__image-container {
+    width: 100%;
+    height: 14vh;
+    margin: 0.5vh 0;
+}
+
+/* ── Panel mode ──
+   Lives in a side column, visible when active, expands on hover */
+.ad-panel {
+    position: relative;
+    width: 100%;
+    max-height: 0;
+    overflow: hidden;
+    opacity: 0;
+    transition: max-height 0.3s ease, opacity 0.3s ease;
+    font-family: var(--font_main), sans-serif;
+    color: rgb(var(--color_r), var(--color_g), var(--color_b));
+    z-index: 45;
+}
+
+/* Show panel when active — always visible, not just on hover */
+.ad-panel--active {
+    max-height: 30vh;
+    opacity: 1;
+}
+
+/* Expand further on hover for better viewing */
+.mod_column:hover .ad-panel--active {
+    max-height: 40vh;
+}
+
+.ad-panel__inner {
+    padding: 0.5vh 0;
+}
+
+.ad-panel__badge {
+    font-size: 0.9vh;
+    letter-spacing: 0.2vh;
+    color: rgba(var(--color_r), var(--color_g), var(--color_b), 0.4);
+    text-transform: uppercase;
+    margin-bottom: 0.3vh;
+}
+
+.ad-panel__image-container {
+    width: 100%;
+    height: 12vh;
+    background: rgba(var(--color_r), var(--color_g), var(--color_b), 0.05);
+    border: 0.05vh solid rgba(var(--color_r), var(--color_g), var(--color_b), 0.2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    margin: 0.3vh 0;
+}
+
+.ad-panel__image {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+    transition: opacity 0.3s ease;
+}
+
+.ad-panel__placeholder {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5vh;
+    color: rgba(var(--color_r), var(--color_g), var(--color_b), 0.3);
+}
+
+.ad-panel__placeholder-icon {
+    font-size: 3vh;
+}
+
+.ad-panel__placeholder-text {
+    font-size: 1vh;
+    letter-spacing: 0.2vh;
+}
+
+.ad-panel__info {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.9vh;
+    margin-top: 0.3vh;
+}
+
+.ad-panel__earning {
+    color: rgb(var(--color_r), var(--color_g), var(--color_b));
+}
+
+.ad-panel__status {
+    color: rgba(var(--color_r), var(--color_g), var(--color_b), 0.5);
+    animation: adPulse 1.5s ease-in-out infinite;
+}
+
+.ad-panel__hover-hint {
+    font-size: 0.8vh;
+    text-align: center;
+    color: rgba(var(--color_r), var(--color_g), var(--color_b), 0.25);
+    margin-top: 0.2vh;
+}
+
+/* ── Shared styles ── */
+
+/* Content wrapper (overlay modes) */
+.ad-overlay__content {
+    background: rgba(0, 0, 0, 0.85);
+    border: 0.1vh solid rgba(var(--color_r), var(--color_g), var(--color_b), 0.4);
+    padding: 1vh;
+    font-family: var(--font_main), sans-serif;
+    position: relative;
+}
+
+/* Close button */
+.ad-overlay__close {
+    position: absolute;
+    top: 0.5vh;
+    right: 0.5vh;
+    width: 2.2vh;
+    height: 2.2vh;
+    border: 0.08vh solid rgba(var(--color_r), var(--color_g), var(--color_b), 0.4);
+    background: rgba(0, 0, 0, 0.6);
+    color: rgba(var(--color_r), var(--color_g), var(--color_b), 0.7);
+    font-size: 1.2vh;
+    line-height: 2.2vh;
+    text-align: center;
+    cursor: pointer;
+    pointer-events: auto;  /* Clickable even though parent is pointer-events: none */
+    transition: background 0.2s, color 0.2s;
+    font-family: var(--font_main), sans-serif;
+    z-index: 51;
+}
+
+.ad-overlay__close:hover {
+    background: rgba(var(--color_r), var(--color_g), var(--color_b), 0.2);
+    color: rgb(var(--color_r), var(--color_g), var(--color_b));
+}
+
+/* Badge label */
+.ad-overlay__badge {
+    font-size: 1vh;
+    letter-spacing: 0.2vh;
+    color: rgba(var(--color_r), var(--color_g), var(--color_b), 0.6);
+    text-transform: uppercase;
+    margin-bottom: 0.5vh;
+}
+
+/* Image container */
+.ad-overlay__image-container {
+    background: rgba(var(--color_r), var(--color_g), var(--color_b), 0.05);
+    border: 0.05vh solid rgba(var(--color_r), var(--color_g), var(--color_b), 0.2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+}
+
+.ad-overlay__image {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+    transition: opacity 0.3s ease;
+}
+
+/* Placeholder when no image */
+.ad-overlay__placeholder {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1vh;
+    color: rgba(var(--color_r), var(--color_g), var(--color_b), 0.3);
+}
+
+.ad-overlay__placeholder-icon {
+    font-size: 5vh;
+}
+
+.ad-overlay--corner .ad-overlay__placeholder-icon {
+    font-size: 3vh;
+}
+
+.ad-overlay__placeholder-text {
+    font-size: 1.2vh;
+    letter-spacing: 0.3vh;
+    font-family: var(--font_main), sans-serif;
+}
+
+/* Info bar */
+.ad-overlay__info {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 0.5vh;
+    font-size: 1vh;
+}
+
+.ad-overlay__earning {
+    color: rgb(var(--color_r), var(--color_g), var(--color_b));
+    font-family: var(--font_main), sans-serif;
+}
+
+.ad-overlay__status {
+    color: rgba(var(--color_r), var(--color_g), var(--color_b), 0.5);
+    animation: adPulse 1.5s ease-in-out infinite;
+    font-family: var(--font_main), sans-serif;
+}
+
+@keyframes adPulse {
+    0%, 100% { opacity: 0.5; }
+    50% { opacity: 1; }
+}
+
+/* ── Change Mode button ── */
+.ad-overlay__change-mode {
+    position: absolute;
+    top: 0.5vh;
+    right: 3.2vh;
+    width: 2.2vh;
+    height: 2.2vh;
+    border: 0.08vh solid rgba(var(--color_r), var(--color_g), var(--color_b), 0.4);
+    background: rgba(0, 0, 0, 0.6);
+    color: rgba(var(--color_r), var(--color_g), var(--color_b), 0.7);
+    font-size: 1.2vh;
+    line-height: 2.2vh;
+    text-align: center;
+    cursor: pointer;
+    pointer-events: auto;
+    transition: background 0.2s, color 0.2s;
+    font-family: var(--font_main), sans-serif;
+    z-index: 51;
+}
+
+.ad-overlay__change-mode:hover {
+    background: rgba(var(--color_r), var(--color_g), var(--color_b), 0.2);
+    color: rgb(var(--color_r), var(--color_g), var(--color_b));
+}
+
+.ad-overlay--fullscreen .ad-overlay__change-mode {
+    width: 3.5vh;
+    height: 3.5vh;
+    font-size: 1.8vh;
+    line-height: 3.5vh;
+    top: 1vh;
+    right: 5vh;
+}
+
+/* ── Draggable corner mode ── */
+.ad-overlay--draggable .ad-overlay__content {
+    cursor: grab;
+}
+
+.ad-overlay--dragging .ad-overlay__content {
+    cursor: grabbing;
+}
+
+.ad-overlay--dragging {
+    user-select: none;
+    transition: none;
+}
+
+/* ── Mode Picker Overlay ── */
+.ad-mode-picker {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 1100;
+    pointer-events: auto;
+    transition: opacity 0.3s ease;
+}
+
+.ad-mode-picker--hidden {
+    opacity: 0;
+    pointer-events: none;
+    visibility: hidden;
+    z-index: -1;
+}
+
+.ad-mode-picker--visible {
+    opacity: 1;
+    visibility: visible;
+}
+
+.ad-mode-picker__backdrop {
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.9);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.ad-mode-picker__container {
+    text-align: center;
+    font-family: var(--font_main), sans-serif;
+    color: rgb(var(--color_r), var(--color_g), var(--color_b));
+}
+
+.ad-mode-picker__title {
+    font-size: 2vh;
+    letter-spacing: 0.4vh;
+    margin-bottom: 0.8vh;
+}
+
+.ad-mode-picker__subtitle {
+    font-size: 1.2vh;
+    color: rgba(var(--color_r), var(--color_g), var(--color_b), 0.5);
+    margin-bottom: 3vh;
+}
+
+.ad-mode-picker__cards {
+    display: flex;
+    gap: 2vh;
+    justify-content: center;
+}
+
+.ad-mode-picker__card {
+    width: 18vh;
+    padding: 2vh 1.5vh;
+    border: 0.1vh solid rgba(var(--color_r), var(--color_g), var(--color_b), 0.3);
+    background: rgba(var(--color_r), var(--color_g), var(--color_b), 0.03);
+    cursor: pointer;
+    transition: border-color 0.2s, background 0.2s, transform 0.2s;
+}
+
+.ad-mode-picker__card:hover {
+    border-color: rgba(var(--color_r), var(--color_g), var(--color_b), 0.7);
+    background: rgba(var(--color_r), var(--color_g), var(--color_b), 0.08);
+    transform: translateY(-0.3vh);
+}
+
+.ad-mode-picker__card-icon {
+    font-size: 3vh;
+    margin-bottom: 1vh;
+}
+
+.ad-mode-picker__card-name {
+    font-size: 1.3vh;
+    letter-spacing: 0.25vh;
+    margin-bottom: 0.8vh;
+}
+
+.ad-mode-picker__card-desc {
+    font-size: 1vh;
+    color: rgba(var(--color_r), var(--color_g), var(--color_b), 0.5);
+    line-height: 1.5;
+    margin-bottom: 1vh;
+}
+
+.ad-mode-picker__card-rate {
+    font-size: 1.1vh;
+    color: rgb(var(--color_r), var(--color_g), var(--color_b));
+}

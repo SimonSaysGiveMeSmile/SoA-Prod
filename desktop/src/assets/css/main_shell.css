@@ -1,0 +1,793 @@
+section#main_shell {
+    /* Right side panel removed — terminal expands to fill the freed area.
+       margin-left pushes the shell past the left column (16vw) so the column
+       (z-index: 40) doesn't overlap terminal output. The 0.74vh top padding
+       and overall height stay the same so widget initialization remains stable. */
+    width: 82.5%;
+    height: 95%;
+    margin-left: 16.5vw;
+    margin-right: 0.5vw;
+    padding: 0.74vh;
+
+    --aug-border: 0.18vh;
+    --aug-border-bg: rgb(var(--color_r), var(--color_g), var(--color_b));
+    --aug-border-opacity: 0.5;
+
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: flex-start;
+    overflow: hidden;
+
+    transition: width .5s cubic-bezier(0.85, 0.5, 0.85, 0.5), height .5s cubic-bezier(0.85, 0.5, 0.85, 0.5);
+}
+
+h1#main_shell_greeting {
+    font-size: 3.9vh;
+    font-weight: normal;
+    margin: auto;
+    opacity: 0;
+    transition: opacity .5s cubic-bezier(0.4, 0, 1, 1);
+}
+
+h1#main_shell_greeting>em {
+    font-style: normal;
+    font-weight: bold;
+}
+
+section#main_shell>h3.title {
+    top: 0.74vh;
+    left: 16.5vw;
+    width: 82.5%;
+    transition: opacity .5s cubic-bezier(0.4, 0, 1, 1) .5s;
+}
+
+section#main_shell>h3.title>p {
+    width: 49.8%;
+}
+
+ul#main_shell_tabs {
+    margin: 0;
+    margin-top: -0.70vh;
+    margin-left: -0.74vh;
+    padding: 0;
+    width: calc(100% + 1.48vh);
+    overflow: hidden;
+    display: flex;
+    box-sizing: border-box;
+    border-bottom: 0.18vh solid rgba(var(--color_r), var(--color_g), var(--color_b), 0.5);
+    border-top-left-radius: 0.278vh;
+    border-top-right-radius: 0.278vh;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-evenly;
+    flex-wrap: nowrap;
+}
+
+ul#main_shell_tabs>li {
+    cursor: pointer;
+    display: block;
+    font-family: var(--font_main);
+    font-weight: normal;
+    width: 100%;
+    padding-top: 0.7vh;
+    padding-bottom: 0.4vh;
+    text-align: center;
+    box-sizing: border-box;
+
+    background: var(--color_light_black);
+    transform: skewX(35deg);
+    transition: background 0.4s ease, box-shadow 0.4s ease;
+}
+
+ul#main_shell_tabs>li>p {
+    margin: 0;
+    transform: skewX(-35deg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.3em;
+    transition: color 0.4s ease;
+}
+
+ul#main_shell_tabs>li .tab-close {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.1em;
+    height: 1.1em;
+    border-radius: 50%;
+    font-size: 0.75em;
+    opacity: 0.5;
+    transition: opacity 0.15s, background 0.15s;
+}
+
+ul#main_shell_tabs>li .tab-close:hover {
+    opacity: 1;
+    background: rgba(255, 255, 255, 0.2);
+}
+
+ul#main_shell_tabs>li:not(:first-child) {
+    border-left: 0.18vh solid rgba(var(--color_r), var(--color_g), var(--color_b), 0.5);
+}
+
+ul#main_shell_tabs>li.active {
+    background: rgb(var(--color_r), var(--color_g), var(--color_b));
+    color: var(--color_light_black);
+    font-weight: bold;
+    transform: skewX(35deg) scale(1.2);
+    z-index: 1;
+    box-shadow:
+        0 0 8px rgba(var(--color_r), var(--color_g), var(--color_b), 0.8),
+        0 0 16px rgba(var(--color_r), var(--color_g), var(--color_b), 0.4);
+    animation: activeGlow 2s ease-in-out infinite alternate;
+}
+
+@keyframes activeGlow {
+    0% { opacity: 0.6; }
+    100% { opacity: 0.9; }
+}
+
+ul#main_shell_tabs>li p[contenteditable="true"] {
+    background: rgba(0, 0, 0, 0.5);
+    outline: 1px solid rgb(var(--color_r), var(--color_g), var(--color_b));
+    padding: 2px 4px;
+    min-width: 50px;
+}
+
+/* Claude Code tab status — full-tab background color, four states */
+
+/* Running / generating — green background with pulse */
+ul#main_shell_tabs>li[data-claude-status="running"] {
+    background: rgba(0, 230, 118, 0.25);
+    box-shadow: inset 0 0 12px rgba(0, 230, 118, 0.15);
+    animation: tabStatusPulse 1.5s ease-in-out infinite;
+}
+ul#main_shell_tabs>li[data-claude-status="running"]>p {
+    color: #a5f5c8;
+}
+
+/* Attention / input required — red background with blink */
+ul#main_shell_tabs>li[data-claude-status="input"] {
+    background: rgba(255, 68, 68, 0.3);
+    box-shadow: inset 0 0 12px rgba(255, 68, 68, 0.2);
+    animation: tabStatusBlink 1.5s ease-in-out infinite;
+}
+ul#main_shell_tabs>li[data-claude-status="input"]>p {
+    color: #ffaaaa;
+}
+
+/* Execution completed — orange background */
+ul#main_shell_tabs>li[data-claude-status="completed"] {
+    background: rgba(255, 152, 0, 0.2);
+    box-shadow: inset 0 0 8px rgba(255, 152, 0, 0.1);
+}
+ul#main_shell_tabs>li[data-claude-status="completed"]>p {
+    color: #ffc97a;
+}
+
+/* Idle — subtle default (no override needed, uses var(--color_light_black)) */
+ul#main_shell_tabs>li[data-claude-status="idle"] {
+    background: var(--color_light_black);
+}
+
+/* Active tab + status: brighter, more saturated since active tab is already bright */
+ul#main_shell_tabs>li.active[data-claude-status="running"] {
+    background: rgba(0, 200, 100, 0.7);
+    box-shadow:
+        0 0 10px rgba(0, 200, 100, 0.5),
+        0 0 20px rgba(0, 200, 100, 0.2);
+    animation: tabStatusPulse 1.5s ease-in-out infinite;
+}
+ul#main_shell_tabs>li.active[data-claude-status="running"]>p {
+    color: var(--color_light_black);
+}
+
+ul#main_shell_tabs>li.active[data-claude-status="input"] {
+    background: rgba(255, 60, 60, 0.75);
+    box-shadow:
+        0 0 10px rgba(255, 60, 60, 0.5),
+        0 0 20px rgba(255, 60, 60, 0.2);
+    animation: tabStatusBlink 1.5s ease-in-out infinite;
+}
+ul#main_shell_tabs>li.active[data-claude-status="input"]>p {
+    color: #fff;
+}
+
+ul#main_shell_tabs>li.active[data-claude-status="completed"] {
+    background: rgba(255, 152, 0, 0.65);
+    box-shadow:
+        0 0 10px rgba(255, 152, 0, 0.4),
+        0 0 18px rgba(255, 152, 0, 0.15);
+}
+ul#main_shell_tabs>li.active[data-claude-status="completed"]>p {
+    color: var(--color_light_black);
+}
+
+ul#main_shell_tabs>li.active[data-claude-status="idle"] {
+    background: rgb(var(--color_r), var(--color_g), var(--color_b));
+}
+
+@keyframes tabStatusPulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.55; }
+}
+
+@keyframes tabStatusBlink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.45; }
+}
+
+/* Dev reload/restart buttons in tab bar */
+ul#main_shell_tabs>li.shell-dev-btn {
+    max-width: 3.5vh;
+    min-width: 3.5vh;
+    flex-shrink: 0;
+    flex-grow: 0;
+    background: transparent;
+    border-left: 0.18vh solid rgba(var(--color_r), var(--color_g), var(--color_b), 0.3);
+    transform: none;
+    opacity: 0.4;
+    transition: opacity 0.2s, background 0.2s;
+}
+
+ul#main_shell_tabs>li.shell-dev-btn:hover {
+    opacity: 1;
+    background: rgba(var(--color_r), var(--color_g), var(--color_b), 0.15);
+}
+
+ul#main_shell_tabs>li.shell-dev-btn>p {
+    transform: none;
+    font-size: 1.4vh;
+}
+
+/* Add new tab (+) button */
+ul#main_shell_tabs>li.shell-add-tab {
+    max-width: 2.5vh;
+    min-width: 2.5vh;
+    flex-shrink: 0;
+    flex-grow: 0;
+    background: transparent;
+    border-left: 0.18vh solid rgba(var(--color_r), var(--color_g), var(--color_b), 0.3);
+    transform: none;
+    opacity: 0.4;
+    transition: opacity 0.2s, background 0.2s;
+}
+
+ul#main_shell_tabs>li.shell-add-tab:hover {
+    opacity: 1;
+    background: rgba(var(--color_r), var(--color_g), var(--color_b), 0.15);
+}
+
+ul#main_shell_tabs>li.shell-add-tab>p {
+    transform: none;
+    font-size: 1.8vh;
+    font-weight: bold;
+    line-height: 1;
+}
+
+/* Browser container (legacy) */
+#browser_container {
+    display: none;
+    width: 100%;
+    height: 100%;
+    position: absolute;
+    top: 0;
+    left: 0;
+    background: #000;
+    z-index: 100;
+}
+
+/* Browser tab — webview-based */
+.browser-tab-wrapper {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    height: 100%;
+}
+
+.browser-url-bar {
+    display: flex;
+    align-items: center;
+    gap: 0.4vh;
+    padding: 0.3vh 0.5vh;
+    background: rgba(0, 0, 0, 0.85);
+    border-bottom: 1px solid rgba(var(--color_r), var(--color_g), var(--color_b), 0.35);
+    flex-shrink: 0;
+}
+
+.browser-nav-btn {
+    background: transparent;
+    border: 1px solid rgba(var(--color_r), var(--color_g), var(--color_b), 0.3);
+    color: rgb(var(--color_r), var(--color_g), var(--color_b));
+    font-size: 1.3vh;
+    width: 2.4vh;
+    height: 2.4vh;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 2px;
+    transition: background 0.15s, opacity 0.15s;
+    padding: 0;
+    font-family: var(--font_main);
+}
+
+.browser-nav-btn:hover:not(:disabled) {
+    background: rgba(var(--color_r), var(--color_g), var(--color_b), 0.15);
+}
+
+.browser-nav-btn:disabled {
+    opacity: 0.3;
+    cursor: default;
+}
+
+.browser-url-input {
+    flex: 1;
+    background: rgba(var(--color_r), var(--color_g), var(--color_b), 0.08);
+    border: 1px solid rgba(var(--color_r), var(--color_g), var(--color_b), 0.25);
+    color: rgb(var(--color_r), var(--color_g), var(--color_b));
+    font-family: var(--font_main);
+    font-size: 1.2vh;
+    padding: 0.3vh 0.6vh;
+    border-radius: 2px;
+    outline: none;
+    transition: border-color 0.15s;
+}
+
+.browser-url-input:focus {
+    border-color: rgba(var(--color_r), var(--color_g), var(--color_b), 0.6);
+}
+
+.browser-webview {
+    flex: 1;
+    width: 100%;
+    border: none;
+}
+
+/* Browser tab container inside main_shell_innercontainer */
+div#main_shell_innercontainer .browser-tab-container {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: -999;
+    opacity: 0;
+}
+
+div#main_shell_innercontainer .browser-tab-container.active {
+    z-index: inherit;
+    opacity: 1;
+}
+
+/* Globe button to add browser tab */
+ul#main_shell_tabs > li.shell-browser-btn {
+    max-width: 2.5vh;
+    min-width: 2.5vh;
+    flex-shrink: 0;
+    flex-grow: 0;
+    background: transparent;
+    border-left: 0.18vh solid rgba(var(--color_r), var(--color_g), var(--color_b), 0.3);
+    transform: none;
+    opacity: 0.4;
+    transition: opacity 0.2s, background 0.2s;
+}
+
+ul#main_shell_tabs > li.shell-browser-btn:hover {
+    opacity: 1;
+    background: rgba(var(--color_r), var(--color_g), var(--color_b), 0.15);
+}
+
+ul#main_shell_tabs > li.shell-browser-btn > p {
+    transform: none;
+    font-size: 1.5vh;
+    line-height: 1;
+}
+
+/* Mic toggle button in tab bar */
+ul#main_shell_tabs>li.shell-mic-btn {
+    transition: opacity 0.2s, background 0.2s, box-shadow 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+ul#main_shell_tabs>li.shell-mic-btn>svg {
+    width: 1.4vh;
+    height: 1.4vh;
+    color: inherit;
+}
+
+ul#main_shell_tabs>li.shell-mic-active {
+    opacity: 1;
+    background: rgba(var(--color_r), var(--color_g), var(--color_b), 0.15);
+    box-shadow: inset 0 -2px 0 rgb(var(--color_r), var(--color_g), var(--color_b));
+}
+
+ul#main_shell_tabs>li.shell-mic-recording {
+    background: rgba(239, 68, 68, 0.2);
+    box-shadow: inset 0 -2px 0 #ef4444;
+    animation: micPulse 1s ease-in-out infinite;
+}
+
+ul#main_shell_tabs>li.shell-mic-processing {
+    background: rgba(234, 179, 8, 0.15);
+    box-shadow: inset 0 -2px 0 #eab308;
+}
+
+@keyframes micPulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+/* Permission mode button in tab bar */
+ul#main_shell_tabs>li.shell-permission-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: opacity 0.2s, background 0.2s, box-shadow 0.2s;
+}
+
+ul#main_shell_tabs>li.shell-permission-btn>svg {
+    width: 1.4vh;
+    height: 1.4vh;
+    color: inherit;
+}
+
+ul#main_shell_tabs>li.shell-permission-btn[data-mode="ask"] {
+    opacity: 0.8;
+    color: #f59e0b;
+    box-shadow: inset 0 -2px 0 #f59e0b;
+}
+
+ul#main_shell_tabs>li.shell-permission-btn[data-mode="default"] {
+    opacity: 0.4;
+}
+
+ul#main_shell_tabs>li.shell-permission-btn[data-mode="yolo"] {
+    opacity: 1;
+    color: #22c55e;
+    background: rgba(34, 197, 94, 0.1);
+    box-shadow: inset 0 -2px 0 #22c55e;
+}
+
+div#main_shell_innercontainer,
+div#main_shell_innercontainer pre {
+    height: 100%;
+    width: 100%;
+    margin: 0vh;
+    overflow: hidden;
+}
+
+div#main_shell_innercontainer {
+    position: relative;
+}
+
+div#main_shell_innercontainer pre {
+    z-index: -999;
+    opacity: 0;
+    position: absolute;
+    top: 0;
+    left: 0;
+}
+
+div#main_shell_innercontainer pre.active {
+    z-index: inherit;
+    opacity: 1;
+}
+
+/* Context banner — floating last-input indicator per terminal */
+.terminal-context-banner {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 100;
+    padding: 0.3vh 0.8vh;
+    font-family: var(--font_main);
+    font-size: 1.05vh;
+    letter-spacing: 0.04em;
+    color: rgb(var(--color_r), var(--color_g), var(--color_b));
+    background: linear-gradient(
+        180deg,
+        rgba(0, 0, 0, 0.88) 0%,
+        rgba(0, 0, 0, 0.78) 100%
+    );
+    border-bottom: 1px solid rgba(var(--color_r), var(--color_g), var(--color_b), 0.25);
+    box-shadow: 0 1px 6px rgba(0, 0, 0, 0.4);
+    display: flex;
+    align-items: baseline;
+    gap: 0.6vh;
+    cursor: pointer;
+    will-change: transform;
+    opacity: 0;
+    transform: translateY(-100%) translateZ(0);
+    transition: opacity 0.25s ease, transform 0.25s ease, max-height 0.3s ease;
+    max-height: 2.4vh;
+    overflow: hidden;
+}
+
+.terminal-context-banner.visible {
+    opacity: 0.9;
+    transform: translateY(0) translateZ(0);
+}
+
+.terminal-context-banner.expanded {
+    max-height: 40vh;
+    overflow-y: auto;
+    padding: 0.5vh 0.8vh;
+    align-items: flex-start;
+}
+
+/* Label — editable session name */
+.terminal-context-banner .banner-label {
+    flex-shrink: 0;
+    padding: 0 0.4vh;
+    border: 1px solid rgba(var(--color_r), var(--color_g), var(--color_b), 0.3);
+    border-radius: 2px;
+    font-size: 0.95vh;
+    cursor: pointer;
+    opacity: 0.9;
+    transition: opacity 0.15s, background 0.15s;
+    white-space: nowrap;
+}
+
+.terminal-context-banner .banner-label:hover {
+    opacity: 1;
+    background: rgba(var(--color_r), var(--color_g), var(--color_b), 0.15);
+}
+
+.terminal-context-banner .banner-label.empty {
+    opacity: 0.4;
+    border-style: dashed;
+}
+
+/* Inline edit input for label */
+.terminal-context-banner .banner-label-input {
+    flex-shrink: 0;
+    width: 14vh;
+    padding: 0 0.4vh;
+    border: 1px solid rgba(var(--color_r), var(--color_g), var(--color_b), 0.6);
+    border-radius: 2px;
+    background: rgba(0, 0, 0, 0.6);
+    color: rgb(var(--color_r), var(--color_g), var(--color_b));
+    font-family: var(--font_main);
+    font-size: 0.95vh;
+    outline: none;
+}
+
+/* Body — Claude input text */
+.terminal-context-banner .banner-body {
+    flex: 1;
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.terminal-context-banner.expanded .banner-body {
+    white-space: pre-wrap;
+    word-break: break-word;
+    overflow: visible;
+    text-overflow: clip;
+}
+
+.terminal .xterm-viewport {
+    overflow: hidden;
+    cursor: default;
+    position: absolute;
+    right: 0;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    padding-bottom: 10px;
+}
+
+.xterm {
+    font-family: monospace;
+    font-feature-settings: "liga" 0;
+    position: relative;
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+.xterm.focus,
+.xterm:focus {
+    outline: none;
+}
+
+.xterm .xterm-helpers {
+    position: absolute;
+    top: 0;
+    z-index: 10;
+}
+
+.xterm .xterm-helper-textarea {
+    position: absolute;
+    opacity: 0;
+    left: -9999em;
+    top: 0;
+    width: 0;
+    height: 0;
+    z-index: -10;
+    white-space: nowrap;
+    overflow: hidden;
+    resize: none;
+}
+
+.xterm .composition-view {
+    background: #000;
+    color: #FFF;
+    display: none;
+    position: absolute;
+    white-space: nowrap;
+    z-index: 1;
+}
+
+.xterm .composition-view.active {
+    display: block;
+}
+
+.xterm .xterm-viewport {
+    background-color: #000;
+    overflow-y: hidden;
+}
+
+.xterm .xterm-screen {
+    position: relative;
+}
+
+.xterm canvas {
+    position: absolute;
+    left: 0;
+    top: 0;
+}
+
+.xterm .xterm-scroll-area {
+    visibility: hidden;
+}
+
+.xterm .xterm-char-measure-element {
+    display: inline-block;
+    visibility: hidden;
+    position: absolute;
+    left: -9999em;
+    line-height: normal;
+}
+
+.xterm.enable-mouse-events {
+    /* When mouse events are enabled (eg. tmux), revert to the standard pointer cursor */
+    cursor: default;
+}
+
+.xterm:not(.enable-mouse-events) {
+    cursor: text;
+}
+
+/* Image preview overlay */
+.terminal-image-preview {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.85);
+    backdrop-filter: blur(4px);
+    opacity: 0;
+    animation: imgPreviewFadeIn 0.25s ease-out forwards;
+    cursor: pointer;
+}
+
+@keyframes imgPreviewFadeIn {
+    to { opacity: 1; }
+}
+
+.terminal-image-preview .img-preview-inner {
+    position: relative;
+    max-width: 80%;
+    max-height: 80%;
+    border: 1px solid rgba(var(--color_r), var(--color_g), var(--color_b), 0.6);
+    box-shadow:
+        0 0 12px rgba(var(--color_r), var(--color_g), var(--color_b), 0.3),
+        0 0 40px rgba(var(--color_r), var(--color_g), var(--color_b), 0.1);
+}
+
+.terminal-image-preview .img-preview-inner img {
+    display: block;
+    max-width: 100%;
+    max-height: 60vh;
+    object-fit: contain;
+}
+
+.terminal-image-preview .img-preview-label {
+    position: absolute;
+    bottom: -3vh;
+    left: 0;
+    right: 0;
+    text-align: center;
+    font-family: var(--font_main);
+    font-size: 1.2vh;
+    color: rgb(var(--color_r), var(--color_g), var(--color_b));
+    opacity: 0.7;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.terminal-image-preview .img-preview-close {
+    position: absolute;
+    top: -2.5vh;
+    right: -1vh;
+    font-family: var(--font_main);
+    font-size: 1.6vh;
+    color: rgb(var(--color_r), var(--color_g), var(--color_b));
+    cursor: pointer;
+    opacity: 0.6;
+    transition: opacity 0.15s;
+}
+
+.terminal-image-preview .img-preview-close:hover {
+    opacity: 1;
+}
+
+/* Drag-over highlight on terminal */
+div#main_shell_innercontainer.drag-over {
+    outline: 2px dashed rgba(var(--color_r), var(--color_g), var(--color_b), 0.6);
+    outline-offset: -4px;
+}
+
+div#main_shell_innercontainer.drag-over::after {
+    content: 'DROP IMAGE';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-family: var(--font_main);
+    font-size: 2vh;
+    color: rgb(var(--color_r), var(--color_g), var(--color_b));
+    opacity: 0.5;
+    z-index: 999;
+    pointer-events: none;
+    letter-spacing: 0.5vh;
+}
+
+/* Power menu dropdown */
+li.shell-power-btn {
+    position: relative;
+}
+
+ul.power-menu {
+    position: fixed;
+    list-style: none;
+    margin: 0;
+    padding: 0.4vh 0;
+    background: rgba(0, 0, 0, 0.9);
+    border: 0.15vh solid rgba(var(--color_r), var(--color_g), var(--color_b), 0.5);
+    min-width: 14vh;
+    z-index: 2000;
+    font-family: var(--font_main);
+}
+
+ul.power-menu.hidden {
+    display: none;
+}
+
+ul.power-menu > li {
+    padding: 0.6vh 1.2vh;
+    font-size: 1.2vh;
+    color: rgb(var(--color_r), var(--color_g), var(--color_b));
+    cursor: pointer;
+    white-space: nowrap;
+    opacity: 0.7;
+    transition: opacity 0.15s, background 0.15s;
+}
+
+ul.power-menu > li:hover {
+    opacity: 1;
+    background: rgba(var(--color_r), var(--color_g), var(--color_b), 0.15);
+}

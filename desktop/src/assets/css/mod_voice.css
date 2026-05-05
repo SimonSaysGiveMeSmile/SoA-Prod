@@ -1,0 +1,228 @@
+/**
+ * Voice Module Styles
+ * Styling for voice toggle button and waveform visualizer
+ */
+
+/* Voice Toggle Widget (Right Side) */
+.voice-toggle {
+  border-top: 0.092vh solid rgba(var(--color_r), var(--color_g), var(--color_b), 0.3);
+  font-family: var(--font_main_light);
+  letter-spacing: 0.092vh;
+  padding: 0.8vh 0;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  user-select: none;
+}
+
+.voice-toggle::before {
+  content: "";
+  border-left: 0.092vh solid rgba(var(--color_r), var(--color_g), var(--color_b), 0.3);
+  align-self: flex-start;
+  position: relative;
+  left: -0.092vh;
+  top: -1.111vh;
+  height: 0.833vh;
+}
+
+.voice-toggle::after {
+  content: "";
+  border-right: 0.092vh solid rgba(var(--color_r), var(--color_g), var(--color_b), 0.3);
+  position: relative;
+  right: -0.092vh;
+  top: -1.111vh;
+  height: 0.833vh;
+}
+
+.voice-toggle__inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 0.5vh;
+}
+
+.voice-toggle__icon {
+  width: 2.5vh;
+  height: 2.5vh;
+  color: rgba(var(--color_r), var(--color_g), var(--color_b), 0.5);
+  transition: color 0.2s ease;
+}
+
+.voice-toggle__icon svg {
+  width: 100%;
+  height: 100%;
+}
+
+.voice-toggle__label {
+  font-size: 0.9vh;
+  color: rgba(var(--color_r), var(--color_g), var(--color_b), 0.7);
+  margin-top: 0.3vh;
+}
+
+.voice-toggle__status {
+  font-size: 1.2vh;
+  font-weight: bold;
+  color: rgba(var(--color_r), var(--color_g), var(--color_b), 0.5);
+  margin-top: 0.2vh;
+}
+
+.voice-toggle--active .voice-toggle__icon {
+  color: rgb(var(--color_r), var(--color_g), var(--color_b));
+}
+
+.voice-toggle--active .voice-toggle__status {
+  color: #22c55e;
+}
+
+.voice-toggle--inactive {
+  opacity: 0.6;
+}
+
+.voice-toggle--recording .voice-toggle__icon {
+  color: #ef4444;
+  animation: voice-pulse 1s ease-in-out infinite;
+}
+
+.voice-toggle--recording .voice-toggle__status {
+  color: #ef4444;
+}
+
+.voice-toggle--processing .voice-toggle__icon {
+  color: #eab308;
+}
+
+.voice-toggle--processing .voice-toggle__status {
+  color: #eab308;
+}
+
+.voice-toggle--unavailable {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.voice-toggle:hover:not(.voice-toggle--unavailable) {
+  background: rgba(var(--color_r), var(--color_g), var(--color_b), 0.05);
+}
+
+@keyframes voice-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.7; transform: scale(1.1); }
+}
+
+/* Waveform Visualizer (Center Overlay) */
+.voice-waveform {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) scale(0.8);
+  width: 50vw;
+  height: 20vh;
+  background: rgba(0, 0, 0, 0.85);
+  border: 1px solid rgba(var(--color_r), var(--color_g), var(--color_b), 0.4);
+  border-radius: 4px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  opacity: 0;
+  transition: opacity 0.3s ease, transform 0.3s ease;
+  pointer-events: none;
+  box-shadow: 0 0 40px rgba(var(--color_r), var(--color_g), var(--color_b), 0.15);
+}
+
+.voice-waveform--visible {
+  opacity: 1;
+  transform: translate(-50%, -50%) scale(1);
+}
+
+.voice-waveform__label {
+  font-family: var(--font_main);
+  font-size: 0.8vh;
+  color: rgba(var(--color_r), var(--color_g), var(--color_b), 0.6);
+  letter-spacing: 0.2vh;
+  margin-bottom: 0.5vh;
+}
+
+.voice-waveform__bars {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 10vh;
+  gap: 3px;
+}
+
+.voice-waveform__bar {
+  width: 5px;
+  min-height: 3px;
+  background: rgb(var(--color_r), var(--color_g), var(--color_b));
+  border-radius: 2px;
+  transition: height 0.08s ease-out;
+}
+
+.voice-waveform__status {
+  font-family: var(--font_mono);
+  font-size: 1vh;
+  color: rgba(var(--color_r), var(--color_g), var(--color_b), 0.8);
+  margin-top: 0.5vh;
+  max-width: 80%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.voice-waveform__status--interim {
+  color: rgba(var(--color_r), var(--color_g), var(--color_b), 0.6);
+  font-style: italic;
+}
+
+/* Terminal Input Voice Integration */
+.term-input--voice-active {
+  border-color: rgba(var(--color_r), var(--color_g), var(--color_b), 0.8) !important;
+  box-shadow: 0 0 5px rgba(var(--color_r), var(--color_g), var(--color_b), 0.3);
+}
+
+/* Processing State */
+.voice-waveform__processing {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1vh;
+  color: rgba(var(--color_r), var(--color_g), var(--color_b), 0.8);
+  font-family: var(--font_mono);
+  font-size: 1vh;
+  letter-spacing: 0.1vh;
+}
+
+.voice-waveform__spinner {
+  width: 3vh;
+  height: 3vh;
+  border: 2px solid rgba(var(--color_r), var(--color_g), var(--color_b), 0.2);
+  border-top-color: rgb(var(--color_r), var(--color_g), var(--color_b));
+  border-radius: 50%;
+  animation: voice-spin 0.8s linear infinite;
+}
+
+.voice-waveform__progress-track {
+  width: 80%;
+  height: 4px;
+  background: rgba(var(--color_r), var(--color_g), var(--color_b), 0.15);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.voice-waveform__progress-fill {
+  width: 0%;
+  height: 100%;
+  background: rgb(var(--color_r), var(--color_g), var(--color_b));
+  border-radius: 2px;
+  transition: width 0.1s linear;
+}
+
+.voice-waveform__progress-time {
+  font-size: 0.85vh;
+  color: rgba(var(--color_r), var(--color_g), var(--color_b), 0.5);
+}
+
+@keyframes voice-spin {
+  to { transform: rotate(360deg); }
+}

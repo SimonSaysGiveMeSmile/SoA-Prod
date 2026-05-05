@@ -1,0 +1,122 @@
+div#mod_context {
+    border-top: 0.092vh solid rgba(var(--color_r), var(--color_g), var(--color_b), 0.3);
+    font-family: var(--font_main_light);
+    letter-spacing: 0.092vh;
+    padding: 0.645vh 0vh;
+    display: flex;
+}
+
+div#mod_context::before {
+    content: "";
+    border-left: 0.092vh solid rgba(var(--color_r), var(--color_g), var(--color_b), 0.3);
+    align-self: flex-start;
+    position: relative;
+    left: -0.092vh;
+    top: -1.111vh;
+    height: 0.833vh;
+}
+
+div#mod_context::after {
+    content: "";
+    border-right: 0.092vh solid rgba(var(--color_r), var(--color_g), var(--color_b), 0.3);
+    position: relative;
+    right: -0.092vh;
+    top: -1.111vh;
+    height: 0.833vh;
+}
+
+div#mod_context_innercontainer {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+}
+
+div#mod_context h1 {
+    font-size: 1.48vh;
+    margin: 0vh;
+    margin-bottom: -1vh;
+    width: 98%;
+}
+
+div#mod_context i.mod_context_headerInfo {
+    font-style: normal;
+    font-size: 1.20vh;
+    opacity: 0.5;
+    text-align: right;
+    display: inline-block;
+    position: relative;
+    bottom: 1.5vh;
+    width: 100%;
+}
+
+div#mod_context_content {
+    width: 100%;
+    padding: 0.5vh 0;
+}
+
+/* Context Display Container */
+div#mod_context .context-display {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 0.5vh 0;
+}
+
+/* Token Count Text */
+div#mod_context .context-text {
+    font-size: 1.4vh;
+    color: rgba(var(--color_r), var(--color_g), var(--color_b), 1);
+    margin-bottom: 0.5vh;
+    text-align: center;
+}
+
+/* Progress Bar Base */
+progress.context-progress {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 90%;
+    height: 0.6vh;
+    border: none;
+    border-right: 0.1vh solid rgba(var(--color_r), var(--color_g), var(--color_b), 0.8);
+}
+
+/* Progress Bar Track */
+progress.context-progress::-webkit-progress-bar {
+    background: rgba(var(--color_r), var(--color_g), var(--color_b), 0.2);
+    height: 0.3vh;
+}
+
+/* Progress Bar Fill - Default green */
+progress.context-progress::-webkit-progress-value {
+    background: #22c55e;
+    height: 0.5vh;
+    transition: width 0.3s ease-out, background-color 0.3s ease-out;
+    position: relative;
+    bottom: 0.1vh;
+}
+
+/* Yellow/Orange state (50-65%) */
+div#mod_context.caution progress.context-progress::-webkit-progress-value {
+    background: #eab308;
+}
+
+/* Orange state (65-80%) */
+div#mod_context.elevated progress.context-progress::-webkit-progress-value {
+    background: #f97316;
+}
+
+/* Red/Warning State (>80%) */
+div#mod_context.warning .context-text {
+    color: #ef4444;
+}
+
+div#mod_context.warning progress.context-progress::-webkit-progress-value {
+    background: #ef4444;
+}
+
+/* Stale Data State (dimmed) */
+div#mod_context.stale {
+    opacity: 0.5;
+}

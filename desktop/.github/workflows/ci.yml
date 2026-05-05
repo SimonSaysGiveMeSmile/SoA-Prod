@@ -1,0 +1,127 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [master, main, feature/*]
+  pull_request:
+    branches: [master, main]
+
+jobs:
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        node-version: [18.x, 20.x]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Jest
+        run: npm install --save-dev jest jest-environment-jsdom
+
+      - name: Run unit tests
+        run: npm test -- --coverage
+
+      - name: Upload coverage report
+        uses: codecov/codecov-action@v5
+        if: matrix.node-version == '20.x'
+        with:
+          files: ./coverage/lcov.info
+          fail_ci_if_error: false
+
+  lint:
+    name: Code Quality Check
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Check for syntax errors
+        run: |
+          # Check all JS files in src/ for syntax errors
+          find src -name "*.js" -type f | while read file; do
+            node --check "$file" || exit 1
+          done
+          echo "All files passed syntax check"
+
+  security:
+    name: Security Scan
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run npm audit
+        run: npm audit --audit-level=high
+        continue-on-error: true
+
+  build:
+    name: Build Application
+    runs-on: ${{ matrix.os }}
+    needs: [test, lint]
+
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        include:
+          - os: ubuntu-latest
+            build-cmd: npm run build-linux
+          - os: windows-latest
+            build-cmd: npm run build-windows
+          - os: macos-latest
+            build-cmd: npm run build-darwin
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install src dependencies
+        run: cd src && npm ci
+
+      # Build step - only on release tags or main branch
+      # Uncomment when ready to build releases
+      # - name: Build application
+      #   if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/')
+      #   run: ${{ matrix.build-cmd }}

@@ -1,0 +1,114 @@
+section.mod_column {
+    width: 16%;
+    top: 2.5vh;
+    min-height: 10%;
+    max-height: 96%;
+    padding: 0.9vh;
+    padding-bottom: 0vh;
+    box-sizing: border-box;
+    position: absolute;
+    z-index: 40;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    gap: 0.55vh;
+    overflow-y: auto;
+    scrollbar-width: none; /* Firefox */
+
+    opacity: 0;
+    transition: opacity .5s cubic-bezier(0.4, 0, 1, 1);
+}
+
+section.mod_column.activated {
+    opacity: 1;
+}
+
+section.mod_column::-webkit-scrollbar {
+    display: none;
+}
+
+section.mod_column > h3.title {
+    top: 0.74vh;
+    width: 14.8%;
+}
+
+section.mod_column > div {
+    width: 100%;
+    opacity: 0;
+    animation-name: fadeIn;
+    animation-duration: .5s;
+    animation-timing-function: cubic-bezier(0.4, 0, 1, 1);
+    animation-delay: 0s;
+    animation-iteration-count: 1;
+    animation-fill-mode: forwards;
+    animation-play-state: paused;
+}
+
+@keyframes fadeIn {
+    from {opacity: 0;}
+    to {opacity: 1;}
+}
+
+section#mod_column_left {
+    left: 0;
+    align-items: flex-end;
+    overflow-x: hidden;
+    max-width: 16vw;
+}
+
+section#mod_column_left > h3.title {
+    left: 0;
+}
+
+/* Right side panel removed — kept in DOM as a hidden mount point so any legacy
+   code that still queries #mod_column_right doesn't crash, but it is invisible
+   and contributes zero layout space. The terminal section expands into the
+   freed area. */
+section#mod_column_right {
+    display: none !important;
+}
+
+/* --- Drag-and-drop tile reordering --- */
+
+.soa-draggable {
+    cursor: grab;
+    transition: box-shadow 0.2s ease, opacity 0.2s ease, transform 0.15s ease;
+}
+
+.soa-draggable:hover {
+    box-shadow: 0 0 8px rgba(var(--color_r), var(--color_g), var(--color_b), 0.35);
+}
+
+.soa-draggable:hover > .soa-drag-handle {
+    opacity: 1;
+}
+
+.soa-dragging {
+    opacity: 0.25 !important;
+    cursor: grabbing;
+    transform: scale(0.97);
+}
+
+.soa-drag-handle {
+    position: absolute;
+    top: 0.3vh;
+    right: 0.5vh;
+    font-size: 1.4vh;
+    color: rgba(var(--color_r), var(--color_g), var(--color_b), 0.6);
+    opacity: 0;
+    transition: opacity 0.2s ease;
+    cursor: grab;
+    z-index: 10;
+    user-select: none;
+    line-height: 1;
+}
+
+.soa-drop-placeholder {
+    width: 100%;
+    min-height: 3vh;
+    border: 1px dashed rgba(var(--color_r), var(--color_g), var(--color_b), 0.5);
+    background: rgba(var(--color_r), var(--color_g), var(--color_b), 0.06);
+    border-radius: 2px;
+    box-sizing: border-box;
+    transition: min-height 0.15s ease;
+}

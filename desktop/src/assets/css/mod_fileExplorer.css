@@ -1,0 +1,306 @@
+.mod_fileExplorer {
+    position: relative;
+    width: 100%;
+    box-sizing: border-box;
+    font-family: var(--font_main);
+    font-size: 1.1vh;
+    color: rgb(var(--color_r), var(--color_g), var(--color_b));
+    background: rgba(0, 0, 0, 0.35);
+    border: 1px solid rgba(var(--color_r), var(--color_g), var(--color_b), 0.25);
+}
+
+/* Header bar */
+.fe-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.4vh 0.6vh;
+    border-bottom: 1px solid rgba(var(--color_r), var(--color_g), var(--color_b), 0.2);
+    background: rgba(var(--color_r), var(--color_g), var(--color_b), 0.06);
+}
+
+.fe-title {
+    font-size: 1vh;
+    letter-spacing: 0.15em;
+    opacity: 0.8;
+    font-weight: bold;
+}
+
+.fe-controls {
+    display: flex;
+    gap: 0.2vh;
+}
+
+.fe-btn {
+    background: transparent;
+    border: 1px solid rgba(var(--color_r), var(--color_g), var(--color_b), 0.2);
+    color: rgb(var(--color_r), var(--color_g), var(--color_b));
+    font-size: 0.9vh;
+    width: 2vh;
+    height: 2vh;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    font-family: var(--font_main);
+    transition: background 0.15s, opacity 0.15s;
+    opacity: 0.6;
+}
+
+.fe-btn:hover {
+    opacity: 1;
+    background: rgba(var(--color_r), var(--color_g), var(--color_b), 0.15);
+}
+
+/* Breadcrumb */
+.fe-breadcrumb {
+    padding: 0.3vh 0.6vh;
+    font-size: 0.9vh;
+    opacity: 0.7;
+    white-space: nowrap;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: none;
+    border-bottom: 1px solid rgba(var(--color_r), var(--color_g), var(--color_b), 0.1);
+}
+
+.fe-breadcrumb::-webkit-scrollbar {
+    display: none;
+}
+
+.fe-crumb {
+    cursor: pointer;
+    transition: opacity 0.15s;
+    opacity: 0.6;
+}
+
+.fe-crumb:hover {
+    opacity: 1;
+    text-decoration: underline;
+}
+
+.fe-crumb-active {
+    opacity: 1;
+    font-weight: bold;
+}
+
+.fe-crumb-sep {
+    opacity: 0.3;
+    margin: 0 0.1vh;
+}
+
+/* Body */
+.fe-body {
+    position: relative;
+    max-height: 40vh;
+    min-height: 8vh;
+    overflow: hidden;
+}
+
+/* File list */
+.fe-list-view {
+    height: 100%;
+    max-height: 40vh;
+    overflow-y: auto;
+    overflow-x: hidden;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(var(--color_r), var(--color_g), var(--color_b), 0.4) transparent;
+}
+
+.fe-list-view::-webkit-scrollbar {
+    width: 4px;
+}
+
+.fe-list-view::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.fe-list-view::-webkit-scrollbar-thumb {
+    background: rgba(var(--color_r), var(--color_g), var(--color_b), 0.3);
+}
+
+/* File entries */
+.fe-entry {
+    display: flex;
+    align-items: center;
+    gap: 0.4vh;
+    padding: 0.25vh 0.6vh;
+    cursor: pointer;
+    transition: background 0.12s;
+    white-space: nowrap;
+    overflow: hidden;
+}
+
+.fe-entry:hover {
+    background: rgba(var(--color_r), var(--color_g), var(--color_b), 0.1);
+}
+
+.fe-entry-icon {
+    flex-shrink: 0;
+    font-size: 1.2vh;
+    width: 1.6vh;
+    text-align: center;
+}
+
+.fe-entry-name {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: 1vh;
+}
+
+.fe-entry-dir .fe-entry-name {
+    font-weight: bold;
+    color: rgb(var(--color_r), var(--color_g), var(--color_b));
+}
+
+.fe-entry-file .fe-entry-name {
+    opacity: 0.85;
+}
+
+.fe-entry-symlink .fe-entry-name {
+    opacity: 0.65;
+    font-style: italic;
+}
+
+.fe-entry-size {
+    flex-shrink: 0;
+    font-size: 0.85vh;
+    opacity: 0.4;
+    min-width: 3vh;
+    text-align: right;
+}
+
+.fe-empty {
+    padding: 1.5vh;
+    text-align: center;
+    opacity: 0.4;
+    font-size: 1vh;
+}
+
+.fe-error {
+    padding: 1vh 0.6vh;
+    color: #ff5555;
+    font-size: 0.95vh;
+    word-break: break-all;
+}
+
+/* Editor view */
+.fe-editor-view {
+    flex-direction: column;
+    height: 100%;
+    max-height: 40vh;
+}
+
+.fe-editor-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.3vh 0.6vh;
+    border-bottom: 1px solid rgba(var(--color_r), var(--color_g), var(--color_b), 0.15);
+    background: rgba(var(--color_r), var(--color_g), var(--color_b), 0.04);
+}
+
+.fe-editor-filename {
+    font-size: 0.95vh;
+    font-weight: bold;
+    opacity: 0.9;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 60%;
+}
+
+.fe-editor-actions {
+    display: flex;
+    gap: 0.3vh;
+}
+
+.fe-btn-save {
+    font-size: 0.85vh;
+    width: auto;
+    padding: 0.1vh 0.5vh;
+    letter-spacing: 0.1em;
+}
+
+.fe-btn-close-editor {
+    font-size: 1.2vh;
+}
+
+.fe-editor-textarea {
+    flex: 1;
+    width: 100%;
+    box-sizing: border-box;
+    resize: none;
+    background: rgba(0, 0, 0, 0.5);
+    color: rgb(var(--color_r), var(--color_g), var(--color_b));
+    border: none;
+    padding: 0.5vh;
+    font-family: "Fira Code", "Fira Mono", "Cascadia Code", monospace;
+    font-size: 1vh;
+    line-height: 1.5;
+    tab-size: 4;
+    outline: none;
+    overflow: auto;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(var(--color_r), var(--color_g), var(--color_b), 0.3) transparent;
+}
+
+.fe-editor-textarea::-webkit-scrollbar {
+    width: 4px;
+}
+
+.fe-editor-textarea::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.fe-editor-textarea::-webkit-scrollbar-thumb {
+    background: rgba(var(--color_r), var(--color_g), var(--color_b), 0.3);
+}
+
+.fe-editor-status {
+    padding: 0.2vh 0.6vh;
+    font-size: 0.85vh;
+    min-height: 1.4vh;
+    opacity: 0.7;
+}
+
+.fe-status-modified {
+    color: #f59e0b;
+}
+
+.fe-status-saved {
+    color: #22c55e;
+}
+
+.fe-status-error {
+    color: #ef4444;
+}
+
+/* Context menu */
+.fe-context-menu {
+    position: fixed;
+    z-index: 3000;
+    background: rgba(0, 0, 0, 0.92);
+    border: 1px solid rgba(var(--color_r), var(--color_g), var(--color_b), 0.4);
+    min-width: 14vh;
+    padding: 0.3vh 0;
+    font-family: var(--font_main);
+    font-size: 1vh;
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.5);
+}
+
+.fe-ctx-item {
+    padding: 0.5vh 1vh;
+    cursor: pointer;
+    color: rgb(var(--color_r), var(--color_g), var(--color_b));
+    opacity: 0.75;
+    transition: background 0.12s, opacity 0.12s;
+    white-space: nowrap;
+}
+
+.fe-ctx-item:hover {
+    opacity: 1;
+    background: rgba(var(--color_r), var(--color_g), var(--color_b), 0.15);
+}

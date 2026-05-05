@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+ - name: Feature Ideas
+   url: https://github.com/yifu001/son-of-anton/discussions/new?category=ideas
+   about: Have a feature idea for Son of Anton? Share it here!
+ - name: Questions
+   url: https://github.com/yifu001/son-of-anton/discussions/new?category=questions
+   about: Questions about Son of Anton? Ask here.
