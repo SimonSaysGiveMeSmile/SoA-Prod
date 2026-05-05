@@ -48,12 +48,18 @@ Electron 28 sci-fi terminal that runs Claude Code inside a cyberpunk HUD.
 
 **Run from source**
 
+Two installs are required — outer (build tooling) and inner (runtime deps shipped inside the app):
+
 ```bash
 cd desktop
-npm install           # or: npm run install-linux | install-windows
-cd src && npm install && cd ..
-npm start             # launches Electron
+npm install                               # build/tooling deps
+cd src && npm install --legacy-peer-deps  # runtime deps (signale, node-pty, picovoice, …)
+cd ..
+npm start                                 # launches Electron
 ```
+
+Linux shortcut: `npm run install-linux` does both installs and rebuilds `node-pty` in one go.
+If `node-pty` errors on launch, run: `./node_modules/.bin/electron-rebuild -f -w node-pty`.
 
 macOS DMG releases are published from the upstream source repo
 ([`SimonSaysGiveMeSmile/son-of-anton-public`](https://github.com/SimonSaysGiveMeSmile/son-of-anton-public/releases)) —
@@ -83,12 +89,29 @@ A tiny PWA (vanilla ES modules, service worker, zero build step) that turns your
 
 **Run standalone**
 
+From the repo root:
+
 ```bash
 cd mobile
 npm install
-npm run dev                    # serves dist/ on :5173
-# or point at a running desktop bridge:
-SOA_BRIDGE=ws://192.168.1.42:7330 npm run dev
+npm run dev                    # serves dist/ on http://localhost:5173
+```
+
+Coming from `desktop/` (e.g. right after launching the Electron app)?
+
+```bash
+cd ../mobile
+npm install
+npm run dev
+```
+
+Or point it at a running desktop bridge (mirrors your actual terminal):
+
+```bash
+cd ../mobile
+npm install
+SOA_BRIDGE=ws://$(ipconfig getifaddr en0):7330 npm run dev   # macOS
+# Linux/Windows: replace $(ipconfig getifaddr en0) with your LAN IP
 ```
 
 **Wire protocol (WebSocket)**
