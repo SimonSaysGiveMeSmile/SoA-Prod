@@ -29,6 +29,8 @@ desktop/dist-electron/
 desktop/out/
 desktop/release/
 desktop/build/
+desktop/dist/builder-debug.yml
+desktop/dist/builder-effective-config.yaml
 
 # Editor / IDE
 .vscode/

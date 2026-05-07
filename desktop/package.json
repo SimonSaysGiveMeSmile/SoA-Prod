@@ -73,7 +73,7 @@
     "afterSign": "./scripts/afterSign.js",
     "forceCodeSigning": false,
     "npmRebuild": true,
-    "artifactName": "Son of Anton-${os}-${arch}.${ext}",
+    "artifactName": "Son-of-Anton-${os}-${arch}.${ext}",
     "linux": {
       "target": [
         "AppImage"
@@ -82,7 +82,7 @@
       "icon": "media/linuxIcons"
     },
     "appImage": {
-      "artifactName": "Son of Anton-Linux-${arch}.AppImage"
+      "artifactName": "Son-of-Anton-Linux-${arch}.AppImage"
     },
     "mac": {
       "target": [
@@ -106,7 +106,7 @@
       }
     },
     "dmg": {
-      "artifactName": "Son of Anton-macOS-${arch}.dmg"
+      "artifactName": "Son-of-Anton-macOS-${arch}.dmg"
     },
     "win": {
       "target": [
@@ -121,7 +121,7 @@
       "icon": "media/icon.ico"
     },
     "nsis": {
-      "artifactName": "Son of Anton-Windows-${arch}.exe",
+      "artifactName": "Son-of-Anton-Windows-${arch}.exe",
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
       "deleteAppDataOnUninstall": true
