@@ -6,6 +6,9 @@
 const { execFile } = require('child_process');
 const path = require('path');
 const fs = require('fs');
+
+const DEBUG = process.env.DEBUG_VOICE === '1';
+const dlog = DEBUG ? console.log.bind(console) : () => {};
 const os = require('os');
 
 class OnDeviceSpeech {
@@ -42,7 +45,7 @@ class OnDeviceSpeech {
       throw new Error('Local whisper not found. Install with: brew install openai-whisper');
     }
     this._ready = true;
-    console.log('[OnDeviceSpeech] Ready (local whisper at', wp + ')');
+    dlog('[OnDeviceSpeech] Ready (local whisper at', wp + ')');
     return true;
   }
 
@@ -71,7 +74,7 @@ class OnDeviceSpeech {
       // budget) plus 60s base. 60s of audio (~900KB) → ~330s budget.
       const timeoutMs = Math.max(60_000, Math.ceil(audioBuffer.length * 0.3));
 
-      console.log('[OnDeviceSpeech] Transcribing', audioBuffer.length, 'bytes (timeout', timeoutMs + 'ms)...');
+      dlog('[OnDeviceSpeech] Transcribing', audioBuffer.length, 'bytes (timeout', timeoutMs + 'ms)...');
 
       const startedAt = Date.now();
       execFile(whisper, [
@@ -107,7 +110,7 @@ class OnDeviceSpeech {
         try { fs.rmSync(outDir, { recursive: true, force: true }); } catch (e) {}
 
         if (text) {
-          console.log('[OnDeviceSpeech] Transcription:', text);
+          dlog('[OnDeviceSpeech] Transcription:', text);
           resolve(text);
           return;
         }
@@ -148,14 +151,14 @@ class OnDeviceSpeech {
           elapsedMs + 'ms with no output (likely silence/unintelligible audio).',
           `bytes=${audioBuffer.length}`
         );
-        if (realErrors) console.log('[OnDeviceSpeech] stderr tail:', tail(stderr, 400));
+        if (realErrors) dlog('[OnDeviceSpeech] stderr tail:', tail(stderr, 400));
         resolve('');
       });
     });
   }
 
   startRecognition() {
-    console.log('[OnDeviceSpeech] startRecognition (push-to-talk mode)');
+    dlog('[OnDeviceSpeech] startRecognition (push-to-talk mode)');
   }
 
   stopRecognition() {

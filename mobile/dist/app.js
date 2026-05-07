@@ -190,9 +190,13 @@ applyTheme(loadSavedTheme());
 function readToken() {
     const params = new URLSearchParams(location.search);
     let t = params.get('t');
-    if (!t && location.hash) {
+    // The QR-encoded URL embeds an alternate transport as `#alt=<origin>` so
+    // the mobile client can fail over LAN↔tunnel without a re-scan.
+    let altOrigin = null;
+    if (location.hash) {
         const hashParams = new URLSearchParams(location.hash.slice(1));
-        t = hashParams.get('t');
+        if (!t) t = hashParams.get('t');
+        altOrigin = hashParams.get('alt');
     }
     if (!t) {
         const pathMatch = location.pathname.match(/^\/s\/([A-Za-z0-9_-]+)/);
@@ -203,6 +207,7 @@ function readToken() {
             localStorage.setItem(STORAGE_KEY, JSON.stringify({
                 token: t,
                 origin: location.origin,
+                altOrigin: altOrigin || null,
                 ts: Date.now(),
             }));
         } catch (_) {}
@@ -210,13 +215,15 @@ function readToken() {
             const clean = location.origin + '/';
             history.replaceState(null, '', clean);
         }
-        return t;
+        return { token: t, altOrigin };
     }
     try {
         const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
-        if (saved && saved.token && saved.origin === location.origin) return saved.token;
+        if (saved && saved.token && saved.origin === location.origin) {
+            return { token: saved.token, altOrigin: saved.altOrigin || null };
+        }
     } catch (_) {}
-    return null;
+    return { token: null, altOrigin: null };
 }
 
 function wsBaseFromHttp(origin) {
@@ -273,7 +280,7 @@ class App {
         if (this.btnSettings) this._wireSettings();
         this._wireIdleHide();
 
-        const token = readToken();
+        const { token, altOrigin } = readToken();
         if (!token) {
             this._showFatal('No session token. Re-scan the QR code on the desktop.');
             return;
@@ -281,6 +288,7 @@ class App {
 
         this.socket = new BridgeSocket({
             url: wsBaseFromHttp(location.origin),
+            altUrls: altOrigin ? [wsBaseFromHttp(altOrigin)] : [],
             token,
         });
 
@@ -513,6 +521,14 @@ class App {
 
         this.socket.addEventListener('diagnosis', (ev) => {
             this._showDiagnosis(ev.detail.diagnosis);
+        });
+
+        this.socket.addEventListener('endpoint-switched', (ev) => {
+            const host = (() => {
+                try { return new URL(ev.detail.url.replace(/^ws/, 'http')).host; }
+                catch (_) { return ev.detail.url; }
+            })();
+            this.reconnectSub.textContent = `trying alternate link · ${host}`;
         });
     }
 
@@ -1111,4 +1127,30 @@ window.addEventListener('DOMContentLoaded', () => {
             location.reload();
         });
     }
+    checkVersionMatch();
 });
+
+async function checkVersionMatch() {
+    try {
+        const [mobileRes, desktopRes] = await Promise.allSettled([
+            fetch('/version.json', { cache: 'no-store' }),
+            fetch('/api/ping', { cache: 'no-store' }),
+        ]);
+        if (mobileRes.status !== 'fulfilled' || !mobileRes.value.ok) return;
+        if (desktopRes.status !== 'fulfilled' || !desktopRes.value.ok) return;
+        const mobile = await mobileRes.value.json();
+        const desktop = await desktopRes.value.json();
+        if (!mobile.version || !desktop.desktopVersion) return;
+        const a = mobile.version.split('.').slice(0, 2).join('.');
+        const b = desktop.desktopVersion.split('.').slice(0, 2).join('.');
+        if (a === b) return;
+        showVersionMismatchBanner(mobile.version, desktop.desktopVersion);
+    } catch (_) { /* silent */ }
+}
+
+function showVersionMismatchBanner(mobileVersion, desktopVersion) {
+    const el = document.createElement('div');
+    el.textContent = `VERSION MISMATCH — mobile ${mobileVersion} · desktop ${desktopVersion}. Please update both to the same release.`;
+    el.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:9999;padding:8px 12px;background:#3a0a0a;color:#ffb3b3;font:12px/1.4 monospace;text-align:center;border-bottom:1px solid #ff5d6f;letter-spacing:.08em;';
+    document.body.appendChild(el);
+}

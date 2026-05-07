@@ -27,14 +27,27 @@ export const Diagnosis = Object.freeze({
 });
 
 export class BridgeSocket extends EventTarget {
-    constructor({ url, token }) {
+    constructor({ url, token, altUrls }) {
         super();
-        this.baseUrl = url;          // e.g. ws://192.168.1.7:7330
+        // Ordered list of ws base URLs (scheme+host+port) we can try. The first
+        // entry is the endpoint we were paired via (LAN if the QR came from a
+        // LAN-primary desktop, otherwise the tunnel). Additional entries are
+        // alternates — e.g. the PUB tunnel we discovered from `#alt=…` on the
+        // QR or from /api/ping once paired. On a run of consecutive failures
+        // we rotate to the next entry so a LAN→tunnel (or tunnel→LAN) flip
+        // happens automatically without a re-scan.
+        this._endpoints = [url, ...(altUrls || [])]
+            .filter(Boolean)
+            .filter((u, i, arr) => arr.indexOf(u) === i)
+            .filter(u => _isEligibleWsScheme(u));
+        this._endpointIdx = 0;
+        this.baseUrl = this._endpoints[0] || url;
         this.token = token;
         this.state = SocketState.IDLE;
         this.diagnosis = Diagnosis.NONE;
         this.ws = null;
         this._attempt = 0;
+        this._failuresOnCurrent = 0;
         this._stop = false;
         this._reconnectTimer = null;
         this._heartbeatTimer = null;
@@ -97,6 +110,37 @@ export class BridgeSocket extends EventTarget {
         this._scheduleReconnect(0);
     }
 
+    /** Merge newly-discovered endpoints (e.g. from /api/ping) into the pool. */
+    addEndpoints(urls) {
+        if (!Array.isArray(urls)) return;
+        let changed = false;
+        for (const u of urls) {
+            if (!u) continue;
+            if (!_isEligibleWsScheme(u)) continue;
+            if (!this._endpoints.includes(u)) {
+                this._endpoints.push(u);
+                changed = true;
+            }
+        }
+        if (changed) {
+            this.dispatchEvent(new CustomEvent('endpoints-changed', {
+                detail: { endpoints: this._endpoints.slice() },
+            }));
+        }
+    }
+
+    /** Jump to the next endpoint in the pool immediately, if one exists. */
+    _rotateEndpoint() {
+        if (this._endpoints.length < 2) return false;
+        this._endpointIdx = (this._endpointIdx + 1) % this._endpoints.length;
+        this.baseUrl = this._endpoints[this._endpointIdx];
+        this._failuresOnCurrent = 0;
+        this.dispatchEvent(new CustomEvent('endpoint-switched', {
+            detail: { url: this.baseUrl, index: this._endpointIdx },
+        }));
+        return true;
+    }
+
     _setDiagnosis(diag) {
         if (this.diagnosis === diag) return;
         this.diagnosis = diag;
@@ -123,6 +167,19 @@ export class BridgeSocket extends EventTarget {
                 return;
             }
 
+            // Probe says the current endpoint is unreachable but the internet
+            // works — try the next endpoint (LAN ↔ tunnel failover) instead
+            // of burning another WS handshake on the same dead host.
+            if (diag === Diagnosis.SERVER_UNREACHABLE) {
+                this._failuresOnCurrent += 1;
+                if (this._failuresOnCurrent >= 2 && this._rotateEndpoint()) {
+                    this._scheduleReconnect(0);
+                    return;
+                }
+                this._scheduleReconnect();
+                return;
+            }
+
             let ws;
             try {
                 ws = new WebSocket(url);
@@ -134,11 +191,13 @@ export class BridgeSocket extends EventTarget {
 
             ws.addEventListener('open', () => {
                 this._attempt = 0;
+                this._failuresOnCurrent = 0;
                 this._lastPongAt = Date.now();
                 this._setDiagnosis(Diagnosis.CONNECTED);
                 this._setState(SocketState.CONNECTED);
                 this._startHeartbeat();
                 this.send('request', { what: 'snapshot' });
+                this._refreshEndpointsFromServer();
             });
 
             ws.addEventListener('message', (ev) => {
@@ -162,10 +221,33 @@ export class BridgeSocket extends EventTarget {
                     this._setState(SocketState.IDLE, { code: ev.code });
                     return;
                 }
+                // Never managed to fully connect, or disconnected almost
+                // immediately — treat as a failure on the current endpoint
+                // and rotate after two strikes.
+                if (this.state !== SocketState.CONNECTED) {
+                    this._failuresOnCurrent += 1;
+                    if (this._failuresOnCurrent >= 2) this._rotateEndpoint();
+                }
                 this._setState(SocketState.DISCONNECTED, { code: ev.code, reason: ev.reason });
                 this._scheduleReconnect();
             });
         });
+    }
+
+    // Called right after a successful connect. Asks the desktop for its full
+    // set of endpoints so we learn about a tunnel that came up after pairing,
+    // or a new LAN IP after the desktop switched networks.
+    async _refreshEndpointsFromServer() {
+        try {
+            const httpOrigin = this.baseUrl.replace(/^ws(s?):\/\//, 'http$1://');
+            const res = await fetch(httpOrigin + '/api/ping', { cache: 'no-store' });
+            if (!res.ok) return;
+            const body = await res.json().catch(() => null);
+            const ep = body && body.endpoints;
+            if (!ep) return;
+            const toWs = (o) => o ? o.replace(/^http(s?):\/\//, 'ws$1://') : null;
+            this.addEndpoints([toWs(ep.lan), toWs(ep.public)].filter(Boolean));
+        } catch (_) {}
     }
 
     async _probeConnectivity() {
@@ -237,4 +319,11 @@ export class BridgeSocket extends EventTarget {
         if (this._reconnectTimer) clearTimeout(this._reconnectTimer);
         this._reconnectTimer = null;
     }
+}
+
+// Browsers refuse to open ws:// from an https:// page (mixed content). Drop
+// endpoints we wouldn't be allowed to contact so rotation can't stall on one.
+function _isEligibleWsScheme(u) {
+    if (location.protocol !== 'https:') return true;
+    return /^wss:/i.test(u);
 }

@@ -17,7 +17,14 @@ import fs from 'node:fs';
 import path from 'node:path';
 import url from 'node:url';
 
-const DIST = path.resolve(path.dirname(url.fileURLToPath(import.meta.url)), '..', 'dist');
+const ROOT = path.resolve(path.dirname(url.fileURLToPath(import.meta.url)), '..');
+const DIST = path.join(ROOT, 'dist');
+const DESKTOP_PKG = path.resolve(ROOT, '..', 'desktop', 'package.json');
+const MOBILE_PKG = path.join(ROOT, 'package.json');
+
+const desktopVersion = readVersion(DESKTOP_PKG);
+if (desktopVersion) syncMobileVersion(desktopVersion);
+
 const REQUIRED = [
     'index.html',
     'styles.css',
@@ -44,10 +51,38 @@ for (const name of REQUIRED) {
         console.log(`  ✗   ${name.padEnd(28)} MISSING`);
     }
 }
+
+if (desktopVersion) {
+    const versionPath = path.join(DIST, 'version.json');
+    const payload = { version: desktopVersion, builtAt: new Date().toISOString() };
+    fs.writeFileSync(versionPath, JSON.stringify(payload, null, 2) + '\n');
+    const stat = fs.statSync(versionPath);
+    total += stat.size;
+    console.log(`  OK  version.json${' '.repeat(16)}${formatBytes(stat.size)}  (v${desktopVersion})`);
+}
+
 console.log(`\n  total: ${formatBytes(total)}`);
 if (failed) {
     console.error('\nbuild failed: some required files are missing');
     process.exit(1);
+}
+
+function readVersion(pkgPath) {
+    try {
+        return JSON.parse(fs.readFileSync(pkgPath, 'utf8')).version || null;
+    } catch (_) {
+        return null;
+    }
+}
+
+function syncMobileVersion(version) {
+    try {
+        const pkg = JSON.parse(fs.readFileSync(MOBILE_PKG, 'utf8'));
+        if (pkg.version === version) return;
+        pkg.version = version;
+        fs.writeFileSync(MOBILE_PKG, JSON.stringify(pkg, null, 2) + '\n');
+        console.log(`  ↻  mobile package.json version → ${version}\n`);
+    } catch (_) { /* ignore */ }
 }
 
 function formatBytes(b) {

@@ -37,15 +37,19 @@ Input kinds: `term-keys`, `term-resize`, `switch-tab`, `new-tab`, `close-tab`, `
 
 ## Development
 
-```bash
-# Standalone dev server (serves dist/ on :5173)
-npm run dev
+The supported way to reach this app is to launch the desktop and scan its QR code. The desktop bundles this PWA inside its DMG; users never install it separately.
 
-# Against a running desktop bridge (proxy /ws and /api to the bridge WebSocket URL):
-# SOA_BRIDGE=ws://192.168.1.42:7330 npm run dev
+For contributors iterating on the mobile UI without packaging a full desktop build, there's a standalone dev server. It is a contributor tool only — not a supported entry point for users:
+
+```bash
+# From the repo root:
+npm run dev:mobile                        # serves dist/ on :5173
+
+# To test against a live desktop bridge, proxy /ws and /api:
+SOA_BRIDGE=ws://192.168.1.42:7330 npm run dev:mobile
 ```
 
-Production pairing uses the desktop app: the bridge at **`http://<LAN-IP>:7330+`** serves **`dist/`** when **`son-of-anton-mobile`** is a sibling folder of **`son-of-anton-public`** (see **`../son-of-anton-public/docs/MOBILE_BRIDGE.md`**).
+Production pairing: the desktop bridge serves `dist/` from `Son of Anton.app/Contents/Resources/mobile/` (packaged) or `<repo>/mobile/dist` (dev). See `../desktop/docs/MOBILE_BRIDGE.md`.
 
 The app reads its token from `?t=<token>` on first load, then persists it in `localStorage` (keyed by origin) so PWA reopens reconnect without a re-scan.
 

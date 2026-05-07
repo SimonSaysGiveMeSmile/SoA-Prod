@@ -1,6 +1,0 @@
-# Mistakes Log
-
-## 2026-05-02 — Top-level require() in <script>-loaded widget class crashed renderer
-- **What went wrong**: Added `mobileBridge.class.js` and `mobileQRWidget.class.js` with `const ... = require(...)` at module top-level. Loaded them via `<script src=...>` in `ui.html`. Renderer crashed silently (black screen, no console output, app never booted). Sometimes manifested as an Oilpan OOM crash several seconds in.
-- **Why**: In Electron's renderer with `nodeIntegration: true`, top-level `require()` inside a `<script>`-loaded file destabilises the renderer (no error surfaced). Every existing `<script>`-loaded widget class (clock, fileExplorer, gitCommits, …) follows this rule: `require()` only ever lives inside methods. Classes that *do* require at top level (claudeState, voiceController, audioFeedback) are dynamically `require()`d from `_renderer.js`, never `<script>`-tag-loaded.
-- **Rule to follow**: For any class added to `ui.html` via `<script src=...>`, put **all** `require()` calls inside methods (constructor or later). If you need a Node-only library (e.g. `qrcode`), load it in the main process and ship results via IPC — never `require()` it in the renderer-loaded script.

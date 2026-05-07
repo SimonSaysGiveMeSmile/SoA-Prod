@@ -1,0 +1,25 @@
+{
+  "name": "soa-prod",
+  "version": "2.2.15",
+  "private": true,
+  "description": "Son of Anton — desktop terminal + mobile companion, shipped as one app.",
+  "license": "GPL-3.0",
+  "workspaces": [
+    "mobile"
+  ],
+  "scripts": {
+    "install:all": "npm install && npm --prefix desktop install && npm --prefix desktop/src install --legacy-peer-deps",
+    "install:linux": "npm install && npm --prefix desktop run install-linux",
+    "install:windows": "npm install && npm --prefix desktop run install-windows",
+    "start": "npm --prefix desktop start",
+    "dev:mobile": "npm --prefix mobile run dev:standalone",
+    "build:mobile": "npm --prefix mobile run build",
+    "build:mac": "npm run build:mobile && npm --prefix desktop run prebuild-darwin && npm --prefix desktop run build-darwin && npm --prefix desktop run postbuild-darwin",
+    "build:linux": "npm run build:mobile && npm --prefix desktop run prebuild-linux && npm --prefix desktop run build-linux && npm --prefix desktop run postbuild-linux",
+    "build:windows": "npm run build:mobile && npm --prefix desktop run prebuild-windows && npm --prefix desktop run build-windows && npm --prefix desktop run postbuild-windows",
+    "test": "npm --prefix desktop test"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

@@ -7,6 +7,9 @@ const { ipcMain } = require('electron');
 const path = require('path');
 const fs = require('fs');
 
+const DEBUG = process.env.DEBUG_VOICE === '1';
+const dlog = DEBUG ? console.log.bind(console) : () => {};
+
 // Load environment variables from project root .env file
 require('dotenv').config({ path: path.join(__dirname, '../../..', '.env') });
 
@@ -80,12 +83,12 @@ function setupVoiceIPC(window) {
     const modelExists = fs.existsSync(modelPath);
     const hasOnDevice = OnDeviceSpeech.isAvailable();
 
-    console.log('[VoiceIPC] Checking availability:');
-    console.log('[VoiceIPC]   - PICOVOICE_ACCESS_KEY:', accessKey ? 'set' : 'not set');
-    console.log('[VoiceIPC]   - OPENAI_API_KEY:', openaiKey ? 'set' : 'not set');
-    console.log('[VoiceIPC]   - Model path:', modelPath);
-    console.log('[VoiceIPC]   - Model exists:', modelExists);
-    console.log('[VoiceIPC]   - On-device speech:', hasOnDevice);
+    dlog('[VoiceIPC] Checking availability:');
+    dlog('[VoiceIPC]   - PICOVOICE_ACCESS_KEY:', accessKey ? 'set' : 'not set');
+    dlog('[VoiceIPC]   - OPENAI_API_KEY:', openaiKey ? 'set' : 'not set');
+    dlog('[VoiceIPC]   - Model path:', modelPath);
+    dlog('[VoiceIPC]   - Model exists:', modelExists);
+    dlog('[VoiceIPC]   - On-device speech:', hasOnDevice);
 
     return {
       available: !!(accessKey && openaiKey && modelExists),
@@ -121,7 +124,7 @@ function setupVoiceIPC(window) {
       whisperClient = new WhisperClient(openaiKey);
 
       const audioReqs = wakeWordDetector.initialize();
-      console.log('[VoiceIPC] Voice services initialized');
+      dlog('[VoiceIPC] Voice services initialized');
 
       return {
         success: true,
@@ -188,6 +191,7 @@ function setupVoiceIPC(window) {
 
   // Helper to log to both main process console and renderer DevTools
   function voiceLog(...args) {
+    if (!DEBUG) return;
     console.log(...args);
     safeSendRenderer('voice:debug-log', args.map(String).join(' '));
   }
@@ -228,7 +232,7 @@ function setupVoiceIPC(window) {
       onDeviceSpeech = null;
     }
     whisperClient = null;
-    console.log('[VoiceIPC] Voice services released');
+    dlog('[VoiceIPC] Voice services released');
   });
 }
 

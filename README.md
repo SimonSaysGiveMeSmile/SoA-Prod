@@ -48,18 +48,33 @@ Electron 28 sci-fi terminal that runs Claude Code inside a cyberpunk HUD.
 
 **Run from source**
 
-Two installs are required — outer (build tooling) and inner (runtime deps shipped inside the app):
+From the repo root (desktop + mobile come as one):
 
 ```bash
-cd desktop
-npm install                               # build/tooling deps
-cd src && npm install --legacy-peer-deps  # runtime deps (signale, node-pty, picovoice, …)
-cd ..
-npm start                                 # launches Electron
+npm run install:all   # installs root, desktop outer, desktop inner
+npm start             # launches Electron (desktop app)
 ```
 
-Linux shortcut: `npm run install-linux` does both installs and rebuilds `node-pty` in one go.
-If `node-pty` errors on launch, run: `./node_modules/.bin/electron-rebuild -f -w node-pty`.
+Per-platform installs (Linux/Windows rebuild native deps):
+
+```bash
+npm run install:linux     # on Linux
+npm run install:windows   # on Windows
+```
+
+The mobile PWA is bundled inside the desktop app. Users reach it only by launching the desktop and scanning the QR code — there's no standalone install. To iterate on the mobile UI without packaging, see [`mobile/README.md`](mobile/README.md).
+
+**Build installers**
+
+```bash
+npm run build:mac        # .dmg for macOS
+npm run build:linux      # .AppImage
+npm run build:windows    # .exe
+```
+
+The mobile PWA is built and copied into the DMG's `Resources/mobile` automatically.
+
+If `node-pty` errors on launch, run inside `desktop/`: `./node_modules/.bin/electron-rebuild -f -w node-pty`.
 
 macOS DMG releases are published from the upstream source repo
 ([`SimonSaysGiveMeSmile/son-of-anton-public`](https://github.com/SimonSaysGiveMeSmile/son-of-anton-public/releases)) —
@@ -223,7 +238,9 @@ We love PRs. Here's the short version:
 
 ## License
 
-GPL-3.0 — inherited from the upstream [eDEX-UI](https://github.com/GitSquared/edex-ui) project. See [`desktop/LICENSE`](desktop/LICENSE).
+GPL-3.0. See [`LICENSE`](LICENSE).
+
+Son of Anton is a modified fork of [eDEX-UI](https://github.com/GitSquared/edex-ui) (v2.2.8). The desktop shell was adapted starting in 2025; the mobile companion and mobile-bridge integration were added in 2025–2026 and are original work. Modifications are documented in the git history.
 
 ## Credits
 

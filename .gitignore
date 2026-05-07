@@ -40,3 +40,7 @@ desktop/build/
 *.tsbuildinfo
 .cache/
 coverage/
+
+# Claude Code internal notes (do not ship)
+.claude/
+.planning/

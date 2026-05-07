@@ -136,10 +136,30 @@ class MobileQRWidget {
             this.urls.hidden = false;
             this.lanRow.textContent = lan || '—';
             this.publicRow.textContent = pub || 'tunnel unavailable';
-            this._renderQr(pub || lan);
+            this._renderQr(this._buildPairingUrl(lan, pub));
         } else {
             this.urls.hidden = true;
             this._clearQr();
+        }
+    }
+
+    // LAN is the primary transport because it survives mixed-content rules:
+    // a PWA served from https://<tunnel> cannot open ws:// to a LAN IP, but
+    // a PWA served from http://<lan> *can* open wss:// to the tunnel when the
+    // LAN disappears. When both URLs are available we embed the tunnel as
+    // `#alt=` so the mobile socket can flip to it on failure without a rescan.
+    // When only one is available we encode it directly.
+    _buildPairingUrl(lan, pub) {
+        const primary = lan || pub;
+        const alt     = lan && pub ? pub : null;
+        if (!primary) return null;
+        if (!alt) return primary;
+        try {
+            const u = new URL(primary);
+            u.hash = 'alt=' + encodeURIComponent(new URL(alt).origin);
+            return u.toString();
+        } catch (_) {
+            return primary;
         }
     }
 

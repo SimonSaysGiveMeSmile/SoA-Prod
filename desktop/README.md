@@ -2,8 +2,8 @@
   <br>
   <img alt="Logo" src="media/logo.png" width="400">
   <br><br>
-  <a href="https://github.com/yifu001/son-of-anton-public/releases/latest"><img alt="Release" src="https://img.shields.io/github/release/yifu001/son-of-anton-public.svg?style=popout"></a>
-  <a href="https://github.com/yifu001/son-of-anton-public/blob/main/LICENSE"><img alt="License" src="https://img.shields.io/github/license/yifu001/son-of-anton-public.svg?style=popout"></a>
+  <a href="https://github.com/SimonSaysGiveMeSmile/son-of-anton-public/releases/latest"><img alt="Release" src="https://img.shields.io/github/release/SimonSaysGiveMeSmile/son-of-anton-public.svg?style=popout"></a>
+  <a href="https://github.com/SimonSaysGiveMeSmile/son-of-anton-public/blob/main/LICENSE"><img alt="License" src="https://img.shields.io/github/license/SimonSaysGiveMeSmile/son-of-anton-public.svg?style=popout"></a>
 </p>
 
 # Son of Anton

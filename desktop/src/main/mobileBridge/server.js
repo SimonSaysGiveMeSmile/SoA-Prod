@@ -5,8 +5,9 @@
  * desktop session to a mobile companion app over the local network (and,
  * optionally, the public internet via a tunnel).
  *
- *   - HTTP serves the static mobile webapp from `../son-of-anton-mobile/dist`
- *     (sibling repo). If that folder doesn't exist we fall back to a tiny
+ *   - HTTP serves the static mobile webapp bundled via electron-builder
+ *     `extraResources` (Resources/mobile in packaged builds) or the repo
+ *     `mobile/dist` in dev. If neither exists we fall back to a tiny
  *     built-in landing page so the user always sees *something* useful.
  *   - WS at `/ws?t=<token>` is the realtime channel. Messages follow
  *     ./protocol.js. Heartbeats every 5s detect dead clients.
@@ -32,15 +33,38 @@ const HEARTBEAT_TIMEOUT_MS  = 15000;
 const DEFAULT_PORT          = 7330;
 const PORT_SCAN_MAX         = 30;
 
-// Resolve the path to the bundled mobile webapp. We look in three places, in
-// order, to support dev (sibling repo), prebuild (./mobile-webapp) and packaged
-// (resources). All are optional — if none exist we serve the fallback page.
-function resolveMobileWebappRoot() {
+// The desktop app version is read once at module load and advertised to mobile
+// clients so they can refuse to pair with a mismatched build.
+const DESKTOP_VERSION = readDesktopVersion();
+
+function readDesktopVersion() {
+    // Outer desktop/package.json is authoritative (the inner src/package.json
+    // holds runtime-deps only and may lag). In dev both exist; in packaged
+    // builds the asar root has a single package.json we read from there.
     const candidates = [
-        path.resolve(__dirname, '../../../../son-of-anton-mobile/dist'),
-        path.resolve(__dirname, '../../../../son-of-anton-mobile'),       // unbuilt sibling
-        path.resolve(__dirname, '../../mobile-webapp'),                    // prebuild step
+        path.resolve(__dirname, '../../../package.json'),
+        path.resolve(__dirname, '../../package.json'),
     ];
+    for (const p of candidates) {
+        try {
+            const pkg = JSON.parse(fs.readFileSync(p, 'utf8'));
+            if (pkg && pkg.version) return pkg.version;
+        } catch (_) { /* try next */ }
+    }
+    return null;
+}
+
+// Resolve the path to the bundled mobile webapp. In packaged builds the PWA is
+// shipped via electron-builder `extraResources` to Resources/mobile. In dev the
+// monorepo layout puts it at <repo>/mobile/dist. We check packaged first so a
+// contributor running a packaged build from a working tree still gets the
+// shipped copy instead of an accidentally-mutated dev tree.
+function resolveMobileWebappRoot() {
+    const candidates = [];
+    if (process.resourcesPath) {
+        candidates.push(path.join(process.resourcesPath, 'mobile'));
+    }
+    candidates.push(path.resolve(__dirname, '../../../../mobile/dist'));
     for (const p of candidates) {
         try {
             if (fs.existsSync(path.join(p, 'index.html'))) return p;
@@ -95,9 +119,8 @@ const FALLBACK_HTML = `<!doctype html>
 </head><body><div class="wrap">
   <h1>SON OF ANTON · MOBILE</h1>
   <p class="hint">The desktop bridge is running, but the bundled mobile webapp
-  was not found on this machine. Build the companion repo
-  (<code>son-of-anton-mobile</code>) and reload, or open it directly in
-  development at <code>http://localhost:5173</code>.</p>
+  was not found. If you built from source, run <code>npm run build:mobile</code>
+  from the repo root and reload.</p>
 </div></body></html>`;
 
 const STATIC_MIME = {
@@ -121,7 +144,7 @@ const STATIC_MIME = {
 };
 
 class MobileBridgeServer {
-    constructor({ logger } = {}) {
+    constructor({ logger, desktopVersion } = {}) {
         this.log = logger || ((..._a) => {});
         this.store = new SessionStore();
         this.httpServer = null;
@@ -131,6 +154,7 @@ class MobileBridgeServer {
         this.port = null;
         this.lanIp = null;
         this.webappRoot = null;
+        this.desktopVersion = desktopVersion || DESKTOP_VERSION;
         this.onInput = null;          // set by IPC layer
         this.onClientChange = null;   // set by IPC layer
         this.onStatusChange = null;   // set by IPC layer
@@ -236,32 +260,57 @@ class MobileBridgeServer {
         const pathname = parsed.pathname || '/';
 
         if (pathname === '/api/ping') {
+            // Include the current set of reachable endpoints so a mobile client
+            // scanned in on one transport can discover the alternate and auto-
+            // fail-over without a rescan. We only ship origins (scheme+host+port)
+            // — the session token stays in the path, which is identical across
+            // transports for the same session.
+            const st = this.status();
+            const endpoints = {};
+            if (st.lanUrl)    endpoints.lan    = new URL(st.lanUrl).origin;
+            if (st.publicUrl) endpoints.public = new URL(st.publicUrl).origin;
             res.writeHead(200, { 'content-type': 'application/json', 'access-control-allow-origin': '*' });
-            res.end(JSON.stringify({ ok: true, name: 'son-of-anton', protocol: 1 }));
+            res.end(JSON.stringify({
+                ok: true,
+                name: 'son-of-anton',
+                protocol: 1,
+                desktopVersion: this.desktopVersion,
+                endpoints,
+            }));
+            return;
+        }
+        if (pathname === '/api/version') {
+            res.writeHead(200, { 'content-type': 'application/json', 'access-control-allow-origin': '*' });
+            res.end(JSON.stringify({ desktopVersion: this.desktopVersion, protocol: 1 }));
             return;
         }
         if (pathname === '/api/diag') {
+            // Diagnostics are disabled by default: the legacy page embedded the live
+            // pairing token into HTML, which leaked it to anyone who could reach the
+            // tunnel URL. Enable only on demand (local debugging) by setting
+            // SOA_BRIDGE_DIAG=1, and still require the session token as `?t=`.
+            if (process.env.SOA_BRIDGE_DIAG !== '1') {
+                res.writeHead(404, { 'content-type': 'text/plain' });
+                res.end('not found');
+                return;
+            }
+            if (!this.store.validateToken(parsed.searchParams.get('t'))) {
+                res.writeHead(401, { 'content-type': 'text/plain' });
+                res.end('unauthorized');
+                return;
+            }
             const status = this.status();
-            res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'access-control-allow-origin': '*' });
+            res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
             res.end(`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>SOA Diag</title>
 <style>body{background:#000;color:#aaffaa;font-family:monospace;padding:16px}h1{font-size:14px;letter-spacing:.2em}
 .ok{color:#5fff5f}.err{color:#ff5d6f}pre{font-size:12px;white-space:pre-wrap}</style></head><body>
-<h1>SON OF ANTON — DIAGNOSTICS</h1>
-<p class="ok">HTTP: OK — this page loaded successfully</p>
-<p id="ws">WebSocket: testing…</p>
-<pre id="info">Server: ${status.running ? 'running' : 'stopped'}
+<h1>SON OF ANTON &mdash; DIAGNOSTICS</h1>
+<p class="ok">HTTP: OK</p>
+<pre>Server: ${status.running ? 'running' : 'stopped'}
 Port: ${status.port}
-LAN: ${status.lanUrl ? status.lanUrl.split('?')[0] : 'n/a'}
 Clients: ${status.clients}
 Token present: ${status.token ? 'yes' : 'no'}</pre>
-<script>
-try{var ws=new WebSocket(location.origin.replace(/^http/,'ws')+'/ws?t=${status.token||'none'}');
-ws.onopen=function(){document.getElementById('ws').className='ok';document.getElementById('ws').textContent='WebSocket: OK — connected';ws.close()};
-ws.onerror=function(){document.getElementById('ws').className='err';document.getElementById('ws').textContent='WebSocket: FAILED'};
-ws.onclose=function(e){if(!document.getElementById('ws').className)document.getElementById('ws').className='err';
-if(!document.getElementById('ws').className.includes('ok'))document.getElementById('ws').textContent='WebSocket: closed ('+e.code+')'}}
-catch(e){document.getElementById('ws').className='err';document.getElementById('ws').textContent='WebSocket: error — '+e.message}
-</script></body></html>`);
+</body></html>`);
             return;
         }
         if (pathname === '/api/session') {
