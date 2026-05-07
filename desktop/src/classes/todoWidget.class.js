@@ -100,7 +100,7 @@ class TodoWidget {
     _getTabName(idx) {
         if (window.terminalNames && window.terminalNames[idx]) {
             const name = window.terminalNames[idx];
-            if (name !== "EMPTY") return name;
+            if (window._isUnnamedTab ? !window._isUnnamedTab(name) : (name && name !== "EMPTY")) return name;
         }
         return idx === 0 ? 'MAIN' : `TAB ${idx}`;
     }

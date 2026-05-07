@@ -94,11 +94,12 @@ try {
         log(`Error loading window state: ${e.message}`);
     }
 
-    // Load terminal names with fallback to defaults (support up to 20 tabs)
+    // Load user-saved terminal names. New users start with no preloaded labels —
+    // tabs render as "#N" / "#N - <process>" until the user renames them. Legacy
+    // installs that persisted "MAIN SHELL" / "EMPTY" strings continue to load
+    // verbatim; the render path treats those as unnamed.
     const defaultTerminalNames = {};
-    for (let i = 0; i < 20; i++) {
-        defaultTerminalNames[i] = i === 0 ? "MAIN SHELL" : "EMPTY";
-    }
+    for (let i = 0; i < 20; i++) defaultTerminalNames[i] = "";
     try {
         if (fs.existsSync(terminalNamesFile)) {
             const saved = JSON.parse(fs.readFileSync(terminalNamesFile, 'utf-8'));
@@ -110,6 +111,17 @@ try {
         console.error("Failed to load terminal names:", e);
         window.terminalNames = defaultTerminalNames;
     }
+
+    // True when a tab has no user-chosen label (blank / legacy "EMPTY" / auto "#N").
+    window._isUnnamedTab = (name) => {
+        if (!name) return true;
+        if (name === "EMPTY" || name === "MAIN SHELL" || name === "DISCONNECTED") return true;
+        if (name.startsWith('#')) return true;
+        return false;
+    };
+
+    // Display string for a tab when nothing is in progress yet (no process name).
+    window._tabPlaceholder = (idx) => `#${idx + 1}`;
 
     window.saveTerminalNames = () => {
         try {
@@ -213,9 +225,8 @@ try {
                 if (node.nodeType === Node.TEXT_NODE) newName += node.textContent;
             });
             newName = newName.trim().substring(0, 20);
-            if (!newName) newName = tabIndex === 0 ? "MAIN SHELL" : "EMPTY";
             window.terminalNames[tabIndex] = newName;
-            textElement.innerHTML = window._escapeHtml(newName) + window._tabCloseBtn(tabIndex);
+            textElement.innerHTML = window._escapeHtml(newName || window._tabPlaceholder(tabIndex)) + window._tabCloseBtn(tabIndex);
             window.saveTerminalNames();
         });
 
@@ -956,7 +967,8 @@ try {
         // Generate initial 5 tabs dynamically
         let tabsHtml = '';
         for (let i = 0; i < 5; i++) {
-            tabsHtml += `<li id="shell_tab${i}" onclick="window.focusShellTab(${i});"${i === 0 ? ' class="active"' : ''}><p>${window._escapeHtml(window.terminalNames[i])}<span class="tab-close" onclick="event.stopPropagation();window.closeShellTab(${i});" title="Close Tab">×</span></p></li>`;
+            const label = window._isUnnamedTab(window.terminalNames[i]) ? window._tabPlaceholder(i) : window.terminalNames[i];
+            tabsHtml += `<li id="shell_tab${i}" onclick="window.focusShellTab(${i});"${i === 0 ? ' class="active"' : ''}><p>${window._escapeHtml(label)}<span class="tab-close" onclick="event.stopPropagation();window.closeShellTab(${i});" title="Close Tab">×</span></p></li>`;
         }
         // Add + button for creating new tabs (up to 10 total)
         tabsHtml += `<li id="shell_add_tab" class="shell-add-tab" onclick="window.addShellTab();" title="New Terminal Tab (Ctrl+Shift+T)"><p>+</p></li>`;
@@ -997,8 +1009,8 @@ try {
         window.term[0].onprocesschange = p => {
             window.term[0]._lastProcess = p;
             // Only show process name if user hasn't set a custom name
-            if (window.terminalNames[0] === "MAIN SHELL") {
-                document.getElementById("shell_tab0").querySelector('p').innerHTML = `MAIN - ${p}${window._tabCloseBtn(0)}`;
+            if (window._isUnnamedTab(window.terminalNames[0])) {
+                document.getElementById("shell_tab0").querySelector('p').innerHTML = `#1 - ${p}${window._tabCloseBtn(0)}`;
             }
         };
         profiler.mark('terminal-ready');
@@ -1137,9 +1149,9 @@ try {
                         if (window.thinkingDetector) {
                             window.thinkingDetector.detach(idx);
                         }
-                        window.terminalNames[idx] = "EMPTY";
+                        window.terminalNames[idx] = "";
                         window.saveTerminalNames();
-                        document.getElementById("shell_tab" + idx).innerHTML = `<p>EMPTY${window._tabCloseBtn(idx)}</p>`;
+                        document.getElementById("shell_tab" + idx).innerHTML = `<p>${window._tabPlaceholder(idx)}${window._tabCloseBtn(idx)}</p>`;
                         document.getElementById("terminal" + idx).innerHTML = "";
                         window.term[idx].term.dispose();
                         delete window.term[idx];
@@ -1148,8 +1160,7 @@ try {
 
                     window.term[idx].onprocesschange = p => {
                         window.term[idx]._lastProcess = p;
-                        const currentName = window.terminalNames[idx];
-                        if (!currentName || currentName === "EMPTY" || currentName.startsWith('#')) {
+                        if (window._isUnnamedTab(window.terminalNames[idx])) {
                             document.getElementById("shell_tab" + idx).querySelector('p').innerHTML = `#${idx + 1} - ${p}${window._tabCloseBtn(idx)}`;
                         }
                     };
@@ -1242,7 +1253,11 @@ try {
                     const newTabEl = document.createElement('li');
                     newTabEl.id = 'shell_tab' + tab.index;
                     newTabEl.onclick = () => window.focusShellTab(tab.index);
-                    newTabEl.innerHTML = `<p>${window._escapeHtml(window.terminalNames[tab.index] || 'EMPTY')}${window._tabCloseBtn(tab.index)}</p>`;
+                    {
+                        const nm = window.terminalNames[tab.index];
+                        const label = window._isUnnamedTab(nm) ? window._tabPlaceholder(tab.index) : nm;
+                        newTabEl.innerHTML = `<p>${window._escapeHtml(label)}${window._tabCloseBtn(tab.index)}</p>`;
+                    }
                     addBtn.parentNode.insertBefore(newTabEl, addBtn);
 
                     const container = document.getElementById('main_shell_innercontainer');
@@ -2206,8 +2221,7 @@ try {
                     window.term[number].onprocesschange = p => {
                         window.term[number]._lastProcess = p;
                         // Only show process name if user hasn't set a custom name
-                        const currentName = window.terminalNames[number];
-                        if (!currentName || currentName === "EMPTY" || currentName.startsWith('#')) {
+                        if (window._isUnnamedTab(window.terminalNames[number])) {
                             const tabEl = document.getElementById("shell_tab" + number);
                             if (tabEl) {
                                 tabEl.querySelector('p').innerHTML = `#${number + 1} - ${p}${window._tabCloseBtn(number)}`;
@@ -2293,7 +2307,11 @@ try {
         const newTab = document.createElement('li');
         newTab.id = 'shell_tab' + nextTab;
         newTab.onclick = () => window.focusShellTab(nextTab);
-        newTab.innerHTML = `<p>${window._escapeHtml(window.terminalNames[nextTab] || 'EMPTY')}${window._tabCloseBtn(nextTab)}</p>`;
+        {
+            const nm = window.terminalNames[nextTab];
+            const label = window._isUnnamedTab(nm) ? window._tabPlaceholder(nextTab) : nm;
+            newTab.innerHTML = `<p>${window._escapeHtml(label)}${window._tabCloseBtn(nextTab)}</p>`;
+        }
         addBtn.parentNode.insertBefore(newTab, addBtn);
 
         // Create terminal container
