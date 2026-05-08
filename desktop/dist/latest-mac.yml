@@ -1,11 +1,11 @@
-version: 2.2.15
+version: 2.2.16
 files:
   - url: Son-of-Anton-macOS-x64.dmg
-    sha512: jNn5jcD4pqD1nS/ZLea9Y0tR/aqjGCw1sHfCpiG+FGAA3gT5pt/BmrmV7aKEcc2s3K78YnlXSEDXGRmpsAKWEQ==
-    size: 147151491
+    sha512: 4Uw9JS8TzJI8vw4dQiVKFTRn4GGCHo/mgz/CwGWattkYy/UYADytbiVUNKnKRi8/lzBKL7cmVSy7LoGwpZUKlg==
+    size: 147480236
   - url: Son-of-Anton-macOS-arm64.dmg
-    sha512: SWPZisp7t3xcN/d1rLlj1G5SnruYuj5rUzUftlDKeQBotSOHExCH1YFXWehWkFGVH74Wh395h02zzFP4nJzkZQ==
-    size: 138868988
+    sha512: S0XqJsKqQwmMAZVjx249RSHfD/x08ykk0BTSX/V8w3EfpB7MkXL07Z5F+uW4qIRa5/8f67Lc02rSpllbstA5Zg==
+    size: 139176042
 path: Son-of-Anton-macOS-x64.dmg
-sha512: jNn5jcD4pqD1nS/ZLea9Y0tR/aqjGCw1sHfCpiG+FGAA3gT5pt/BmrmV7aKEcc2s3K78YnlXSEDXGRmpsAKWEQ==
-releaseDate: '2026-05-07T00:35:16.474Z'
+sha512: 4Uw9JS8TzJI8vw4dQiVKFTRn4GGCHo/mgz/CwGWattkYy/UYADytbiVUNKnKRi8/lzBKL7cmVSy7LoGwpZUKlg==
+releaseDate: '2026-05-08T11:28:00.241Z'
