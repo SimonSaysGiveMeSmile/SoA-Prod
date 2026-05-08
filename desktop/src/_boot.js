@@ -75,7 +75,6 @@ const Terminal = require("./classes/terminal.class.js").Terminal;
 const ClaudeStateManager = require("./classes/claudeState.class.js");
 const { setupVoiceIPC, cleanupVoiceIPC } = require('./main/ipc/voiceHandlers');
 const { setupMobileBridgeIPC, teardownMobileBridge } = require('./main/ipc/mobileBridgeHandlers');
-const { setupAutoUpdater } = require('./main/autoUpdate');
 
 profiler.mark('modules-loaded');
 
@@ -361,8 +360,6 @@ app.on('ready', async () => {
         await profiler.startTracing();
     }
 
-    setupAutoUpdater();
-
     // IPC handler: stop contentTracing when renderer signals startup-complete
     ipc.on('stop-content-tracing', async () => {
         const tracePath = await profiler.stopTracing();
@@ -461,6 +458,12 @@ app.on('ready', async () => {
     createWindow(settings);
     profiler.mark('main-ready');
     profiler.measure('main-total', 'boot-start', 'main-ready');
+
+    try {
+        require('./main/autoUpdate').setupAutoUpdater();
+    } catch (e) {
+        signale.warn(`[updater] setup failed: ${e && e.message ? e.message : e}`);
+    }
 
     // System sleep/wake handling — notify renderer so terminals can reconnect
     const { powerMonitor } = electron;
