@@ -75,6 +75,7 @@ const Terminal = require("./classes/terminal.class.js").Terminal;
 const ClaudeStateManager = require("./classes/claudeState.class.js");
 const { setupVoiceIPC, cleanupVoiceIPC } = require('./main/ipc/voiceHandlers');
 const { setupMobileBridgeIPC, teardownMobileBridge } = require('./main/ipc/mobileBridgeHandlers');
+const { setupAutoUpdater } = require('./main/autoUpdate');
 
 profiler.mark('modules-loaded');
 
@@ -359,6 +360,8 @@ app.on('ready', async () => {
     if (process.env.PROFILE_STARTUP === 'deep') {
         await profiler.startTracing();
     }
+
+    setupAutoUpdater();
 
     // IPC handler: stop contentTracing when renderer signals startup-complete
     ipc.on('stop-content-tracing', async () => {
