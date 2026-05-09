@@ -53,6 +53,59 @@ const log = (msg) => {
     ipc.send("log", "info", msg);
 };
 
+// Rotate the log if it exceeds ~2MB so it doesn't grow unbounded across runs.
+try {
+    if (fs.existsSync(logFile) && fs.statSync(logFile).size > 2 * 1024 * 1024) {
+        const rotated = logFile + '.1';
+        try { fs.unlinkSync(rotated); } catch (_) { /* ignore */ }
+        try { fs.renameSync(logFile, rotated); } catch (_) { /* ignore */ }
+    }
+} catch (_) { /* ignore */ }
+
+// Session marker so each run is easy to find when reading the log after a crash.
+try {
+    fs.appendFileSync(logFile, `\n===== SESSION START ${new Date().toISOString()} pid=${process.pid} =====\n`);
+} catch (_) { /* ignore */ }
+
+// Tee console output to the log file. Keeps DevTools output intact; the file
+// copy is what survives a crash / blackout so we can diagnose it after relaunch.
+(function teeConsole() {
+    const levels = ['log', 'info', 'warn', 'error', 'debug'];
+    const fmt = (arg) => {
+        if (arg instanceof Error) return arg.stack || `${arg.name}: ${arg.message}`;
+        if (typeof arg === 'string') return arg;
+        try { return JSON.stringify(arg); } catch (_) { return String(arg); }
+    };
+    levels.forEach(level => {
+        const original = console[level].bind(console);
+        console[level] = (...args) => {
+            try {
+                const line = `[${new Date().toISOString()}] [${level.toUpperCase()}] ${args.map(fmt).join(' ')}\n`;
+                fs.appendFileSync(logFile, line);
+            } catch (_) { /* never let logging break the app */ }
+            original(...args);
+        };
+    });
+})();
+
+// Capture silent failures — unhandled promise rejections and uncaught errors
+// are the single most common cause of "the app just went blank" without
+// leaving a visible trace.
+window.addEventListener('error', (ev) => {
+    try {
+        const err = ev.error || ev.message;
+        const stack = (ev.error && ev.error.stack) || '(no stack)';
+        fs.appendFileSync(logFile, `[${new Date().toISOString()}] [UNCAUGHT] ${err}\n${stack}\nat ${ev.filename}:${ev.lineno}:${ev.colno}\n`);
+    } catch (_) { /* ignore */ }
+});
+window.addEventListener('unhandledrejection', (ev) => {
+    try {
+        const reason = ev.reason;
+        const body = (reason && reason.stack) ? reason.stack : (typeof reason === 'string' ? reason : JSON.stringify(reason));
+        fs.appendFileSync(logFile, `[${new Date().toISOString()}] [UNHANDLED_REJECTION] ${body}\n`);
+    } catch (_) { /* ignore */ }
+});
+
 log("[Renderer] Startup initiated - Direct Log");
 try {
     profiler.mark('renderer-start');
@@ -68,6 +121,64 @@ try {
     const terminalNamesFile = path.join(settingsDir, "terminalNames.json");
     const bannerLabelsFile = path.join(settingsDir, "bannerLabels.json");
     const sessionStateFile = path.join(settingsDir, "sessionState.json");
+    const sessionStateTmpFile = sessionStateFile + ".tmp";
+
+    // Atomic write: temp file + rename, so a crash mid-write can't corrupt the
+    // session file. rename() is atomic on POSIX and on modern NTFS.
+    const writeSessionStateAtomic = (state) => {
+        try {
+            fs.writeFileSync(sessionStateTmpFile, JSON.stringify(state, null, 4));
+            fs.renameSync(sessionStateTmpFile, sessionStateFile);
+        } catch (e) {
+            console.error('[Session] Atomic write failed:', e);
+            try { fs.unlinkSync(sessionStateTmpFile); } catch (_) { /* ignore */ }
+        }
+    };
+
+    // Snapshot current tab layout. Used both on beforeunload and periodically,
+    // so a crash (no beforeunload fires) still has a recent snapshot on disk.
+    const captureSessionState = () => {
+        const tabs = [];
+        const allTabEls = document.querySelectorAll('ul#main_shell_tabs > li[id^="shell_tab"]:not(.shell-add-tab):not(.shell-browser-btn)');
+        allTabEls.forEach(el => {
+            const idx = parseInt(el.id.replace('shell_tab', ''), 10);
+            const type = (window.tabType && window.tabType[idx]) || 'terminal';
+            const entry = { index: idx, type };
+            if (type === 'terminal' && window.term && window.term[idx] && window.term[idx].cwd) {
+                entry.cwd = window.term[idx].cwd;
+            }
+            if (type === 'browser' && window.browserInstances && window.browserInstances[idx]) {
+                const wv = document.querySelector('#browser_tab_' + idx + ' webview');
+                if (wv && wv.getURL) {
+                    try { entry.url = wv.getURL(); } catch (_) { /* ignore */ }
+                }
+            }
+            entry.name = (window.terminalNames && window.terminalNames[idx]) || '';
+            tabs.push(entry);
+        });
+        return { activeTerm: window.currentTerm, tabs };
+    };
+
+    // Debounced + throttled periodic save. Skips writes when the serialized
+    // state hasn't changed, so idle sessions don't churn the disk.
+    let _lastSerializedState = '';
+    let _sessionSaveDebounceTimer = null;
+    const persistSessionStateNow = () => {
+        if (window.settings && window.settings.restoreSession === false) return;
+        try {
+            const state = captureSessionState();
+            const serialized = JSON.stringify(state);
+            if (serialized === _lastSerializedState) return;
+            _lastSerializedState = serialized;
+            writeSessionStateAtomic(state);
+        } catch (e) {
+            console.error('[Session] persist failed:', e);
+        }
+    };
+    window.scheduleSessionSave = () => {
+        if (_sessionSaveDebounceTimer) clearTimeout(_sessionSaveDebounceTimer);
+        _sessionSaveDebounceTimer = setTimeout(persistSessionStateNow, 500);
+    };
 
     // Load config
     try {
@@ -1084,34 +1195,17 @@ try {
             // Persist session state to disk for cross-launch restore
             if (window.settings.restoreSession !== false) {
                 try {
-                    const tabs = [];
-                    const allTabEls = document.querySelectorAll('ul#main_shell_tabs > li[id^="shell_tab"]:not(.shell-add-tab):not(.shell-browser-btn)');
-                    allTabEls.forEach(el => {
-                        const idx = parseInt(el.id.replace('shell_tab', ''), 10);
-                        const type = window.tabType[idx] || 'terminal';
-                        const entry = { index: idx, type };
-                        if (type === 'terminal' && window.term[idx] && window.term[idx].cwd) {
-                            entry.cwd = window.term[idx].cwd;
-                        }
-                        if (type === 'browser' && window.browserInstances[idx]) {
-                            const wv = document.querySelector('#browser_tab_' + idx + ' webview');
-                            if (wv && wv.getURL) {
-                                try { entry.url = wv.getURL(); } catch (_) { /* ignore */ }
-                            }
-                        }
-                        entry.name = window.terminalNames[idx] || '';
-                        tabs.push(entry);
-                    });
-                    const state = {
-                        activeTerm: window.currentTerm,
-                        tabs
-                    };
-                    fs.writeFileSync(sessionStateFile, JSON.stringify(state, null, 4));
+                    writeSessionStateAtomic(captureSessionState());
                 } catch (e) {
                     console.error('[Session] Failed to save session state:', e);
                 }
             }
         });
+
+        // Periodic crash-safety snapshot. beforeunload only fires on a clean
+        // shutdown, so without this a renderer crash / GPU blackout / power loss
+        // drops the previous session on reopen.
+        setInterval(persistSessionStateNow, 5000);
 
         // Restore extra terminals on hot-reload
         (function restoreTerminals() {
@@ -1200,6 +1294,16 @@ try {
             if (window.settings.restoreSession === false) return;
             if (!fs.existsSync(sessionStateFile)) return;
 
+            // Crash-loop guard: if the previous restore didn't finish, skip
+            // this one so we don't reopen whatever crashed us last time.
+            const restoringFlag = sessionStateFile + ".restoring";
+            if (fs.existsSync(restoringFlag)) {
+                console.warn('[Session] Previous restore did not complete — skipping restore this launch.');
+                try { fs.unlinkSync(restoringFlag); } catch (_) { /* ignore */ }
+                try { fs.unlinkSync(sessionStateFile); } catch (_) { /* ignore */ }
+                return;
+            }
+
             let state;
             try {
                 state = JSON.parse(fs.readFileSync(sessionStateFile, 'utf-8'));
@@ -1208,13 +1312,19 @@ try {
                 return;
             }
 
-            // Remove the file so a crash during restore doesn't loop
-            try { fs.unlinkSync(sessionStateFile); } catch (_) { /* ignore */ }
+            // Mark restore as in-flight. Cleared once restore finishes; if a
+            // crash happens mid-restore the file stays and we'll hit the
+            // crash-loop guard above on the next launch.
+            try { fs.writeFileSync(restoringFlag, String(Date.now())); } catch (_) { /* ignore */ }
 
-            if (!state || !Array.isArray(state.tabs) || state.tabs.length <= 1) return;
+            const clearRestoringFlag = () => {
+                try { fs.unlinkSync(restoringFlag); } catch (_) { /* ignore */ }
+            };
+
+            if (!state || !Array.isArray(state.tabs) || state.tabs.length <= 1) { clearRestoringFlag(); return; }
 
             const extraTabs = state.tabs.filter(t => t.index !== 0);
-            if (extraTabs.length === 0) return;
+            if (extraTabs.length === 0) { clearRestoringFlag(); return; }
 
             // Store pending CWDs so ttyspawn picks them up
             window._pendingTabCwd = {};
@@ -1243,6 +1353,7 @@ try {
                         }, 600);
                     }
                     delete window._pendingTabCwd;
+                    clearRestoringFlag();
                     return;
                 }
                 const tab = extraTabs[i++];
@@ -2252,6 +2363,8 @@ try {
                 }
             });
         }
+
+        window.scheduleSessionSave();
     };
 
     // Mic toggle in tab bar
@@ -2335,6 +2448,8 @@ try {
             const browserBtn = document.getElementById('shell_browser_btn');
             if (browserBtn) browserBtn.style.display = 'none';
         }
+
+        window.scheduleSessionSave();
     };
 
     // Get the total number of terminal tabs (excludes dev buttons)
@@ -2410,6 +2525,8 @@ try {
                 window.focusShellTab(nextIndex);
             }
         }
+
+        window.scheduleSessionSave();
     };
 
     // Add a browser tab in the unified tab system (any slot 0-19)
@@ -2479,6 +2596,7 @@ try {
         }
 
         console.log(`[BrowserTab] Created browser tab at slot ${nextTab}`);
+        window.scheduleSessionSave();
         return nextTab;
     };
 
