@@ -34,6 +34,65 @@ One repo, two surfaces, one session — scan, pair, keep coding from the couch.
 
 ---
 
+## Install
+
+### From a release (recommended for users)
+
+Signed, notarized **macOS** DMGs are published on this repo's
+[Releases page](https://github.com/SimonSaysGiveMeSmile/SoA-Prod/releases/latest).
+
+| Platform | File |
+|---|---|
+| macOS (Apple Silicon) | `Son-of-Anton-macOS-arm64.dmg` |
+| macOS (Intel) | `Son-of-Anton-macOS-x64.dmg` |
+
+1. Download the DMG matching your Mac.
+2. Open it, drag **Son of Anton** into `/Applications`.
+3. Launch it — in-app auto-update (`electron-updater`) takes it from there.
+
+> **Windows and Linux:** no prebuilt installers yet. Build from source — it's a
+> one-command setup (see below) and the same app.
+
+### From source (all platforms)
+
+Requires Node.js ≥ 18, npm, Python 3 + a C toolchain (for the `node-pty` native
+build), and git.
+
+```bash
+git clone https://github.com/SimonSaysGiveMeSmile/SoA-Prod.git
+cd SoA-Prod
+npm run install:all    # root + desktop (outer) + desktop/src (inner) — macOS
+npm start              # launches the Electron app
+```
+
+Linux and Windows need platform-specific native-dep rebuilds:
+
+```bash
+npm run install:linux       # on Linux
+npm run install:windows     # on Windows
+```
+
+Then `npm start` the same way.
+
+If Electron complains about `node-pty` on first launch, from inside `desktop/`:
+
+```bash
+./node_modules/.bin/electron-rebuild -f -w node-pty
+```
+
+### Build your own installers
+
+```bash
+npm run build:mac        # .dmg  (signs + notarizes if Apple env vars are set)
+npm run build:linux      # .AppImage
+npm run build:windows    # .exe
+```
+
+The mobile PWA is built and copied into the package automatically — on macOS it
+lands in `Son of Anton.app/Contents/Resources/mobile/`.
+
+---
+
 ## Desktop 🖥️
 
 Electron 28 sci-fi terminal that runs Claude Code inside a cyberpunk HUD.
@@ -46,39 +105,9 @@ Electron 28 sci-fi terminal that runs Claude Code inside a cyberpunk HUD.
 - **Input composer** — `Ctrl+Space` opens a multi-line editor docked to the bottom for composing long prompts. `Shift+Enter` sends.
 - **Mobile bridge** — spins up HTTP+WS on `7330+`, rotates a session token, serves the mobile PWA, and streams a live terminal snapshot (~250 ms) + `term-data` patches.
 
-**Run from source**
-
-From the repo root (desktop + mobile come as one):
-
-```bash
-npm run install:all   # installs root, desktop outer, desktop inner
-npm start             # launches Electron (desktop app)
-```
-
-Per-platform installs (Linux/Windows rebuild native deps):
-
-```bash
-npm run install:linux     # on Linux
-npm run install:windows   # on Windows
-```
-
-The mobile PWA is bundled inside the desktop app. Users reach it only by launching the desktop and scanning the QR code — there's no standalone install. To iterate on the mobile UI without packaging, see [`mobile/README.md`](mobile/README.md).
-
-**Build installers**
-
-```bash
-npm run build:mac        # .dmg for macOS
-npm run build:linux      # .AppImage
-npm run build:windows    # .exe
-```
-
-The mobile PWA is built and copied into the DMG's `Resources/mobile` automatically.
-
-If `node-pty` errors on launch, run inside `desktop/`: `./node_modules/.bin/electron-rebuild -f -w node-pty`.
-
-macOS DMG releases are published from the upstream source repo
-([`SimonSaysGiveMeSmile/son-of-anton-public`](https://github.com/SimonSaysGiveMeSmile/son-of-anton-public/releases)) —
-binaries are **not** stored in this monorepo.
+Once the app is running, open a terminal tab and run `claude` — the side
+panels start populating automatically. No API key, no config: the widgets
+parse terminal output.
 
 Full feature list, keyboard shortcuts, and setup notes:
 [`desktop/README.md`](desktop/README.md) • [`desktop/docs/QUICKSTART.md`](desktop/docs/QUICKSTART.md) • [`desktop/docs/MOBILE_BRIDGE.md`](desktop/docs/MOBILE_BRIDGE.md)
@@ -102,32 +131,19 @@ A tiny PWA (vanilla ES modules, service worker, zero build step) that turns your
 2. Scan the QR code — it encodes `http(s)://<lan-ip>:7330+/?t=<token>`.
 3. Phone loads `index.html`, opens `ws://…/ws?t=<token>`, persists the token in `localStorage` — future PWA opens reconnect without re-scanning.
 
-**Run standalone**
+Shipped DMG users don't install the mobile app separately: it lives inside the
+desktop bundle and the QR-scanned URL points straight at it.
+
+**Iterate on the mobile UI (contributors)**
 
 From the repo root:
 
 ```bash
-cd mobile
-npm install
-npm run dev                    # serves dist/ on http://localhost:5173
+npm run dev:mobile                              # serves dist/ on :5173 (mock bridge)
+SOA_BRIDGE=ws://<lan-ip>:7330 npm run dev:mobile # proxy /ws + /api to a running desktop
 ```
 
-Coming from `desktop/` (e.g. right after launching the Electron app)?
-
-```bash
-cd ../mobile
-npm install
-npm run dev
-```
-
-Or point it at a running desktop bridge (mirrors your actual terminal):
-
-```bash
-cd ../mobile
-npm install
-SOA_BRIDGE=ws://$(ipconfig getifaddr en0):7330 npm run dev   # macOS
-# Linux/Windows: replace $(ipconfig getifaddr en0) with your LAN IP
-```
+On macOS, grab your LAN IP with `ipconfig getifaddr en0`.
 
 **Wire protocol (WebSocket)**
 

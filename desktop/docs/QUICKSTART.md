@@ -2,22 +2,23 @@
 
 ## 🚀 Starting the Application
 
-You have three ways to launch Son of Anton:
+Two ways to run Son of Anton.
 
-### Option 1: Desktop App (Easiest)
-Double-click the **"Son of Anton.app"** icon on your Desktop.
+### Option 1: Installed app (macOS)
+Grab the latest DMG from
+[Releases](https://github.com/SimonSaysGiveMeSmile/SoA-Prod/releases/latest),
+drag **Son of Anton** into `/Applications`, and launch it like any other Mac
+app. Updates arrive in-app via `electron-updater`.
 
-### Option 2: Launch Script
+### Option 2: From source (macOS / Linux / Windows)
+From the **SoA-Prod** monorepo root:
+
 ```bash
-cd /Users/test/Desktop/Hireal/son-of-anton-public
-./launch.sh
+npm run install:all      # macOS       (use install:linux / install:windows elsewhere)
+npm start                # launches the Electron app
 ```
 
-### Option 3: Start Script
-```bash
-cd /Users/test/Desktop/Hireal/son-of-anton-public
-./start.sh
-```
+See the root [`README.md`](../../README.md) for the full source setup.
 
 ## 📖 Using Son of Anton
 
@@ -65,29 +66,31 @@ Available themes: `tron`, `blade`, `matrix`, `nord`, `navy`, `red`, `apollo`, `c
 
 ### App Won't Start
 ```bash
-# Kill any existing instances
-pkill -f "Electron src"
+# Kill any stray Electron processes
+pkill -f "Son of Anton"
 
-# Try launching again
-./launch.sh
+# Then launch again (installed app: reopen from /Applications.
+# From source: `npm start` at the repo root.)
 ```
 
 ### Black Screen
-- Close the app
+- Quit the app
 - Delete: `~/Library/Application Support/Son of Anton`
 - Launch again
 
-### Port 3000 Already in Use
+### Port 7330 Already in Use
+The mobile bridge binds to `7330+`. If something else already holds it:
 ```bash
-lsof -ti:3000 | xargs kill -9
+lsof -ti:7330 | xargs kill -9
 ```
 
 ## 📚 Documentation
 
 For detailed setup instructions and technical details, see:
 - `MACOS_SETUP.md` - Complete setup guide
-- `README.md` - Original project documentation
-- `TROUBLESHOOTING.md` - Common issues
+- `MOBILE_BRIDGE.md` - Mobile bridge protocol + pairing flow
+- `../README.md` - Desktop feature list and keyboard shortcuts
+- `../../README.md` - Repo overview (desktop + mobile)
 
 ## 🎨 Customization
 
@@ -115,7 +118,7 @@ Edit `~/Library/Application Support/Son of Anton/settings.json`:
 
 ## 🆘 Getting Help
 
-- GitHub Issues: https://github.com/yifu001/son-of-anton-public/issues
+- GitHub Issues: https://github.com/SimonSaysGiveMeSmile/SoA-Prod/issues
 - Original eDEX-UI: https://github.com/GitSquared/edex-ui
 
 ---

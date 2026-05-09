@@ -17,14 +17,14 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/yifu001/son-of-anton.git"
+    "url": "git+https://github.com/SimonSaysGiveMeSmile/SoA-Prod.git"
   },
   "author": "Gabriel 'Squared' SAILLARD <gabriel@saillard.dev> (https://gaby.dev)",
-  "license": "GPL-3.0",
+  "license": "GPL-3.0-only",
   "bugs": {
-    "url": "https://github.com/yifu001/son-of-anton/issues"
+    "url": "https://github.com/SimonSaysGiveMeSmile/SoA-Prod/issues"
   },
-  "homepage": "https://github.com/yifu001/son-of-anton#readme",
+  "homepage": "https://github.com/SimonSaysGiveMeSmile/SoA-Prod#readme",
   "dependencies": {
     "@electron/remote": "^2.1.2",
     "@picovoice/porcupine-node": "^4.0.1",

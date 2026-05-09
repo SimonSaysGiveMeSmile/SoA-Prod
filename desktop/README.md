@@ -2,8 +2,8 @@
   <br>
   <img alt="Logo" src="media/logo.png" width="400">
   <br><br>
-  <a href="https://github.com/SimonSaysGiveMeSmile/son-of-anton-public/releases/latest"><img alt="Release" src="https://img.shields.io/github/release/SimonSaysGiveMeSmile/son-of-anton-public.svg?style=popout"></a>
-  <a href="https://github.com/SimonSaysGiveMeSmile/son-of-anton-public/blob/main/LICENSE"><img alt="License" src="https://img.shields.io/github/license/SimonSaysGiveMeSmile/son-of-anton-public.svg?style=popout"></a>
+  <a href="https://github.com/SimonSaysGiveMeSmile/SoA-Prod/releases/latest"><img alt="Release" src="https://img.shields.io/github/v/release/SimonSaysGiveMeSmile/SoA-Prod?style=popout"></a>
+  <a href="https://github.com/SimonSaysGiveMeSmile/SoA-Prod/blob/main/LICENSE"><img alt="License" src="https://img.shields.io/github/license/SimonSaysGiveMeSmile/SoA-Prod.svg?style=popout"></a>
 </p>
 
 # Son of Anton
@@ -130,28 +130,79 @@ Includes save to disk, open in external editor, reload UI, restart app, and quit
 
 ## Quick Start
 
-### 1. Download
+There are two ways to run Son of Anton: install a signed release (macOS only
+for now), or build from source (macOS, Linux, Windows).
 
-Download the latest installer for your platform from [Releases](https://github.com/yifu001/son-of-anton-public/releases):
+### Option A — Install from a release (macOS)
+
+Download the latest DMG from
+[**Releases**](https://github.com/SimonSaysGiveMeSmile/SoA-Prod/releases/latest):
 
 | Platform | File |
 |----------|------|
-| Windows (64-bit) | [`Son of Anton-Windows-x64.exe`](https://github.com/yifu001/son-of-anton-public/releases/download/v2.0.0/Son.of.Anton-Windows-x64.exe) |
-| Windows (32-bit) | [`Son of Anton-Windows-ia32.exe`](https://github.com/yifu001/son-of-anton-public/releases/download/v2.0.0/Son.of.Anton-Windows-ia32.exe) |
-| macOS (Intel) | [`Son of Anton-macOS-x64.dmg`](https://github.com/SimonSaysGiveMeSmile/son-of-anton-public/releases/download/v2.2.15-mac/Son.of.Anton-macOS-x64.dmg) |
-| macOS (Apple Silicon) | [`Son of Anton-macOS-arm64.dmg`](https://github.com/SimonSaysGiveMeSmile/son-of-anton-public/releases/download/v2.2.15-mac/Son.of.Anton-macOS-arm64.dmg) |
+| macOS (Apple Silicon) | `Son-of-Anton-macOS-arm64.dmg` |
+| macOS (Intel) | `Son-of-Anton-macOS-x64.dmg` |
 
-### 2. Install & Run
+1. Open the DMG, drag **Son of Anton** into `/Applications`.
+2. Launch it. The app is signed with Apple Developer ID and notarized, so
+   Gatekeeper lets it through on first run.
+3. Future updates arrive in-app via `electron-updater`, which reads
+   `latest-mac.yml` from the same Releases page.
 
-**Windows:**
-1. Run the `.exe` installer
-2. Launch "Son of Anton" from Start Menu or Desktop
+Windows and Linux: no prebuilt installers yet — use Option B.
 
-### 3. Use with Claude Code
+### Option B — Run from source (all platforms)
 
-1. Open Son of Anton
-2. In the terminal, run `claude` to start Claude Code
-3. The side panels will automatically display Claude's context, agents, and todos
+Prerequisites: Node.js ≥ 18, npm, git, a C/C++ toolchain (Xcode Command Line
+Tools on macOS, `build-essential` on Linux, Windows Build Tools on Windows)
+and Python 3 for `node-pty`'s native build.
+
+From the **repo root** (this project lives inside the `SoA-Prod` monorepo):
+
+```bash
+git clone https://github.com/SimonSaysGiveMeSmile/SoA-Prod.git
+cd SoA-Prod
+
+# macOS
+npm run install:all
+
+# Linux
+npm run install:linux
+
+# Windows (PowerShell)
+npm run install:windows
+
+npm start    # launches the Electron app
+```
+
+If the first launch fails on `node-pty`, rebuild it against Electron's ABI:
+
+```bash
+cd desktop
+./node_modules/.bin/electron-rebuild -f -w node-pty
+```
+
+### Build your own installers
+
+From the repo root:
+
+```bash
+npm run build:mac        # .dmg     (macOS)
+npm run build:linux      # .AppImage (Linux)
+npm run build:windows    # .exe     (Windows)
+```
+
+`build:mac` signs + notarizes when the `APPLE_ID`,
+`APPLE_APP_SPECIFIC_PASSWORD`, and `APPLE_TEAM_ID` env vars are present;
+otherwise it produces an unsigned DMG for local use.
+
+### Use with Claude Code
+
+1. Open Son of Anton.
+2. In the terminal, run `claude` to start a Claude Code session.
+3. The side panels automatically fill in with context usage, active agents,
+   and todos — parsed live from the terminal, no API key needed.
+4. Tap **MOBILE LINK → PAIR** on the left to hand the session to your phone.
 
 ---
 
@@ -213,9 +264,10 @@ Launch with `--force-device-scale-factor=1` flag.
 
 ## Credits
 
-- **Son of Anton** - Fork by [yifu001](https://github.com/yifu001)
-- **Original eDEX-UI** - Created by [Squared](https://github.com/GitSquared)
-- **Sound Effects** - [IceWolf](https://soundcloud.com/iamicewolf)
+- **Son of Anton** — maintained by [@SimonSaysGiveMeSmile](https://github.com/SimonSaysGiveMeSmile) in the [SoA-Prod](https://github.com/SimonSaysGiveMeSmile/SoA-Prod) monorepo.
+- **Original eDEX-UI** — created by [Gabriel 'Squared' SAILLARD](https://github.com/GitSquared).
+- **Sound effects** — [IceWolf](https://soundcloud.com/iamicewolf).
+- Character inspiration: *Silicon Valley* (HBO).
 
 Inspired by [TRON Legacy](https://web.archive.org/web/20170511000410/http://jtnimoy.com/blogs/projects/14881671) movie effects.
 

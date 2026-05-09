@@ -3,7 +3,7 @@
   "version": "2.2.19",
   "private": true,
   "description": "Son of Anton — desktop terminal + mobile companion, shipped as one app.",
-  "license": "GPL-3.0",
+  "license": "GPL-3.0-only",
   "workspaces": [
     "mobile"
   ],

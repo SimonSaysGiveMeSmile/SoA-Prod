@@ -35,14 +35,14 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/SimonSaysGiveMeSmile/son-of-anton-public.git"
+    "url": "git+https://github.com/SimonSaysGiveMeSmile/SoA-Prod.git"
   },
   "author": "Gabriel 'Squared' SAILLARD <gabriel@saillard.dev> (https://gaby.dev)",
-  "license": "GPL-3.0",
+  "license": "GPL-3.0-only",
   "bugs": {
-    "url": "https://github.com/SimonSaysGiveMeSmile/son-of-anton-public/issues"
+    "url": "https://github.com/SimonSaysGiveMeSmile/SoA-Prod/issues"
   },
-  "homepage": "https://github.com/SimonSaysGiveMeSmile/son-of-anton-public#readme",
+  "homepage": "https://github.com/SimonSaysGiveMeSmile/SoA-Prod#readme",
   "build": {
     "appId": "dev.soa.son-of-anton",
     "productName": "Son of Anton",
