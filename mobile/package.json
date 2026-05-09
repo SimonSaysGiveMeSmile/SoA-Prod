@@ -1,6 +1,6 @@
 {
   "name": "son-of-anton-mobile",
-  "version": "2.2.17",
+  "version": "2.2.18",
   "description": "Mobile companion web app for Son of Anton. Pair via QR code and mirror the desktop session on a phone.",
   "private": true,
   "type": "module",
