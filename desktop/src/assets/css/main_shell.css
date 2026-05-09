@@ -60,8 +60,15 @@ ul#main_shell_tabs {
     border-top-right-radius: 0.278vh;
     flex-direction: row;
     align-items: center;
-    justify-content: space-evenly;
+    justify-content: flex-start;
     flex-wrap: nowrap;
+}
+
+/* Push the control section (add-tab + all right-side icons) to the right.
+   When fewer than 5 tabs are open this leaves empty space between the last
+   tab and the controls instead of spreading items across the full width. */
+ul#main_shell_tabs > li.shell-add-tab {
+    margin-left: auto;
 }
 
 ul#main_shell_tabs>li {

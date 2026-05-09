@@ -1,0 +1,100 @@
+/*
+ * Apple-style rounded corners applied on top of the existing stylesheet.
+ * Loaded last in ui.html so it overrides sharp-cornered defaults without
+ * touching any theme or module file. We avoid `*` selectors so that shapes
+ * that rely on specific geometry (50% circles, augmented-ui clip paths,
+ * range sliders) keep their original look.
+ */
+
+/* Inputs, selects, textareas — small radius, like macOS form controls. */
+input[type="text"],
+input[type="number"],
+input[type="search"],
+input[type="email"],
+input[type="password"],
+input[type="url"],
+input[type="tel"],
+input:not([type]),
+select,
+textarea {
+    border-radius: 8px !important;
+}
+
+/* Buttons — slightly more generous, matching Apple HIG rounded rects. */
+button,
+.btn,
+input[type="button"],
+input[type="submit"],
+input[type="reset"] {
+    border-radius: 10px !important;
+}
+
+/* Modal popups — large radius for panel surfaces. */
+div.modal_popup {
+    border-radius: 14px !important;
+}
+
+/* Settings editor: sidebar tabs, panes, tables. */
+.settings-tab,
+.settings-tab:hover,
+.settings-tab--active {
+    border-radius: 10px !important;
+    margin: 0.2vh 0.4vh !important;
+}
+
+.settings-tabbed,
+.settings-content,
+.settings-pane {
+    border-radius: 12px !important;
+}
+
+/* Tables inside modals — round the outer frame, keep inner cells flat. */
+div.modal_popup table {
+    border-radius: 10px !important;
+    overflow: hidden;
+}
+
+/* Modal buttons: restore the bottom-left/right that the original CSS
+   explicitly flattens, so they look like pills instead of tabs. */
+div.modal_popup button {
+    border-radius: 10px !important;
+    border-bottom-left-radius: 10px !important;
+    border-bottom-right-radius: 10px !important;
+}
+
+/* Scrollbar thumbs & tracks. */
+::-webkit-scrollbar-track,
+::-webkit-scrollbar-thumb {
+    border-radius: 6px !important;
+}
+
+/* Cards / panels / widgets that already paint a background or border. */
+.card,
+.panel,
+.widget,
+.popup,
+.tooltip,
+.notification,
+.alert,
+.tag,
+.badge,
+.menu,
+.menu-item,
+.context-menu,
+.context-menu-item,
+.list-item,
+.tab,
+.dock-item {
+    border-radius: 12px !important;
+}
+
+/* Details / summary (shortcuts accordion). */
+details,
+summary {
+    border-radius: 10px !important;
+}
+
+/* Inline code / kbd pills. */
+code, kbd, pre {
+    border-radius: 6px !important;
+}

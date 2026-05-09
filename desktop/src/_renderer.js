@@ -2709,6 +2709,19 @@ try {
                 document.querySelector('.settings-pane[data-pane="' + tab.dataset.tab + '"]').classList.add('settings-pane--active');
             });
         });
+
+        // Auto-save every edit. Text inputs debounce by ~400ms so typing doesn't
+        // thrash the disk; selects save on each change.
+        let _autoSaveTimer = null;
+        const scheduleAutoSave = () => {
+            clearTimeout(_autoSaveTimer);
+            _autoSaveTimer = setTimeout(() => { try { window.writeSettingsFile(); } catch (_) {} }, 400);
+        };
+        document.querySelectorAll('#settingsEditor input, #settingsEditor select').forEach(f => {
+            const immediate = f.tagName === 'SELECT' || f.type === 'number';
+            f.addEventListener('change', () => { try { window.writeSettingsFile(); } catch (_) {} });
+            if (!immediate) f.addEventListener('input', scheduleAutoSave);
+        });
     };
 
     window.writeFile = (filePath) => {
