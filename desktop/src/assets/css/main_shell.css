@@ -70,6 +70,7 @@ ul#main_shell_tabs>li {
     font-family: var(--font_main);
     font-weight: normal;
     width: 100%;
+    max-width: 20%;
     padding-top: 0.7vh;
     padding-bottom: 0.4vh;
     text-align: center;

@@ -964,11 +964,15 @@ try {
         profiler.mark('terminal-init-start');
         let shellContainer = document.getElementById("main_shell");
 
-        // Generate initial 5 tabs dynamically
+        // Start with only the first tab. Extra slots are created on demand by
+        // addShellTab() (user clicks "+") or by session-restore when reopening a
+        // previous layout. Previously we pre-rendered 5 empty placeholder slots,
+        // which made fresh installs look cluttered.
         let tabsHtml = '';
-        for (let i = 0; i < 5; i++) {
+        {
+            const i = 0;
             const label = window._isUnnamedTab(window.terminalNames[i]) ? window._tabPlaceholder(i) : window.terminalNames[i];
-            tabsHtml += `<li id="shell_tab${i}" onclick="window.focusShellTab(${i});"${i === 0 ? ' class="active"' : ''}><p>${window._escapeHtml(label)}<span class="tab-close" onclick="event.stopPropagation();window.closeShellTab(${i});" title="Close Tab">×</span></p></li>`;
+            tabsHtml += `<li id="shell_tab${i}" onclick="window.focusShellTab(${i});" class="active"><p>${window._escapeHtml(label)}<span class="tab-close" onclick="event.stopPropagation();window.closeShellTab(${i});" title="Close Tab">×</span></p></li>`;
         }
         // Add + button for creating new tabs (up to 10 total)
         tabsHtml += `<li id="shell_add_tab" class="shell-add-tab" onclick="window.addShellTab();" title="New Terminal Tab (Ctrl+Shift+T)"><p>+</p></li>`;
@@ -1847,31 +1851,27 @@ try {
             window.mods = widgetLoader.getMods();
             if (_cdRef) window.mods.creditDisplay = _cdRef;
 
-            // Right column was removed — enforce default visual priority on the left column.
-            // FILE EXPLORER and WORLD VIEW (globe) sit at the top; PROCESSES (toplist) are last.
-            // appendChild on an already-attached node moves it to the end of its parent, so
-            // iterating in desired order produces the desired DOM order in O(n) — no clones.
+            // Enforce the user-chosen default order on the left column. Drag-and-drop
+            // can reorder afterwards at runtime; this just sets the starting layout.
+            // appendChild on an already-attached node moves it to the end of its
+            // parent, so iterating in desired order produces that DOM order in O(n).
             const leftCol = document.getElementById("mod_column_left");
             if (leftCol) {
                 const desiredLeftOrder = [
-                    "mod_fileExplorer",       // top priority
-                    "mod_globe",              // world view
-                    "mod_sysinfo",            // manufacturer / model
-                    "mod_hardwareInspector",
-                    "mod_ramwatcher",         // memory
-                    "mod_cpuinfo",
-                    "mod_clock",
-                    "mod_creditDisplay",
-                    "mod_gitCommits",
-                    "mod_mobileQR",           // pair-a-phone tile
-                    "mod_conninfo",
-                    "mod_netstat",
-                    "mod_todoWidget",
-                    "mod_agentList",
-                    "mod_voiceToggle",
+                    "mod_clock",              // 1. clock
+                    "mod_globe",              // 2. world view
+                    "mod_mobileQR",           // 3. phone pairing QR
+                    "mod_voiceToggle",        // 4. mic input (toggle + meter)
                     "mod_micMonitor",
-                    "ad_panel",
-                    "mod_toplist"             // processes — least priority
+                    "mod_fileExplorer",       // 5. file explorer
+                    "mod_toplist",            // 6. top processes
+                    "mod_ramwatcher",         // 7. memory
+                    "mod_sysinfo",            // 8. year / date / OS / uptime
+                    "mod_hardwareInspector",  // 9. mac model
+                    "mod_cpuinfo"             // 10. cpu usage
+                    // 11+ — everything not listed here (netstat, conninfo, gitCommits,
+                    // todoWidget, agentList, creditDisplay, ad_panel) keeps its
+                    // natural DOM order after position 10.
                 ];
                 desiredLeftOrder.forEach(id => {
                     const el = document.getElementById(id);
