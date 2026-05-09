@@ -19,28 +19,45 @@ Before starting any task, read the mistakes file above. After making an error (w
 
 ## Release Workflow (macOS DMGs)
 
-This repo (`son-of-anton-public`) hosts macOS builds. Releases go to `SimonSaysGiveMeSmile/son-of-anton-public`.
+Releases are built by GitHub Actions (`.github/workflows/release-mac.yml`). The
+runner signs with Developer ID, notarizes via Apple, and publishes the DMGs +
+`latest-mac.yml` straight to the GitHub release. No local build required.
 
-### Steps
-1. Bump version in `package.json`
-2. Commit source changes first (separate from build artifacts)
-3. Clean old prebuild: `rm -rf prebuild-src`
-4. Run `npm run prebuild-darwin` (rsync + minify + npm install)
-5. Run `npm run build-darwin` (electron-builder, produces x64 + arm64 DMGs in `dist/`)
-6. Commit DMG files (tracked via Git LFS) + `dist/latest-mac.yml`
-7. Push to `origin main`
-8. Create release: `gh release create vX.Y.Z-mac --repo SimonSaysGiveMeSmile/son-of-anton-public --title "..." --notes "..." dist/Son\ of\ Anton-macOS-arm64.dmg dist/Son\ of\ Anton-macOS-x64.dmg`
-9. Update macOS download links in `README.md` to point to new release tag
-10. Commit and push README update
+### Primary path (CI)
+
+1. Bump `version` in `package.json`, `desktop/package.json`, `desktop/src/package.json`, `mobile/package.json` — all four must match
+2. Commit and push to `main`
+3. `git tag vX.Y.Z-mac && git push origin vX.Y.Z-mac` — triggers CI
+4. CI takes ~15–30 min. Release appears at `/releases/tag/vX.Y.Z-mac` when done.
+
+The workflow rejects the build if the tag doesn't match `package.json` version, so
+version drift between tag and manifests is caught before signing.
+
+### Backup path (local build)
+
+Only when CI is down or you need to ship from your laptop:
+1. Bump versions as above, commit
+2. `cd desktop && rm -rf prebuild-src && npm run prebuild-darwin`
+3. Export `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, `APPLE_TEAM_ID` in your shell
+4. `npm run build-darwin && npm run postbuild-darwin`
+5. Verify: `spctl -a -vvv -t exec "dist/mac/Son of Anton.app"` must say `source=Notarized Developer ID`
+6. Commit DMGs + blockmaps + `dist/latest-mac.yml` (DMGs go through LFS automatically)
+7. Push main, then `gh release create vX.Y.Z-mac` with the 5 files
 
 ### Important
-- Tag format: `vX.Y.Z-mac` (e.g., `v2.2.9-mac`)
-- DMGs are tracked with Git LFS (`.gitattributes` has `*.dmg` and `*.blockmap` rules)
-- Always specify `--repo SimonSaysGiveMeSmile/son-of-anton-public` — without it, `gh` may target the wrong remote
-- Verify download URLs with: `gh api repos/SimonSaysGiveMeSmile/son-of-anton-public/releases/tags/vX.Y.Z-mac --jq '.assets[] | .browser_download_url'`
+
+- Tag format: `vX.Y.Z-mac` (e.g. `v2.2.17-mac`)
+- DMGs are tracked through Git LFS (`.gitattributes` has `*.dmg` and `*.blockmap` rules)
+- CI requires six GitHub Secrets: `MACOS_CERTIFICATE`, `MACOS_CERTIFICATE_PWD`,
+  `MACOS_KEYCHAIN_PWD`, `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, `APPLE_TEAM_ID`
+- Signing identity: `Developer ID Application: Jiahe Tian (4QUC4B3L36)` — cert SHA
+  `5024F791418B9BF875F599260131D7ADE4DE47CF`, set in `desktop/package.json → build.mac.identity`
+- Auto-updater (`electron-updater`) is wired in `desktop/src/main/autoUpdate.js`; it
+  reads `latest-mac.yml` from the release, so asset names in that file must match
+  uploaded filenames exactly. `artifactName` in `desktop/package.json` enforces
+  `Son-of-Anton-${os}-${arch}.${ext}` (hyphens — not spaces, not dots)
+- Verify published release: `gh release view vX.Y.Z-mac --json assets`
 
 ## Remotes
-- `origin` / `fork` = `SimonSaysGiveMeSmile/son-of-anton-public` (public fork, macOS releases here)
-- `upstream` = `yifu001/son-of-anton-public` (upstream public)
-- `target` = `yifu001/son-of-anton` (private repo, Windows releases there)
-- `myfork` = `SimonSaysGiveMeSmile/son-of-anton` (private fork)
+- `origin` = `SimonSaysGiveMeSmile/SoA-Prod` (production monorepo, macOS releases here)
+- `soa-desktop-src` + `soa-mobile-src` = local filesystem paths to historical desktop/mobile repos
