@@ -1,0 +1,93 @@
+div#mod_consoleLog {
+    border-top: 0.092vh solid rgba(var(--color_r), var(--color_g), var(--color_b), 0.3);
+    font-family: var(--font_main_light);
+    letter-spacing: 0.092vh;
+    padding: 0.645vh 0;
+    display: flex;
+}
+
+div#mod_consoleLog::before {
+    content: "";
+    border-left: 0.092vh solid rgba(var(--color_r), var(--color_g), var(--color_b), 0.3);
+    align-self: flex-start;
+    position: relative;
+    left: -0.092vh;
+    top: -1.111vh;
+    height: 0.833vh;
+}
+
+div#mod_consoleLog::after {
+    content: "";
+    border-right: 0.092vh solid rgba(var(--color_r), var(--color_g), var(--color_b), 0.3);
+    position: relative;
+    right: -0.092vh;
+    top: -1.111vh;
+    height: 0.833vh;
+}
+
+div#mod_consoleLog_inner {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+}
+
+div#mod_consoleLog h1 {
+    font-size: 1.8vh;
+    margin: 0 0 0.3vh 0;
+    width: 98%;
+    display: flex;
+    align-items: center;
+}
+
+.cl-controls {
+    margin-left: auto;
+    display: flex;
+    gap: 0.6vh;
+    font-size: 1.2vh;
+    opacity: 0.6;
+    cursor: pointer;
+}
+
+.cl-controls span:hover { opacity: 1; }
+
+#cl-pause.cl-paused { opacity: 1; color: rgb(var(--color_r), var(--color_g), var(--color_b)); }
+
+div#mod_consoleLog_content {
+    width: 100%;
+    max-height: 28vh;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(var(--color_r), var(--color_g), var(--color_b), 0.3) transparent;
+}
+
+div#mod_consoleLog_content::-webkit-scrollbar { width: 4px; }
+div#mod_consoleLog_content::-webkit-scrollbar-track { background: transparent; }
+div#mod_consoleLog_content::-webkit-scrollbar-thumb {
+    background: rgba(var(--color_r), var(--color_g), var(--color_b), 0.3);
+    border-radius: 2px;
+}
+
+.cl-row {
+    display: flex;
+    gap: 0.5vh;
+    padding: 0.15vh 0.3vh;
+    font-size: 1.15vh;
+    border-bottom: 1px dotted rgba(var(--color_r), var(--color_g), var(--color_b), 0.1);
+    line-height: 1.4;
+}
+
+.cl-ts {
+    opacity: 0.4;
+    flex-shrink: 0;
+    font-size: 1.05vh;
+    padding-top: 0.05vh;
+}
+
+.cl-text {
+    word-break: break-all;
+    opacity: 0.85;
+}
+
+.cl-row.cl-warn .cl-text  { color: #e6c84a; opacity: 1; }
+.cl-row.cl-error .cl-text { color: #e05c5c; opacity: 1; }
+.cl-row.cl-debug .cl-text { opacity: 0.45; }

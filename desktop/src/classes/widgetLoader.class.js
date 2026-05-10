@@ -44,7 +44,8 @@ class WidgetLoader {
             agentList: { column: 'left', weight: 'deferred', class: null },
             fileExplorer: { column: 'left', weight: 'deferred', class: null },
             mobileQR: { column: 'left', weight: 'deferred', class: null },
-            deviceStatus: { column: 'left', weight: 'heavy', class: null }
+            deviceStatus: { column: 'left', weight: 'heavy', class: null },
+            consoleLog: { column: 'left', weight: 'deferred', class: null }
         };
     }
 

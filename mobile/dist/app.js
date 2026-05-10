@@ -261,6 +261,8 @@ class App {
         this._snapshot = null;
         this._activeTab = 0;
         this._tabStates = new Map();
+        this._tabStatuses = new Map();
+        this._toastTimer = null;
         this._flushScheduled = false;
         this._currentTheme = loadSavedTheme();
         this._idleTimer = null;
@@ -666,6 +668,14 @@ class App {
     }
 
     _renderTabs(tabs, activeIndex) {
+        // Check for status transitions before re-rendering
+        for (const t of tabs) {
+            const prev = this._tabStatuses.get(t.index);
+            if (prev !== undefined && prev !== t.status && t.status === 'input') {
+                this._showAgentToast(t.name || `TAB ${t.index + 1}`);
+            }
+            this._tabStatuses.set(t.index, t.status);
+        }
         const frag = document.createDocumentFragment();
         for (const t of tabs) {
             const el = document.createElement('button');
@@ -1093,6 +1103,16 @@ class App {
         if (!text) return;
         const colour = level === 'error' ? '\x1b[91m' : (level === 'warn' ? '\x1b[93m' : '\x1b[92m');
         this._applyTerminalChunk({ data: `\r\n${colour}[${(level || 'info').toUpperCase()}] ${text}\x1b[0m\r\n` });
+    }
+
+    _showAgentToast(tabName) {
+        const toast = document.getElementById('agent-toast');
+        if (!toast) return;
+        clearTimeout(this._toastTimer);
+        toast.textContent = `Tab ${tabName} needs your attention.`;
+        toast.classList.add('visible');
+        this._toastTimer = setTimeout(() => toast.classList.remove('visible'), 4000);
+        if ('vibrate' in navigator) try { navigator.vibrate([80, 40, 80]); } catch (_) {}
     }
 
     _showFatal(text) {

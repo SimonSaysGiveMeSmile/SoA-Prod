@@ -1928,7 +1928,8 @@ try {
             agentList: AgentList,
             fileExplorer: FileExplorer,
             mobileQR: MobileQRWidget,
-            deviceStatus: DeviceStatus
+            deviceStatus: DeviceStatus,
+            consoleLog: ConsoleLogWidget
         });
 
         // Load lightweight widgets immediately (Clock, TodoWidget, AgentList)
