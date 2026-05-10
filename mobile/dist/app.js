@@ -1075,6 +1075,17 @@ class App {
             const outbps = formatRate(widgets.net.tx_sec || widgets.net.txBytesPerSec);
             cards.push(card('NETWORK', `${inbps} ↓ · ${outbps} ↑`, ''));
         }
+        if (widgets.deviceStatus) {
+            const ds = widgets.deviceStatus;
+            const batLabel = ds.battery ? ds.battery.label : 'N/A';
+            const netLabel = ds.network || '—';
+            const cpuLabel = ds.cpuTemp != null ? ds.cpuTemp + '°C' : 'N/A';
+            const gpuLabel = ds.gpuTemp != null ? ds.gpuTemp + '°C' : 'N/A';
+            cards.push(card('DEVICE STATUS',
+                `${batLabel} · ${netLabel}`,
+                `CPU ${cpuLabel}  GPU ${gpuLabel}`
+            ));
+        }
         this.widgetsEl.innerHTML = cards.join('') || `<div class="w-card"><h2>No data yet</h2><div class="w-meta">Waiting for the desktop to push state…</div></div>`;
     }
 

@@ -1927,7 +1927,8 @@ try {
             todoWidget: TodoWidget,
             agentList: AgentList,
             fileExplorer: FileExplorer,
-            mobileQR: MobileQRWidget
+            mobileQR: MobileQRWidget,
+            deviceStatus: DeviceStatus
         });
 
         // Load lightweight widgets immediately (Clock, TodoWidget, AgentList)
@@ -1979,7 +1980,8 @@ try {
                     "mod_ramwatcher",         // 7. memory
                     "mod_sysinfo",            // 8. year / date / OS / uptime
                     "mod_hardwareInspector",  // 9. mac model
-                    "mod_cpuinfo"             // 10. cpu usage
+                    "mod_deviceStatus",       // 10. battery / network / temp
+                    "mod_cpuinfo"             // 11. cpu usage
                     // 11+ — everything not listed here (netstat, conninfo, gitCommits,
                     // todoWidget, agentList, creditDisplay, ad_panel) keeps its
                     // natural DOM order after position 10.

@@ -43,7 +43,8 @@ class WidgetLoader {
             todoWidget: { column: 'left', weight: 'deferred', class: null },
             agentList: { column: 'left', weight: 'deferred', class: null },
             fileExplorer: { column: 'left', weight: 'deferred', class: null },
-            mobileQR: { column: 'left', weight: 'deferred', class: null }
+            mobileQR: { column: 'left', weight: 'deferred', class: null },
+            deviceStatus: { column: 'left', weight: 'heavy', class: null }
         };
     }
 
@@ -105,7 +106,7 @@ class WidgetLoader {
             // followed by hardware identity (sysinfo / hardwareInspector), memory, CPU, then the
             // less-prioritized network/git/processes widgets last. Final visual position is also
             // enforced by a DOM reorder pass in _renderer.js after load.
-            const loadOrder = ['globe', 'sysinfo', 'hardwareInspector', 'ramwatcher', 'cpuinfo', 'gitCommits', 'conninfo', 'netstat', 'toplist'];
+            const loadOrder = ['globe', 'sysinfo', 'hardwareInspector', 'deviceStatus', 'ramwatcher', 'cpuinfo', 'gitCommits', 'conninfo', 'netstat', 'toplist'];
 
             const heavyWidgets = loadOrder
                 .map(name => [name, this.widgetRegistry[name]])

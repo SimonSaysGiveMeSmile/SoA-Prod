@@ -310,6 +310,9 @@ class MobileBridge {
             if (w.mods && w.mods.netstat && w.mods.netstat._last) {
                 data.net = w.mods.netstat._last;
             }
+            if (w.mods && w.mods.deviceStatus && w.mods.deviceStatus._last) {
+                data.deviceStatus = w.mods.deviceStatus._last;
+            }
         } catch (_) { /* widgets are best-effort */ }
         return data;
     }
