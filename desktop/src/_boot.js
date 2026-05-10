@@ -32,7 +32,39 @@ async function findAvailablePort(startPort, maxAttempts = 20) {
     return null;
 }
 
+// Main-process diagnostics: crash log + native minidumps land under userData/.
+const path = require("path");
+const fs = require("fs");
+const { crashReporter } = require("electron");
+
+const mainLogFile = path.join(app.getPath("userData"), "main_debug.log");
+const mainLog = (tag, msg) => {
+    try {
+        fs.appendFileSync(mainLogFile, `[${new Date().toISOString()}] [${tag}] ${msg}\n`);
+    } catch (_) { /* never let logging break the app */ }
+};
+
+try {
+    if (fs.existsSync(mainLogFile) && fs.statSync(mainLogFile).size > 2 * 1024 * 1024) {
+        const rotated = mainLogFile + '.1';
+        try { fs.unlinkSync(rotated); } catch (_) { /* ignore */ }
+        try { fs.renameSync(mainLogFile, rotated); } catch (_) { /* ignore */ }
+    }
+} catch (_) { /* ignore */ }
+
+try { fs.mkdirSync(path.dirname(mainLogFile), { recursive: true }); } catch (_) { /* ignore */ }
+mainLog('SESSION', `START pid=${process.pid} version=${app.getVersion()}`);
+
+crashReporter.start({
+    productName: 'Son of Anton',
+    companyName: 'SoA',
+    submitURL: '',
+    uploadToServer: false,
+    compress: true
+});
+
 process.on("uncaughtException", e => {
+    mainLog('UNCAUGHT', (e && e.stack) || String(e));
     signale.fatal(e);
     dialog.showErrorBox("Son of Anton crashed", e.message || "Cannot retrieve error message.");
     if (tty) {
@@ -46,6 +78,18 @@ process.on("uncaughtException", e => {
         });
     }
     process.exit(1);
+});
+
+process.on("unhandledRejection", reason => {
+    const body = (reason && reason.stack) ? reason.stack :
+        (typeof reason === 'string' ? reason : JSON.stringify(reason));
+    mainLog('UNHANDLED_REJECTION', body);
+    signale.fatal(reason);
+});
+
+app.on('child-process-gone', (_e, details) => {
+    mainLog('CHILD_GONE', `type=${details.type} reason=${details.reason} exitCode=${details.exitCode} name=${details.name || ''}`);
+    signale.warn(`Child process gone: ${details.type} (${details.reason})`);
 });
 
 app.on('will-quit', () => {
@@ -67,9 +111,7 @@ const electron = require("electron");
 const remoteMain = require('@electron/remote/main');
 remoteMain.initialize();
 const ipc = electron.ipcMain;
-const path = require("path");
 const url = require("url");
-const fs = require("fs");
 const which = require("which");
 const Terminal = require("./classes/terminal.class.js").Terminal;
 const ClaudeStateManager = require("./classes/claudeState.class.js");
@@ -295,6 +337,24 @@ function createWindow(settings) {
 
     // Enable @electron/remote for this window
     remoteMain.enable(win.webContents);
+
+    // Capture "app went black" events. `render-process-gone` fires when the
+    // renderer dies (OOM, crash, killed). `unresponsive` fires when the event
+    // loop hangs past Chromium's threshold (typical symptom of the black screen).
+    win.webContents.on('render-process-gone', (_e, details) => {
+        mainLog('RENDER_GONE', `reason=${details.reason} exitCode=${details.exitCode}`);
+        signale.fatal(`Renderer gone: ${details.reason} (exit ${details.exitCode})`);
+    });
+    win.on('unresponsive', () => {
+        mainLog('UNRESPONSIVE', 'renderer event loop stalled');
+        signale.warn('Renderer unresponsive');
+    });
+    win.on('responsive', () => {
+        mainLog('RESPONSIVE', 'renderer recovered');
+    });
+    win.webContents.on('did-fail-load', (_e, code, desc, url) => {
+        mainLog('DID_FAIL_LOAD', `code=${code} desc=${desc} url=${url}`);
+    });
 
     win.loadURL(url.format({
         pathname: path.join(__dirname, 'ui.html'),
