@@ -113,7 +113,7 @@ jobs:
           if ! gh release view "$TAG" >/dev/null 2>&1; then
             gh release create "$TAG" \
               --title "Son of Anton ${{ steps.version.outputs.version }} (macOS)" \
-              --notes "Built by CI from ${{ github.sha }}. Signed with Developer ID Application: Jiahe Tian (${{ secrets.APPLE_TEAM_ID }}) and notarized by Apple. See commit history for changes." \
+              --notes "Built by CI from ${{ github.sha }}. Signed with a Developer ID Application certificate (team ${{ secrets.APPLE_TEAM_ID }}) and notarized by Apple. See commit history for changes." \
               --draft
           fi
           gh release upload "$TAG" --clobber \

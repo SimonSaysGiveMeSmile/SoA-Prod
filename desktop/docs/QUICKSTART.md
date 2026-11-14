@@ -105,7 +105,7 @@ Edit `~/Library/Application Support/Son of Anton/settings.json`:
 ### Custom Working Directory
 ```json
 {
-  "cwd": "/Users/test/Projects"
+  "cwd": "/Users/YOUR_USER/Projects"
 }
 ```
 
