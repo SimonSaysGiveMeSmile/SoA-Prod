@@ -50,7 +50,7 @@ Only when CI is down or you need to ship from your laptop:
 - DMGs are tracked through Git LFS (`.gitattributes` has `*.dmg` and `*.blockmap` rules)
 - CI requires six GitHub Secrets: `MACOS_CERTIFICATE`, `MACOS_CERTIFICATE_PWD`,
   `MACOS_KEYCHAIN_PWD`, `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, `APPLE_TEAM_ID`
-- Signing identity: `Developer ID Application: Jiahe Tian (4QUC4B3L36)` — cert SHA
+- Signing identity: `Developer ID Application: <YOUR_NAME> (<YOUR_TEAM_ID>)` — cert SHA
   `5024F791418B9BF875F599260131D7ADE4DE47CF`, set in `desktop/package.json → build.mac.identity`
 - Auto-updater (`electron-updater`) is wired in `desktop/src/main/autoUpdate.js`; it
   reads `latest-mac.yml` from the release, so asset names in that file must match
